@@ -1,0 +1,24 @@
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Variáveis de ambiente (NUNCA versionar segredos reais)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Editor
+.vscode/
+.idea/
+
+# Banco de dados local (se usar SQLite em algum teste)
+*.db
+*.sqlite3
+
+# Logs
+*.log
