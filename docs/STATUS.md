@@ -13,7 +13,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | Fase | Situação | Observações |
 |---|---|---|
 | 1 — Fundação de dados | **Implementada; verificação pendente** | Migrations 0007–0013, models e seeds existem. Ver pendências abaixo. |
-| 2 — Ingestão de vendas e perdas | Não iniciada | D1 decidida (opção A). Começa depois de concluída a Fase 1 e a migration 0014. |
+| 2 — Ingestão de vendas e perdas | Não iniciada | D1 decidida (opção A); migration 0014 aplicada. Falta a dependency `obter_gestor_central` e o teste dela (passos 5 e 6) antes de começar. |
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
@@ -24,6 +24,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 ### Fase 1 — o que existe no código (lido em 2026-10-13)
 
 - Migrations: `0007_central_producao`, `0008_loja_central_producao_id`, `0009_usuario_tipo_e_central`, `0010_produto_campos_producao`, `0011_produto_loja_ativo`, `0012_calendario_producao`, `0013_evento_e_associacoes`.
+- Migration `0014_usuario_tem_acesso_web` (consequência de D1, 2026-10-13): coluna `usuarios.tem_acesso_web` (Boolean, NOT NULL, `server_default false`) e campo correspondente no model `Usuario`. Verificada: upgrade 0013→0014, downgrade 0014→0013 (coluna removida), upgrade de novo, todos com exit 0. Usuários existentes ficaram com `false`; `test_constraint_usuario.py` passou de novo (4/4); health check 200 e `POST /auth/login` igual a antes (200 para os operadores, 403 para o gestor).
 - Models: `CentralProducao`, `CalendarioProducao` (+ `DiaSemana`), `Evento`, `EventoLoja`, `EventoProduto` (+ `EscopoLoja`, `EscopoProduto`, `TipoAjuste`). Campos novos em `Produto`, `ProdutoLoja.ativo`, `Usuario.tipo_usuario`/`central_producao_id`, `Loja.central_producao_id` (obrigatório).
 - Check constraint no banco: `ck_usuario_tipo_vs_loja_central` (operador_loja ⇒ loja_id preenchido e central nula; gestor_central ⇒ central preenchida e loja nula).
 - Não há mais `estoque_minimo`/`estoque_maximo` em `produtos_lojas`, e nenhum código da API ou dos serviços os referencia.
@@ -52,7 +53,7 @@ Depois: abrir `/api/health`, e fazer login e uma contagem de estoque no app mobi
 
 ### Fase 1 — pendências identificadas (fora da verificação)
 
-1. **`seed_dev.py` (corrigido em 2026-10-13).** Agora é idempotente e garante: negócio `Rede Padaria Teste`; 1 central (reaproveita a existente do negócio: no banco de dev é a `Central Principal (Padrão)`, criada pela migration 0008); lojas `Loja Centro` e `Loja Bairro`; operadores `admin@teste.com` e `operador.bairro@teste.com` (`tem_acesso_app=True`); gestor `gestor@teste.com` (`gestor_central`, `tem_acesso_app=False`). Senha `senha123`. **Falta:** `tem_acesso_web=True` no gestor, que depende da migration 0014 (passo 4). O seed reaplica as flags de acesso a cada execução, então basta incluir a flag e rodar de novo.
+1. **`seed_dev.py` (corrigido em 2026-10-13).** Agora é idempotente e garante: negócio `Rede Padaria Teste`; 1 central (reaproveita a existente do negócio: no banco de dev é a `Central Principal (Padrão)`, criada pela migration 0008); lojas `Loja Centro` e `Loja Bairro`; operadores `admin@teste.com` e `operador.bairro@teste.com` (`tem_acesso_app=True`); gestor `gestor@teste.com` (`gestor_central`, `tem_acesso_app=False`). Senha `senha123`. Depois da migration 0014, o gestor passou a ter `tem_acesso_web=True`: o seed **atualizou** o usuário 27 (mesmo id e `criado_em`), sem recriá-lo.
 2. **`backend/README.md` está desatualizado:** lista migrations só até a 0006 e não cita os models novos.
 3. **Resíduos de teste no banco de desenvolvimento (resolvido em 2026-10-13):** havia dois negócios de teste sobrando (`_Teste Constraint`, id 3, de uma versão antiga do script; e `_Teste Constraint 16588216`, id 6, da execução que quebrou), com suas centrais, lojas e usuários. Nenhuma outra tabela apontava para eles. Foram apagados pela limpeza inicial do script corrigido. Os negócios 1 (`Rede Padaria Teste`) e 2 (`Pais e Filhos`) foram mantidos.
 4. **`seed_produtos.py` só vincula produtos à primeira loja do negócio.** A `Loja Bairro` fica sem produtos (o operador dela entra no app com a lista vazia). Precisa ser resolvido antes das Fases 4–5, que calculam necessidade e distribuição por loja.
@@ -72,7 +73,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | Nomes de tabela | singular (`central_producao`, `evento`, `produto_loja`) | `centrais_producao`, `eventos`, `eventos_lojas`, `eventos_produtos`, `produtos_lojas`, `calendario_producao` |
 | Eventos | uma entidade `evento` | `eventos` + tabelas de associação `eventos_lojas` e `eventos_produtos` (usadas quando o escopo é "específicas"/"específicos"); `valor_ajuste` é `Numeric(10,4)` |
 | Isolamento multi-tenant (§6) | recomenda schema/banco por cliente | Tabelas compartilhadas, com `negocio_id` em tudo e isolamento via JWT (ver D2) |
-| Login do gestor (§3.1) | gestor com escopo de central | `obter_usuario_autenticado` exige `tem_acesso_app`, não devolve `tipo_usuario` nem `central_producao_id` (ver D1) |
+| Login do gestor (§3.1) | gestor com escopo de central; não fala em flag de acesso ao SaaS | Campo novo `usuarios.tem_acesso_web` (migration 0014, D1 = A), separado de `tem_acesso_app`. A dependency `obter_gestor_central` ainda não existe (passo 5); `obter_usuario_autenticado` e `/auth/login` continuam exigindo `tem_acesso_app` (rotas `/auth/web/*` ficam para a Fase 2) |
 
 ---
 
@@ -100,6 +101,6 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 ## 5. Próximo passo
 
 1. Concluir a verificação da Fase 1: falta testar login + contagem no app mobile de verdade.
-2. Implementar a consequência de D1 = A: migration 0014 (`tem_acesso_web`), dependency `obter_gestor_central` e script de teste.
+2. Concluir a consequência de D1 = A: ~~migration 0014~~ (feita em 2026-10-13), dependency `obter_gestor_central` e script de teste.
 3. Atualizar `backend/README.md`.
 4. Iniciar a Fase 2: rotas `/auth/web/login` e `/auth/web/refresh`, models `venda_diaria`/`perda_diaria`, importação por CSV, consulta `GET /vendas`, stub de `sync_vendas_service`.

@@ -44,12 +44,11 @@ LOJAS = [
     {"nome": "Loja Bairro", "operador_email": "operador.bairro@teste.com", "operador_nome": "Operador Loja Bairro"},
 ]
 
-# Gestor da central: não tem loja e não usa o app mobile.
-# TODO(passo 4): incluir tem_acesso_web=True depois da migration 0014.
+# Gestor da central: não tem loja, não usa o app mobile e entra no SaaS web.
 GESTOR = {
     "email": "gestor@teste.com",
     "nome": "Gestor Central Teste",
-    "flags": {"tem_acesso_app": False},
+    "flags": {"tem_acesso_app": False, "tem_acesso_web": True},
 }
 
 

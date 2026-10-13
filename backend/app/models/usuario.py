@@ -7,15 +7,18 @@ redundante em relação à loja (toda loja já pertence a um negócio): isso é
 intencional, como uma segunda camada de proteção para o isolamento
 multiempresa (ver app/models/produto_loja.py para o racional completo).
 
-Login é individual via e-mail + senha. A flag `tem_acesso_app` controla se
-este usuário pode autenticar no aplicativo móvel (PWA) — controlado pelo
-admin no software web.
+Login é individual via e-mail + senha. Duas flags independentes controlam
+as duas portas de entrada do produto (decisão D1 em docs/STATUS.md):
+- `tem_acesso_app`: pode autenticar no aplicativo móvel (PWA) das lojas.
+- `tem_acesso_web`: pode autenticar no SaaS web da central de produção.
+São separadas para que o gestor de central não precise ganhar acesso ao
+app só para entrar no SaaS, e vice-versa.
 """
 
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -78,6 +81,12 @@ class Usuario(Base):
 
     # Define se este usuário pode autenticar no app móvel.
     tem_acesso_app: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Define se este usuário pode autenticar no SaaS web (migration 0014).
+    # server_default igual ao da migration: usuários existentes ficam sem acesso.
+    tem_acesso_web: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
 
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
