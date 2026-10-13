@@ -13,7 +13,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | Fase | Situação | Observações |
 |---|---|---|
 | 1 — Fundação de dados | **Concluída (2026-10-13)** | Migrations 0007–0014, models, seeds e testes verificados; app mobile testado no iPhone. |
-| 2 — Ingestão de vendas e perdas | Planejamento | D1 e D4 decididas; `obter_gestor_central` pronta e testada. Plano em discussão (2026-10-13). |
+| 2 — Ingestão de vendas e perdas | **Em andamento** (plano aprovado em 2026-10-13) | Passos P1–P8 na seção "Fase 2 — plano" abaixo. |
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
@@ -78,6 +78,23 @@ Depois: abrir `/api/health`, e fazer login e uma contagem de estoque no app mobi
 
 - **Rotas de login do SaaS: `/auth/web/login` e `/auth/web/refresh`.** Os endpoints atuais `/auth/login` e `/auth/refresh` recusam usuários com `tem_acesso_app = False`, então um gestor só com `tem_acesso_web` ainda **não consegue obter um token**. As rotas novas devem exigir `tem_acesso_web` e ficar separadas das do app mobile, sem alterar estas. Até lá, o teste da `obter_gestor_central` gera o token direto (`criar_access_token`). Decidido em 2026-10-13.
 
+### Fase 2 — plano (aprovado em 2026-10-13)
+
+Objetivo (doc §8): ter dado de venda e perda fluindo antes da API do PDV. Critério de aceite: importar um CSV de vendas e consultá-lo em `GET /vendas?loja_id=&produto_id=&data_inicio=&data_fim=`. Decisões aplicadas: D5–D11 (seção 3).
+
+| Passo | O que | Verificação | Situação |
+|---|---|---|---|
+| P1 | Rotas `/auth/web/login` e `/auth/web/refresh` (router próprio, regras da `obter_gestor_central` compartilhadas); claim `porta: web` nos tokens do SaaS; dependency do app recusa tokens `porta: web` e quem não é `operador_loja` (D10) | Script com `TestClient`: login/refresh do gestor, 401/403 por motivo, token de uma porta recusado na outra; regressão completa do app (login, `/produtos`, `/zeragem`); `test_obter_gestor_central` | Em andamento |
+| P2 | Migration 0015: `vendas_diarias` e `perdas_diarias` (`negocio_id`, `loja_id`, `produto_id`, `data`, `quantidade` na unidade do produto, `origem`, `criado_em`; perda já com `inferida`); chave única para D5; `lojas.codigo` opcional (D7) | upgrade → downgrade → upgrade; script de chave única e FKs; regressão do app | — |
+| P3 | Escopo do gestor: lojas da própria central (D8); `loja_id` como filtro validado contra o escopo (fora → 404) | Script: loja da central, de outra central do mesmo negócio, de outro negócio | — |
+| P4 | Serviço de importação CSV (`;`, vírgula decimal, `dd/mm/aaaa`, produto por `codigo`, loja por `codigo`), tudo ou nada (D9), substitui na reimportação (D5) | Script com CSVs sintéticos: válido, data inválida, produto desconhecido, loja fora do escopo, quantidade negativa, linha duplicada, reimportação | — |
+| P5 | `POST /vendas/importar` e `POST /perdas/importar` | `TestClient`: 401/403, importação válida, relatório de erros | — |
+| P6 | `GET /vendas` e `GET /perdas` (filtros, período máximo, paginação) | `TestClient`: filtros, escopo, isolamento entre negócios — fecha o critério de aceite | — |
+| P7 | Stub `sync_vendas_service` ("integração não configurada"), fora do agendador | Chamada direta; agendador não o registra | — |
+| P8 | `seed_vendas.py` (~8 semanas, 2 lojas) para a Fase 3; README e STATUS | Seed 2× sem duplicar; `GET /vendas` devolve o período | — |
+
+Frontend do SaaS (`frontend-saas/`): começa depois do P6.
+
 ---
 
 ## 2. Divergências entre o documento de referência e o código
@@ -88,8 +105,10 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 |---|---|---|
 | Nomes de tabela | singular (`central_producao`, `evento`, `produto_loja`) | `centrais_producao`, `eventos`, `eventos_lojas`, `eventos_produtos`, `produtos_lojas`, `calendario_producao` |
 | Eventos | uma entidade `evento` | `eventos` + tabelas de associação `eventos_lojas` e `eventos_produtos` (usadas quando o escopo é "específicas"/"específicos"); `valor_ajuste` é `Numeric(10,4)` |
-| Isolamento multi-tenant (§6) | recomenda schema/banco por cliente | Tabelas compartilhadas, com `negocio_id` em tudo e isolamento via JWT (ver D2) |
+| Isolamento multi-tenant (§6 e §10) | recomenda schema/banco por cliente | **Decidido (D2, 2026-10-13):** tabelas compartilhadas, com `negocio_id` em todas as tabelas e isolamento via JWT |
 | Login do gestor (§3.1) | gestor com escopo de central; não fala em flag de acesso ao SaaS | Campo novo `usuarios.tem_acesso_web` (migration 0014, D1 = A), separado de `tem_acesso_app`. A dependency `obter_gestor_central` exige `tem_acesso_web` e `gestor_central` (passo 5, 2026-10-13); `obter_usuario_autenticado` e `/auth/login` continuam exigindo `tem_acesso_app` (rotas `/auth/web/*` ficam para a Fase 2) |
+| Vendas e perdas (§3.6, §3.7) | `venda_diaria`/`perda_diaria`, sem `negocio_id` | Planejado (P2): `vendas_diarias`/`perdas_diarias`, **com** `negocio_id` (D2); quantidade na unidade do produto (D6) |
+| Escopo do gestor (§3.1) | "negócio/central inteiro" | **Só as lojas da própria central** (D8) |
 
 ---
 
@@ -98,9 +117,16 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | ID | Decisão | Opções | Recomendação | Status |
 |---|---|---|---|---|
 | D1 | Como o gestor de central autentica no SaaS web | **A)** nova flag `tem_acesso_web` no usuário (migration 0014) + dependency `obter_gestor_central` que valida `tipo_usuario` e `central_producao_id` no banco. **B)** reaproveitar `tem_acesso_app`. | A: separa as duas portas de entrada; em B o gestor ganharia acesso ao app mobile só para conseguir logar. | **Decidida em 2026-10-13: opção A.** |
-| D2 | Isolamento: schema/banco por cliente (doc §6) vs. `negocio_id` em tabelas compartilhadas (código atual) | A) manter tabelas compartilhadas; B) migrar para schema por cliente | Não recomendado de forma conclusiva ainda: o doc diz "recomendado", não "decidido". Trocar depois de ter clientes reais é caro, então decidir **antes do primeiro cliente real**. Enquanto isso, toda query nova **deve** filtrar por `negocio_id` vindo do token. | Aberta. Não bloqueia as Fases 2–4. |
-| D3 | Cliente piloto e acesso aos dados de venda (PDV) | — | Definir cedo: a Fase 7 depende disso. Alternativa de baixo custo: usar os dados do MVP de loja única (planilha) para testar a Fase 3. | Não definido. |
+| D2 | Isolamento: schema/banco por cliente (doc §6) vs. `negocio_id` em tabelas compartilhadas (código atual) | A) manter tabelas compartilhadas; B) migrar para schema por cliente | Trocar depois de ter clientes reais é caro. Toda query nova **deve** filtrar por `negocio_id` vindo do usuário autenticado. | **Decidida em 2026-10-13: opção A** (tabelas compartilhadas, `negocio_id` em todas as tabelas). |
+| D3 | Cliente piloto e acesso aos dados de venda (PDV) | — | Definir cedo: a Fase 7 depende disso. Alternativa de baixo custo: usar os dados do MVP de loja única (planilha) para testar a Fase 3. Quando definido, pode alterar o formato do CSV (D7). | **Aberta.** Trava a implementação real do `sync_vendas_service` (P7 fica em stub). |
 | D4 | Central de produção inativa (`centrais_producao.ativa = false`) bloqueia o acesso do gestor ao SaaS? | **A)** sim: `obter_gestor_central` responde 403. **B)** não: o gestor entra e só vê a central como inativa (ex.: para consultar histórico). | Sem recomendação: depende de como o cliente usa a desativação de central. | **Decidida em 2026-10-13: opção A** (central inativa bloqueia o gestor, 403). Implementada em `obter_gestor_central`. |
+| D5 | Reimportação de loja + produto + data + origem já existentes | A) substituir; B) somar; C) recusar | A: permite corrigir reenviando o arquivo | **Decidida em 2026-10-13: A (substituir).** |
+| D6 | Unidade da quantidade vendida/perdida | — | Unidade do produto (UN → peças, KG → kg), coerente com `estoque_atual_calculado` | **Decidida em 2026-10-13: unidade do produto.** |
+| D7 | Formato do CSV de importação | — | `;` como separador, vírgula decimal, data `dd/mm/aaaa`, produto pelo `codigo` interno, loja por `lojas.codigo` (campo novo, opcional) | **Aprovada em 2026-10-13 como provisória**; pode mudar quando D3 for definida. |
+| D8 | Escopo do gestor de central | A) lojas da própria central; B) todas as lojas do negócio | A: menor privilégio; bate com "cada central roda seu ciclo" | **Decidida em 2026-10-13: A.** |
+| D9 | Arquivo com linhas inválidas | A) tudo ou nada, com relatório de erros; B) importa as válidas | A | **Decidida em 2026-10-13: A (tudo ou nada).** |
+| D10 | Separar tokens do app e do SaaS | — | Claim `porta: web` nos tokens do SaaS, exigida pela `obter_gestor_central`; a dependency do app recusa tokens `porta: web` e usuários que não são `operador_loja` (fecha o risco de gestor com `tem_acesso_app` cair em endpoints que assumem `loja_id`) | **Decidida em 2026-10-13: sim.** |
+| D11 | Como testar rotas por HTTP | A) `httpx` em `requirements-dev.txt` + `TestClient`; B) subir uvicorn nos scripts | A | **Decidida em 2026-10-13: A.** |
 
 ---
 
@@ -113,6 +139,11 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 - **2026-10-13** — **D4 decidida: opção A.** Gestor cuja central está inativa (`centrais_producao.ativa = false`) é recusado pela `obter_gestor_central` com 403 e mensagem própria ("A central de produção vinculada ao seu usuário está inativa"). Coberto pelo caso 8 de `test_obter_gestor_central.py`.
 - **2026-10-13** — Removido `backend/scripts/_fix_migrations_encoding.py` (script temporário, sem uso, que reescrevia as migrations 0012 e 0013 se executado).
 - **2026-10-13** — **Fase 1 concluída.** Último item: teste do app mobile no iPhone (login, contagem e leitor de código de barras, este após correção do `BarcodeScanner`).
+- **2026-10-13** — **Plano da Fase 2 aprovado** (passos P1–P8, seção 1). Frontend do SaaS começa depois do P6.
+- **2026-10-13** — **D2 decidida:** tabelas compartilhadas com `negocio_id` em todas as tabelas (diverge da recomendação do doc §6/§10, que fica superada).
+- **2026-10-13** — **D5:** reimportação substitui o valor. **D6:** quantidade na unidade do produto. **D8:** gestor vê só as lojas da própria central. **D9:** importação tudo ou nada.
+- **2026-10-13** — **D7 (provisória):** CSV com `;`, vírgula decimal, `dd/mm/aaaa`, produto por `codigo`, loja por `lojas.codigo` (opcional). Revisar quando D3 for definida.
+- **2026-10-13** — **D10:** tokens do SaaS levam a claim `porta: web`; a dependency do app recusa esses tokens e quem não é `operador_loja`. **D11:** `httpx` só em `requirements-dev.txt`, testes de rota com `TestClient`.
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -123,4 +154,4 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 1. ~~Teste do app mobile (login + contagem + leitor)~~ — feito pelo Ualker em 2026-10-13. **Fase 1 concluída.**
 2. ~~Consequência de D1 = A: migration 0014, dependency `obter_gestor_central` e script de teste~~ (concluídas em 2026-10-13).
 3. ~~Atualizar `backend/README.md`~~ e ~~corrigir `seed_produtos.py`~~ (feitos em 2026-10-13).
-4. Iniciar a Fase 2: rotas `/auth/web/login` e `/auth/web/refresh`, models `venda_diaria`/`perda_diaria`, importação por CSV, consulta `GET /vendas`, stub de `sync_vendas_service`.
+4. **Fase 2, P1:** rotas `/auth/web/login` e `/auth/web/refresh` + D10 (ver plano na seção 1). Depois P2–P8 na ordem.
