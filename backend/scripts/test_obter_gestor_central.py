@@ -12,9 +12,11 @@ Casos:
   [6]  gestor bloqueado (status != ativo) -> 403
   [7]  gestor ligado a uma central de outro negócio -> 403
   [8]  gestor ligado a uma central inativa -> 403 (decisão D4)
+  [9]  token do app (sem a claim "porta": "web") de um gestor válido -> 401 (decisão D10)
 
-Os tokens são gerados direto (criar_access_token), sem passar por
-/auth/login: as rotas de login do SaaS só chegam na Fase 2. Cada chamada
+Os tokens são gerados direto (criar_access_token com porta=PORTA_WEB),
+sem passar por /auth/web/login: o teste é da dependency, não do login
+(as rotas de login têm o próprio teste, test_auth_web.py). Cada chamada
 monta uma requisição real e passa pelo esquema bearer_scheme_web antes da
 dependency, o mesmo caminho que o FastAPI percorre (sem subir servidor).
 
@@ -40,7 +42,7 @@ from fastapi import HTTPException  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 
 from app.core.dependencies import bearer_scheme_web, obter_gestor_central  # noqa: E402
-from app.core.security import _criar_token, criar_access_token, criar_refresh_token, hash_senha  # noqa: E402
+from app.core.security import PORTA_WEB, _criar_token, criar_access_token, criar_refresh_token, hash_senha  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
 from app.models.central_producao import CentralProducao  # noqa: E402
 from app.models.loja import Loja  # noqa: E402
@@ -49,7 +51,7 @@ from app.models.usuario import StatusUsuario, TipoUsuario, Usuario  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 10
+TOTAL_CASOS = 11
 
 EMAIL_GESTOR_SEED = "gestor@teste.com"
 
@@ -229,7 +231,7 @@ def main():
             central_gestor = db.get(CentralProducao, gestor.central_producao_id)
             try:
                 status_obtido, resultado = _chamar_dependency(
-                    db, criar_access_token(usuario_id=gestor.id, negocio_id=gestor.negocio_id)
+                    db, criar_access_token(usuario_id=gestor.id, negocio_id=gestor.negocio_id, porta=PORTA_WEB)
                 )
                 esperado = (gestor.id, gestor.negocio_id, gestor.central_producao_id)
                 obtido = (
@@ -255,19 +257,21 @@ def main():
         _verificar_recusa(resultados, "CASO 3a (token invalido)", db, "abc.def.ghi", 401)
         if gestor is not None:
             token_expirado = _criar_token(
-                {"sub": str(gestor.id), "negocio_id": gestor.negocio_id},
+                {"sub": str(gestor.id), "negocio_id": gestor.negocio_id, "porta": PORTA_WEB},
                 expira_em=timedelta(minutes=-1),
                 tipo="access",
             )
             _verificar_recusa(resultados, "CASO 3b (token expirado)", db, token_expirado, 401)
-            token_refresh = criar_refresh_token(usuario_id=gestor.id, negocio_id=gestor.negocio_id)
+            token_refresh = criar_refresh_token(usuario_id=gestor.id, negocio_id=gestor.negocio_id, porta=PORTA_WEB)
             _verificar_recusa(resultados, "CASO 3c (refresh token como access)", db, token_refresh, 401)
+            token_app = criar_access_token(usuario_id=gestor.id, negocio_id=gestor.negocio_id)
+            _verificar_recusa(resultados, "CASO 9 (token do app, sem porta web)", db, token_app, 401)
         else:
-            resultados.append(f"{FAIL} CASO 3b/3c: sem o gestor do seed para gerar o token")
+            resultados.append(f"{FAIL} CASO 3b/3c/9: sem o gestor do seed para gerar o token")
 
         # ---- CASOS 4 a 7: usuários sem permissão ----
         def token_de(u):
-            return criar_access_token(usuario_id=u.id, negocio_id=u.negocio_id)
+            return criar_access_token(usuario_id=u.id, negocio_id=u.negocio_id, porta=PORTA_WEB)
 
         _verificar_recusa(
             resultados, "CASO 4 (operador de loja com tem_acesso_web)", db,

@@ -8,7 +8,7 @@ fazer duas coisas, de forma isolada e testável:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -49,26 +49,43 @@ def _criar_token(dados: dict[str, Any], expira_em: timedelta, tipo: str) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def criar_access_token(usuario_id: int, negocio_id: int) -> str:
+# Valor da claim "porta" nos tokens emitidos pelo SaaS web (decisão D10).
+# Tokens do app mobile não têm essa claim — assim continuam idênticos aos
+# que o app já recebe. Cada porta de entrada recusa o token da outra.
+PORTA_WEB = "web"
+
+
+def _dados_token(usuario_id: int, negocio_id: int, porta: Optional[str]) -> dict[str, Any]:
+    dados: dict[str, Any] = {"sub": str(usuario_id), "negocio_id": negocio_id}
+    if porta is not None:
+        dados["porta"] = porta
+    return dados
+
+
+def criar_access_token(usuario_id: int, negocio_id: int, porta: Optional[str] = None) -> str:
     """
     Cria um access token de vida curta.
 
     Carrega dentro de si o usuario_id e o negocio_id — são esses dois valores
     que o restante da API vai extrair do token para aplicar o isolamento
     multiempresa (nunca confiando em valores enviados pelo cliente).
+
+    `porta`: None para o app mobile (sem claim); PORTA_WEB para o SaaS.
     """
     return _criar_token(
-        dados={"sub": str(usuario_id), "negocio_id": negocio_id},
+        dados=_dados_token(usuario_id, negocio_id, porta),
         expira_em=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         tipo="access",
     )
 
 
-def criar_refresh_token(usuario_id: int, negocio_id: int) -> str:
+def criar_refresh_token(usuario_id: int, negocio_id: int, porta: Optional[str] = None) -> str:
     """Cria um refresh token de vida longa (30 dias por padrão), usado só para
-    obter um novo access token sem pedir senha novamente."""
+    obter um novo access token sem pedir senha novamente.
+
+    `porta`: None para o app mobile (sem claim); PORTA_WEB para o SaaS."""
     return _criar_token(
-        dados={"sub": str(usuario_id), "negocio_id": negocio_id},
+        dados=_dados_token(usuario_id, negocio_id, porta),
         expira_em=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         tipo="refresh",
     )

@@ -1,0 +1,7 @@
+# Dependências só de desenvolvimento/teste (não vão para produção).
+# Instalar com: pip install -r requirements-dev.txt
+-r requirements.txt
+
+# Cliente HTTP usado pelo TestClient do FastAPI nos scripts de teste de rotas
+# (decisão D11 em docs/STATUS.md). 0.27.x: compatível com o Starlette 0.38.
+httpx==0.27.2

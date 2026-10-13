@@ -92,6 +92,11 @@ def refresh(dados: RefreshRequest, db: Session = Depends(get_db)):
     if payload.get("tipo") != "refresh":
         raise credenciais_invalidas
 
+    # Decisão D10: refresh token do SaaS web (claim "porta") não renova
+    # sessão do app. Os tokens do app não têm essa claim.
+    if payload.get("porta") is not None:
+        raise credenciais_invalidas
+
     usuario_id_str = payload.get("sub")
     if usuario_id_str is None:
         raise credenciais_invalidas

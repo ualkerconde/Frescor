@@ -22,7 +22,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
-from app.core.security import decodificar_token
+from app.core.security import PORTA_WEB, decodificar_token
 from app.db.session import get_db
 from app.models.central_producao import CentralProducao
 from app.models.usuario import StatusUsuario, TipoUsuario, Usuario
@@ -77,21 +77,34 @@ def _credenciais_invalidas() -> HTTPException:
     )
 
 
-def _carregar_usuario_do_token(token: str, db: Session) -> Usuario:
+def carregar_usuario_do_token(
+    token: str,
+    db: Session,
+    tipo: str = "access",
+    porta: Optional[str] = None,
+) -> Usuario:
     """
-    Valida o access token e devolve o usuário atual do banco.
+    Valida o token e devolve o usuário atual do banco.
 
-    Comum às duas portas de entrada (app e SaaS). Levanta 401 se o token
-    for inválido, expirado, não for um access token ou apontar para um
-    usuário que não existe mais. Não verifica status nem permissões: isso
-    é responsabilidade de cada dependency, porque as regras diferem.
+    Comum às duas portas de entrada (app e SaaS) e às rotas de refresh.
+    Levanta 401 se o token for inválido, expirado, de outro tipo (access x
+    refresh), de outra porta de entrada, ou apontar para um usuário que não
+    existe mais. Não verifica status nem permissões: isso é responsabilidade
+    de cada porta, porque as regras diferem.
+
+    `porta` (decisão D10): None exige um token SEM a claim "porta" (app
+    mobile, tokens como sempre foram); PORTA_WEB exige "porta": "web"
+    (SaaS). Assim um token do SaaS não abre o app, e vice-versa.
     """
     try:
         payload = decodificar_token(token)
     except JWTError:
         raise _credenciais_invalidas()
 
-    if payload.get("tipo") != "access":
+    if payload.get("tipo") != tipo:
+        raise _credenciais_invalidas()
+
+    if payload.get("porta") != porta:
         raise _credenciais_invalidas()
 
     usuario_id_str = payload.get("sub")
@@ -125,7 +138,7 @@ def obter_usuario_autenticado(
        eventual revogação de acesso ou troca de loja feita pelo admin
        tenha efeito imediato.
     """
-    usuario = _carregar_usuario_do_token(credenciais.credentials, db)
+    usuario = carregar_usuario_do_token(credenciais.credentials, db)
 
     if usuario.status != StatusUsuario.ATIVO:
         raise HTTPException(
@@ -139,6 +152,15 @@ def obter_usuario_autenticado(
             detail="Seu usuário não tem permissão para acessar o app. Fale com o administrador.",
         )
 
+    # Decisão D10: o app é de operador de loja. Todos os endpoints do app
+    # usam loja_id; um gestor de central (loja_id nulo) com tem_acesso_app
+    # ligado por engano cairia em consultas sem loja.
+    if usuario.tipo_usuario != TipoUsuario.OPERADOR_LOJA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="O app é restrito a operadores de loja. Gestores de central usam o sistema web.",
+        )
+
     # negocio_id e loja_id vêm do registro atual do usuário no banco, não
     # do token. Isso é intencional: garante que o isolamento multiempresa
     # (e a troca de loja de um usuário, se o admin fizer isso) reflita o
@@ -150,32 +172,21 @@ def obter_usuario_autenticado(
     )
 
 
-def obter_gestor_central(
-    credenciais: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme_web),
-    db: Session = Depends(get_db),
-) -> GestorCentralAutenticado:
+def validar_gestor_central(usuario: Usuario, db: Session) -> GestorCentralAutenticado:
     """
-    Dependency do SaaS web: aceita só gestor de central ativo e com acesso
-    ao SaaS (decisão D1 em docs/STATUS.md).
+    Regras de acesso ao SaaS web, num lugar só. Usada pela dependency
+    obter_gestor_central e pelas rotas /auth/web/login e /auth/web/refresh,
+    para que login, renovação e cada requisição apliquem exatamente as
+    mesmas regras.
 
-    Independe de tem_acesso_app: o acesso ao app mobile e ao SaaS são
-    controlados por flags separadas.
-
-    Respostas:
-    - 401: token ausente, inválido, expirado, ou de usuário inexistente.
-    - 403: usuário autenticado, mas bloqueado, sem tem_acesso_web, que não
-      é gestor_central, cuja central não pertence ao seu negócio, ou cuja
-      central está inativa (decisão D4).
+    Levanta 403 se o usuário estiver bloqueado, sem tem_acesso_web, não for
+    gestor_central, ou se a central não for do seu negócio ou estiver
+    inativa (D4). Independe de tem_acesso_app.
 
     negocio_id e central_producao_id vêm do registro atual do usuário no
     banco (não do token nem da requisição), para que uma revogação feita
     pelo admin tenha efeito imediato.
     """
-    if credenciais is None or credenciais.scheme.lower() != "bearer":
-        raise _credenciais_invalidas()
-
-    usuario = _carregar_usuario_do_token(credenciais.credentials, db)
-
     if usuario.status != StatusUsuario.ATIVO:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -221,6 +232,26 @@ def obter_gestor_central(
         negocio_id=usuario.negocio_id,
         central_producao_id=usuario.central_producao_id,
     )
+
+
+def obter_gestor_central(
+    credenciais: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme_web),
+    db: Session = Depends(get_db),
+) -> GestorCentralAutenticado:
+    """
+    Dependency do SaaS web: aceita só gestor de central ativo e com acesso
+    ao SaaS (decisões D1, D4 e D10 em docs/STATUS.md).
+
+    Respostas:
+    - 401: token ausente, inválido, expirado, de usuário inexistente, ou
+      que não é um token do SaaS (sem a claim "porta": "web").
+    - 403: as regras de validar_gestor_central.
+    """
+    if credenciais is None or credenciais.scheme.lower() != "bearer":
+        raise _credenciais_invalidas()
+
+    usuario = carregar_usuario_do_token(credenciais.credentials, db, porta=PORTA_WEB)
+    return validar_gestor_central(usuario, db)
 
 
 # -----------------------------------------------------------------------
