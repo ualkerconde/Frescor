@@ -12,8 +12,8 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 
 | Fase | Situação | Observações |
 |---|---|---|
-| 1 — Fundação de dados | **Concluída no backend (2026-10-13); falta só o teste no app mobile** | Migrations 0007–0014, models, seeds e testes verificados. A última caixa (login + contagem no app de verdade) fica com o Ualker. |
-| 2 — Ingestão de vendas e perdas | Não iniciada | D1 decidida (opção A); migration 0014 aplicada; `obter_gestor_central` implementada e testada (10/10, inclui D4). Pode começar após o teste no app mobile (Fase 1). |
+| 1 — Fundação de dados | **Concluída (2026-10-13)** | Migrations 0007–0014, models, seeds e testes verificados; app mobile testado no iPhone. |
+| 2 — Ingestão de vendas e perdas | Planejamento | D1 e D4 decididas; `obter_gestor_central` pronta e testada. Plano em discussão (2026-10-13). |
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
@@ -40,7 +40,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 - `UsuarioAutenticado.loja_id` já é `Optional[int]`.
 - `scripts/test_constraint_usuario.py` existe (4 casos: 2 inválidos, 2 válidos).
 
-### Fase 1 — verificação (resultados registrados em 2026-10-13)
+### Fase 1 — verificação (concluída em 2026-10-13)
 
 Na pasta `backend/`, com o venv ativo:
 
@@ -57,7 +57,7 @@ Depois: abrir `/api/health`, e fazer login e uma contagem de estoque no app mobi
 
 - [x] upgrade / downgrade / upgrade sem erro (2026-10-13: 0013 → 0012 → 0013, exit 0)
 - [x] `test_constraint_usuario.py` — 4 casos passam (2026-10-13: a 1ª execução quebrou com `UnicodeEncodeError` ao imprimir o emoji `✅` no console cp1252, antes da limpeza. O script foi corrigido (saída `[OK]`/`[FALHA]`, limpeza de resíduos no início e limpeza final em `try/finally` próprio) e passou 2 vezes seguidas, exit 0, sem deixar dados no banco)
-- [ ] app mobile continua funcionando (login + contagem) — **pendente, teste manual do Ualker no app de verdade.** Sinal indireto já verificado pela API: `POST /auth/login` → 200 para os dois operadores, e `GET /produtos` → 200 com os 11 produtos para cada um.
+- [x] app mobile continua funcionando (login + contagem) — 2026-10-13, teste manual do Ualker no iPhone: login, contagem e leitor de código de barras ok (o leitor precisou de correção, ver pendência 6).
 - [x] seed + health check ok (2026-10-13: `seed_dev.py` rodou 2 vezes sem duplicar; `GET /api/health` → 200 `{"status":"ok","database":"conectado"}`. Teste extra pela API: `POST /auth/login` → 200 para `admin@teste.com` e `operador.bairro@teste.com`, 403 para `gestor@teste.com`, como esperado)
 
 ### Fase 1 — pendências identificadas (fora da verificação)
@@ -67,6 +67,12 @@ Depois: abrir `/api/health`, e fazer login e uma contagem de estoque no app mobi
 3. **Resíduos de teste no banco de desenvolvimento (resolvido em 2026-10-13):** havia dois negócios de teste sobrando (`_Teste Constraint`, id 3, de uma versão antiga do script; e `_Teste Constraint 16588216`, id 6, da execução que quebrou), com suas centrais, lojas e usuários. Nenhuma outra tabela apontava para eles. Foram apagados pela limpeza inicial do script corrigido. Os negócios 1 (`Rede Padaria Teste`) e 2 (`Pais e Filhos`) foram mantidos.
 4. **`seed_produtos.py` (corrigido em 2026-10-13):** agora habilita cada produto em todas as lojas do negócio. Rodou 2 vezes: na 1ª criou 11 habilitações para a `Loja Bairro` (0 para a `Loja Centro`, que já tinha); na 2ª, 0 em ambas. Banco: 11 produtos × 2 lojas, nenhum par duplicado (o banco também impede: `uq_produto_loja`).
 5. **Observação (não bloqueia):** `seed_produtos.py` usa o primeiro negócio do banco (`order by id`), não o negócio pelo nome como o `seed_dev.py`. No banco de dev é o mesmo (id 1); só faria diferença num banco onde outro negócio tenha sido criado antes.
+6. **App mobile — leitor de código de barras com tela preta no iPhone (resolvido em 2026-10-13).**
+   - **Sintoma:** iPhone + Safari, em HTTPS (no navegador e instalado na tela inicial): ao tocar no leitor abria uma tela preta, sem imagem e sem mensagem.
+   - **Descartado:** contexto não seguro (o app já rodava em HTTPS com proxy `/backend`).
+   - **Causa:** montagem dupla do efeito pelo `React.StrictMode` em dev, com as duas aberturas compartilhando o mesmo `<video>`; a primeira, ao parar, zerava a imagem da segunda. Confirmada **indiretamente**: a correção que isola as aberturas resolveu. Como a correção também trouxe `getUserMedia` próprio e limites de tempo, não houve teste isolado de cada mudança.
+   - **Correção (`frontend/src/components/BarcodeScanner.jsx`):** `<video>` próprio por abertura; `getUserMedia` feito pelo componente e entregue ao ZXing (`decodeFromStream`); limites de 20 s (liberação) e 8 s (imagem) com "Tentar novamente"; nome técnico do erro na mensagem; câmera sempre desligada ao fechar, detectar, falhar, estourar o tempo ou o app ir para segundo plano. `StrictMode` mantido.
+   - **Teste do Ualker no iPhone (2026-10-13):** leitura ok, fechar no ✕ ok, trocar de app ok, abrir/fechar várias vezes ok.
 
 ### Pendências registradas para a Fase 2
 
@@ -106,6 +112,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 - **2026-10-13** — **D1 decidida: opção A.** O gestor de central entra no SaaS web por uma flag nova `tem_acesso_web` no usuário, separada de `tem_acesso_app` (migration 0014). A autorização no SaaS fica na dependency `obter_gestor_central`, que exige `status = ativo`, `tem_acesso_web = True` e `tipo_usuario = gestor_central`.
 - **2026-10-13** — **D4 decidida: opção A.** Gestor cuja central está inativa (`centrais_producao.ativa = false`) é recusado pela `obter_gestor_central` com 403 e mensagem própria ("A central de produção vinculada ao seu usuário está inativa"). Coberto pelo caso 8 de `test_obter_gestor_central.py`.
 - **2026-10-13** — Removido `backend/scripts/_fix_migrations_encoding.py` (script temporário, sem uso, que reescrevia as migrations 0012 e 0013 se executado).
+- **2026-10-13** — **Fase 1 concluída.** Último item: teste do app mobile no iPhone (login, contagem e leitor de código de barras, este após correção do `BarcodeScanner`).
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -113,7 +120,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 
 ## 5. Próximo passo
 
-1. **Ualker:** testar login + contagem no app mobile de verdade (última caixa da Fase 1). Usuários: `admin@teste.com` (Loja Centro) e `operador.bairro@teste.com` (Loja Bairro), senha `senha123`.
+1. ~~Teste do app mobile (login + contagem + leitor)~~ — feito pelo Ualker em 2026-10-13. **Fase 1 concluída.**
 2. ~~Consequência de D1 = A: migration 0014, dependency `obter_gestor_central` e script de teste~~ (concluídas em 2026-10-13).
 3. ~~Atualizar `backend/README.md`~~ e ~~corrigir `seed_produtos.py`~~ (feitos em 2026-10-13).
 4. Iniciar a Fase 2: rotas `/auth/web/login` e `/auth/web/refresh`, models `venda_diaria`/`perda_diaria`, importação por CSV, consulta `GET /vendas`, stub de `sync_vendas_service`.
