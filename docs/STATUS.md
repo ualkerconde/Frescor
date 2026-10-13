@@ -86,7 +86,7 @@ Objetivo (doc §8): ter dado de venda e perda fluindo antes da API do PDV. Crit�
 |---|---|---|---|
 | P1 | Rotas `/auth/web/login` e `/auth/web/refresh` (router próprio, regras da `obter_gestor_central` compartilhadas); claim `porta: web` nos tokens do SaaS; dependency do app recusa tokens `porta: web` e quem não é `operador_loja` (D10) | Script com `TestClient`: login/refresh do gestor, 401/403 por motivo, token de uma porta recusado na outra; regressão completa do app (login, `/produtos`, `/zeragem`); `test_obter_gestor_central` | **Concluído (2026-10-13)** — ver abaixo |
 | P2 | Migration 0015: `vendas_diarias` e `perdas_diarias` (`negocio_id`, `loja_id`, `produto_id`, `data`, `quantidade` na unidade do produto, `origem`, `criado_em`; perda já com `inferida`); chave única para D5; `lojas.codigo` opcional (D7) | upgrade → downgrade → upgrade; script de chave única e FKs; regressão do app | **Concluído (2026-10-13)** — ver abaixo |
-| P3 | Escopo do gestor: lojas da própria central (D8); `loja_id` como filtro validado contra o escopo (fora → 404) | Script: loja da central, de outra central do mesmo negócio, de outro negócio | — |
+| P3 | Escopo do gestor: lojas da própria central (D8); `loja_id` como filtro validado contra o escopo (fora → 404) | Script: loja da central, de outra central do mesmo negócio, de outro negócio | **Concluído (2026-10-13)** — ver abaixo |
 | P4 | Serviço de importação CSV (`;`, vírgula decimal, `dd/mm/aaaa`, produto por `codigo`, loja por `codigo`), tudo ou nada (D9), substitui na reimportação (D5) | Script com CSVs sintéticos: válido, data inválida, produto desconhecido, loja fora do escopo, quantidade negativa, linha duplicada, reimportação | — |
 | P5 | `POST /vendas/importar` e `POST /perdas/importar` | `TestClient`: 401/403, importação válida, relatório de erros | — |
 | P6 | `GET /vendas` e `GET /perdas` (filtros, período máximo, paginação) | `TestClient`: filtros, escopo, isolamento entre negócios — fecha o critério de aceite | — |
@@ -111,6 +111,14 @@ Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 - `seed_dev.py`: preenche `lojas.codigo` (`001` Loja Centro, `002` Loja Bairro) só se estiver vazio; 2 execuções sem duplicar.
 - Regressão: `test_auth_web.py` 38/38 (inclui a regressão completa do app), `test_obter_gestor_central.py` 11/11, `test_constraint_usuario.py` 4/4.
 - **Para o P4:** o banco arredonda quantidades com mais de 3 casas (1,2345 → 1,235) sem erro; o serviço de importação deve recusar esses valores em vez de deixar o banco arredondar. A coerência entre o `negocio_id` da venda e o da loja/produto é garantida no banco (FKs compostas), mas o serviço também valida, para dar mensagem de erro clara.
+
+**P3 — resultado (2026-10-13):**
+- `app/services/escopo_service.py` (novo): `consulta_lojas_do_gestor`, `ids_lojas_do_gestor` e `buscar_loja_no_escopo`. Filtra por `negocio_id` **e** `central_producao_id`, ambos de `GestorCentralAutenticado` (nunca da requisição). Não conhece HTTP: devolve a loja ou `None`.
+- `app/api/escopo.py` (novo): `loja_no_escopo_ou_404`, para as rotas do P5/P6. Loja inexistente, de outra central ou de outro negócio recebem a **mesma** resposta (`404 "Loja não encontrada."`), sem revelar se a loja existe.
+- `scripts/test_escopo_gestor.py` (novo): 13 casos, 2 execuções, exit 0, banco limpo. Serviço (S1–S7, incluindo o gestor do seed → lojas `001` e `002`) e HTTP por rotas que só existem no processo de teste (H1–H6, incluindo as três respostas 404 idênticas).
+- Mutação: sem o filtro de central, 5 casos falham. Sem o filtro de negócio, nenhum falha — esperado: a central pertence a um só negócio e `validar_gestor_central` já garante que é o do gestor; o filtro é defesa em profundidade (regra de ouro), sem efeito observável com dados válidos.
+- Regressão: `test_auth_web.py` 38/38, `test_vendas_perdas_modelo.py` 20/20, `test_obter_gestor_central.py` 11/11, `test_constraint_usuario.py` 4/4.
+- **Lojas inativas estão no escopo** (permite consultar histórico). A importação para loja inativa é recusada pelo serviço de importação (D12).
 
 ---
 
@@ -144,6 +152,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | D9 | Arquivo com linhas inválidas | A) tudo ou nada, com relatório de erros; B) importa as válidas | A | **Decidida em 2026-10-13: A (tudo ou nada).** |
 | D10 | Separar tokens do app e do SaaS | — | Claim `porta: web` nos tokens do SaaS, exigida pela `obter_gestor_central`; a dependency do app recusa tokens `porta: web` e usuários que não são `operador_loja` (fecha o risco de gestor com `tem_acesso_app` cair em endpoints que assumem `loja_id`) | **Decidida em 2026-10-13: sim.** |
 | D11 | Como testar rotas por HTTP | A) `httpx` em `requirements-dev.txt` + `TestClient`; B) subir uvicorn nos scripts | A | **Decidida em 2026-10-13: A.** |
+| D12 | Importar vendas/perdas para uma loja **inativa** da central | A) recusar (erro na linha do CSV); B) aceitar | — | **Decidida em 2026-10-13: A (recusar).** Erro na linha; pela D9 (tudo ou nada) o arquivo inteiro não grava. Para carregar histórico de uma loja desativada, reativar a loja temporariamente, importar e desativar de novo. |
 
 ---
 
@@ -161,6 +170,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 - **2026-10-13** — **D5:** reimportação substitui o valor. **D6:** quantidade na unidade do produto. **D8:** gestor vê só as lojas da própria central. **D9:** importação tudo ou nada.
 - **2026-10-13** — **D7 (provisória):** CSV com `;`, vírgula decimal, `dd/mm/aaaa`, produto por `codigo`, loja por `lojas.codigo` (opcional). Revisar quando D3 for definida.
 - **2026-10-13** — **D10:** tokens do SaaS levam a claim `porta: web`; a dependency do app recusa esses tokens e quem não é `operador_loja`. **D11:** `httpx` só em `requirements-dev.txt`, testes de rota com `TestClient`.
+- **2026-10-13** — **D12 decidida: A.** Importação para loja inativa é recusada com erro na linha (e, pela D9, o arquivo inteiro não grava). Histórico de loja desativada: reativar temporariamente, importar e desativar.
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
