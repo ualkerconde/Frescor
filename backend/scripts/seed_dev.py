@@ -1,9 +1,18 @@
 """
-Script para criar dados de teste: um negócio, uma central de produção,
-uma loja vinculada à central, e um usuário operador de loja.
+Script para criar dados de teste da Fase 1: um negócio, uma central de
+produção, duas lojas vinculadas a ela, um usuário operador por loja e um
+usuário gestor da central.
 
-Use isto para conseguir testar o login (POST /auth/login) sem precisar
-ainda das telas administrativas do software web.
+Use isto para testar o login do app (POST /auth/login) e, no SaaS, as
+dependencies do gestor de central, sem precisar ainda das telas
+administrativas do software web.
+
+Idempotente: pode rodar quantas vezes quiser. Cada registro é procurado
+antes de ser criado (negócio pelo nome, central pela primeira do negócio,
+loja pelo nome dentro do negócio, usuário pelo e-mail). As flags de acesso
+dos usuários são reaplicadas a cada execução, para que uma flag nova
+(ex.: tem_acesso_web, migration 0014) chegue também aos usuários que já
+existiam.
 
 Como rodar (com o ambiente virtual ativado, na raiz do projeto backend/):
     python scripts/seed_dev.py
@@ -24,64 +33,149 @@ from app.models.loja import Loja  # noqa: E402
 from app.models.negocio import Negocio  # noqa: E402
 from app.models.usuario import StatusUsuario, TipoUsuario, Usuario  # noqa: E402
 
-EMAIL_TESTE = "admin@teste.com"
+NOME_NEGOCIO = "Rede Padaria Teste"
+NOME_CENTRAL = "Central de Produção Teste"
 SENHA_TESTE = "senha123"
+
+# Uma entrada por loja, cada uma com seu operador. A primeira mantém o
+# usuário histórico admin@teste.com, já usado para testar o app mobile.
+LOJAS = [
+    {"nome": "Loja Centro", "operador_email": "admin@teste.com", "operador_nome": "Administrador Teste"},
+    {"nome": "Loja Bairro", "operador_email": "operador.bairro@teste.com", "operador_nome": "Operador Loja Bairro"},
+]
+
+# Gestor da central: não tem loja e não usa o app mobile.
+# TODO(passo 4): incluir tem_acesso_web=True depois da migration 0014.
+GESTOR = {
+    "email": "gestor@teste.com",
+    "nome": "Gestor Central Teste",
+    "flags": {"tem_acesso_app": False},
+}
+
+
+def _obter_ou_criar_negocio(db):
+    negocio = db.query(Negocio).filter(Negocio.nome == NOME_NEGOCIO).order_by(Negocio.id).first()
+    if negocio:
+        return negocio, False
+    negocio = Negocio(nome=NOME_NEGOCIO, ativo=True)
+    db.add(negocio)
+    db.flush()
+    return negocio, True
+
+
+def _obter_ou_criar_central(db, negocio):
+    # Reaproveita qualquer central já existente do negócio, em vez de buscar
+    # pelo nome: a migration 0008 criou centrais padrão com outro nome para
+    # as lojas que já existiam, e buscar pelo nome criaria uma segunda.
+    central = (
+        db.query(CentralProducao)
+        .filter(CentralProducao.negocio_id == negocio.id)
+        .order_by(CentralProducao.id)
+        .first()
+    )
+    if central:
+        return central, False
+    central = CentralProducao(negocio_id=negocio.id, nome=NOME_CENTRAL, ativa=True)
+    db.add(central)
+    db.flush()
+    return central, True
+
+
+def _obter_ou_criar_loja(db, negocio, central, nome):
+    loja = db.query(Loja).filter(Loja.negocio_id == negocio.id, Loja.nome == nome).first()
+    if loja:
+        return loja, False
+    loja = Loja(
+        negocio_id=negocio.id,
+        central_producao_id=central.id,
+        nome=nome,
+        horario_zeragem=time(6, 0),
+        ativo=True,
+    )
+    db.add(loja)
+    db.flush()
+    return loja, True
+
+
+def _obter_ou_criar_usuario(db, negocio, email, nome, tipo, flags, loja_id=None, central_producao_id=None):
+    """
+    Cria o usuário se não existir. Se existir, só reaplica as flags de
+    acesso (não mexe em senha, nome nem vínculos de quem já existe).
+    Devolve (usuario, situacao), situacao em "criado", "atualizado" ou "existente".
+    """
+    usuario = db.query(Usuario).filter(Usuario.email == email).first()
+    if usuario is None:
+        usuario = Usuario(
+            negocio_id=negocio.id,
+            tipo_usuario=tipo,
+            loja_id=loja_id,
+            central_producao_id=central_producao_id,
+            nome=nome,
+            email=email,
+            senha_hash=hash_senha(SENHA_TESTE),
+            status=StatusUsuario.ATIVO,
+            **flags,
+        )
+        db.add(usuario)
+        db.flush()
+        return usuario, "criado"
+
+    alterado = False
+    for campo, valor in flags.items():
+        if getattr(usuario, campo) != valor:
+            setattr(usuario, campo, valor)
+            alterado = True
+    return usuario, "atualizado" if alterado else "existente"
 
 
 def main():
     db = SessionLocal()
     try:
-        usuario_existente = db.query(Usuario).filter(Usuario.email == EMAIL_TESTE).first()
-        if usuario_existente:
-            print(f"Usuário de teste '{EMAIL_TESTE}' já existe (id={usuario_existente.id}). Nada a fazer.")
-            return
+        negocio, criado = _obter_ou_criar_negocio(db)
+        print(f"Negócio: {negocio.nome} (id={negocio.id}) [{'criado' if criado else 'existente'}]")
 
-        negocio = Negocio(nome="Rede Padaria Teste", ativo=True)
-        db.add(negocio)
-        db.flush()  # garante que negocio.id já está disponível
+        central, criado = _obter_ou_criar_central(db, negocio)
+        print(f"Central: {central.nome} (id={central.id}) [{'criado' if criado else 'existente'}]")
 
-        central = CentralProducao(
-            negocio_id=negocio.id,
-            nome="Central de Produção Teste",
-            ativa=True,
-        )
-        db.add(central)
-        db.flush()  # garante que central.id já está disponível
+        for item in LOJAS:
+            loja, criado = _obter_ou_criar_loja(db, negocio, central, item["nome"])
+            print(
+                f"Loja:    {loja.nome} (id={loja.id}, central_producao_id={loja.central_producao_id}) "
+                f"[{'criado' if criado else 'existente'}]"
+            )
+            usuario, situacao = _obter_ou_criar_usuario(
+                db,
+                negocio,
+                email=item["operador_email"],
+                nome=item["operador_nome"],
+                tipo=TipoUsuario.OPERADOR_LOJA,
+                flags={"tem_acesso_app": True},
+                loja_id=loja.id,
+            )
+            print(f"  Operador: {usuario.email} (id={usuario.id}, loja_id={usuario.loja_id}) [{situacao}]")
 
-        loja = Loja(
-            negocio_id=negocio.id,
+        gestor, situacao = _obter_ou_criar_usuario(
+            db,
+            negocio,
+            email=GESTOR["email"],
+            nome=GESTOR["nome"],
+            tipo=TipoUsuario.GESTOR_CENTRAL,
+            flags=GESTOR["flags"],
             central_producao_id=central.id,
-            nome="Loja Centro",
-            horario_zeragem=time(6, 0),
-            ativo=True,
         )
-        db.add(loja)
-        db.flush()  # garante que loja.id já está disponível
-
-        usuario = Usuario(
-            negocio_id=negocio.id,
-            loja_id=loja.id,
-            tipo_usuario=TipoUsuario.OPERADOR_LOJA,
-            nome="Administrador Teste",
-            email=EMAIL_TESTE,
-            senha_hash=hash_senha(SENHA_TESTE),
-            status=StatusUsuario.ATIVO,
-            tem_acesso_app=True,
+        print(
+            f"Gestor:  {gestor.email} (id={gestor.id}, central_producao_id={gestor.central_producao_id}) "
+            f"[{situacao}]"
         )
-        db.add(usuario)
 
         db.commit()
-
-        print("Dados de teste criados com sucesso:")
-        print(f"  Negócio: {negocio.nome} (id={negocio.id})")
-        print(f"  Central: {central.nome} (id={central.id})")
-        print(f"  Loja:    {loja.nome} (id={loja.id})")
-        print(f"  Usuário: {usuario.email} (id={usuario.id})")
-        print(f"  Senha:   {SENHA_TESTE}")
+        print(f"Senha dos usuários criados agora: {SENHA_TESTE}")
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
 
 if __name__ == "__main__":
     main()
-

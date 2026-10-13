@@ -48,13 +48,14 @@ Depois: abrir `/api/health`, e fazer login e uma contagem de estoque no app mobi
 - [x] upgrade / downgrade / upgrade sem erro (2026-10-13: 0013 → 0012 → 0013, exit 0)
 - [x] `test_constraint_usuario.py` — 4 casos passam (2026-10-13: a 1ª execução quebrou com `UnicodeEncodeError` ao imprimir o emoji `✅` no console cp1252, antes da limpeza. O script foi corrigido (saída `[OK]`/`[FALHA]`, limpeza de resíduos no início e limpeza final em `try/finally` próprio) e passou 2 vezes seguidas, exit 0, sem deixar dados no banco)
 - [ ] app mobile continua funcionando (login + contagem)
-- [ ] seed + health check ok
+- [x] seed + health check ok (2026-10-13: `seed_dev.py` rodou 2 vezes sem duplicar; `GET /api/health` → 200 `{"status":"ok","database":"conectado"}`. Teste extra pela API: `POST /auth/login` → 200 para `admin@teste.com` e `operador.bairro@teste.com`, 403 para `gestor@teste.com`, como esperado)
 
 ### Fase 1 — pendências identificadas (fora da verificação)
 
-1. **`seed_dev.py` não atende o critério de aceite original.** Cria 1 central e **1** loja (o critério pedia 2 ou mais lojas) e só um usuário `operador_loja`. Falta também um usuário `gestor_central`, necessário para testar qualquer endpoint do SaaS.
+1. **`seed_dev.py` (corrigido em 2026-10-13).** Agora é idempotente e garante: negócio `Rede Padaria Teste`; 1 central (reaproveita a existente do negócio: no banco de dev é a `Central Principal (Padrão)`, criada pela migration 0008); lojas `Loja Centro` e `Loja Bairro`; operadores `admin@teste.com` e `operador.bairro@teste.com` (`tem_acesso_app=True`); gestor `gestor@teste.com` (`gestor_central`, `tem_acesso_app=False`). Senha `senha123`. **Falta:** `tem_acesso_web=True` no gestor, que depende da migration 0014 (passo 4). O seed reaplica as flags de acesso a cada execução, então basta incluir a flag e rodar de novo.
 2. **`backend/README.md` está desatualizado:** lista migrations só até a 0006 e não cita os models novos.
 3. **Resíduos de teste no banco de desenvolvimento (resolvido em 2026-10-13):** havia dois negócios de teste sobrando (`_Teste Constraint`, id 3, de uma versão antiga do script; e `_Teste Constraint 16588216`, id 6, da execução que quebrou), com suas centrais, lojas e usuários. Nenhuma outra tabela apontava para eles. Foram apagados pela limpeza inicial do script corrigido. Os negócios 1 (`Rede Padaria Teste`) e 2 (`Pais e Filhos`) foram mantidos.
+4. **`seed_produtos.py` só vincula produtos à primeira loja do negócio.** A `Loja Bairro` fica sem produtos (o operador dela entra no app com a lista vazia). Precisa ser resolvido antes das Fases 4–5, que calculam necessidade e distribuição por loja.
 
 ### Pendências registradas para a Fase 2
 
@@ -98,7 +99,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 
 ## 5. Próximo passo
 
-1. Concluir a verificação da Fase 1 (seção 1) e corrigir `seed_dev.py` (2+ lojas, 1 `operador_loja` por loja e 1 `gestor_central` com `tem_acesso_web=True`).
+1. Concluir a verificação da Fase 1: falta testar login + contagem no app mobile de verdade.
 2. Implementar a consequência de D1 = A: migration 0014 (`tem_acesso_web`), dependency `obter_gestor_central` e script de teste.
 3. Atualizar `backend/README.md`.
 4. Iniciar a Fase 2: rotas `/auth/web/login` e `/auth/web/refresh`, models `venda_diaria`/`perda_diaria`, importação por CSV, consulta `GET /vendas`, stub de `sync_vendas_service`.
