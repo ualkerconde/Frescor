@@ -12,8 +12,8 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 
 | Fase | Situação | Observações |
 |---|---|---|
-| 1 — Fundação de dados | **Implementada; verificação pendente** | Migrations 0007–0013, models e seeds existem. Ver pendências abaixo. |
-| 2 — Ingestão de vendas e perdas | Não iniciada | D1 decidida (opção A); migration 0014 aplicada; `obter_gestor_central` implementada e testada (9/9). Pode começar depois do passo 7 (README + STATUS) e do teste no app mobile. |
+| 1 — Fundação de dados | **Concluída no backend (2026-10-13); falta só o teste no app mobile** | Migrations 0007–0014, models, seeds e testes verificados. A última caixa (login + contagem no app de verdade) fica com o Ualker. |
+| 2 — Ingestão de vendas e perdas | Não iniciada | D1 decidida (opção A); migration 0014 aplicada; `obter_gestor_central` implementada e testada (10/10, inclui D4). Pode começar após o teste no app mobile (Fase 1). |
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
@@ -27,19 +27,20 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 - Migration `0014_usuario_tem_acesso_web` (consequência de D1, 2026-10-13): coluna `usuarios.tem_acesso_web` (Boolean, NOT NULL, `server_default false`) e campo correspondente no model `Usuario`. Verificada: upgrade 0013→0014, downgrade 0014→0013 (coluna removida), upgrade de novo, todos com exit 0. Usuários existentes ficaram com `false`; `test_constraint_usuario.py` passou de novo (4/4); health check 200 e `POST /auth/login` igual a antes (200 para os operadores, 403 para o gestor).
 - Dependency `obter_gestor_central` em `app/core/dependencies.py` (2026-10-13), devolve `GestorCentralAutenticado(usuario_id, negocio_id, central_producao_id)`, sempre lidos do registro atual no banco. Regras:
   - **401**: token ausente, malformado, inválido, expirado, refresh token no lugar de access, ou usuário inexistente. Usa um esquema próprio (`bearer_scheme_web = HTTPBearer(auto_error=False)`), porque o `HTTPBearer` padrão do FastAPI 0.115 responde **403** para token ausente.
-  - **403**: usuário bloqueado; `tem_acesso_web = False`; `tipo_usuario` diferente de `gestor_central`; ou central inexistente ou de outro negócio (checagem extra: nada no banco impede uma central de outro negócio no usuário).
+  - **403**: usuário bloqueado; `tem_acesso_web = False`; `tipo_usuario` diferente de `gestor_central`; central inexistente ou de outro negócio (checagem extra: nada no banco impede uma central de outro negócio no usuário); ou central inativa (D4).
   - Não lê `tem_acesso_app`.
   - A validação do token foi extraída para `_carregar_usuario_do_token`, usada também pela `obter_usuario_autenticado`, com os mesmos passos na mesma ordem. Regressão conferida em `GET /produtos`: 200 com token válido, 403 sem token, 401 com token inválido, iguais ao comportamento anterior. `/auth/login` e `/auth/refresh` não foram alterados.
   - Verificado após a mudança: `test_constraint_usuario.py` 4/4 e health check 200.
   - **Testada em 2026-10-13** por `scripts/test_obter_gestor_central.py` (9 casos, 2 execuções seguidas, exit 0, banco limpo ao final): gestor do seed → 200 com `negocio_id=1`, `central_producao_id=1`; sem token, token inválido, expirado e refresh no lugar de access → 401; operador de loja (mesmo com `tem_acesso_web`), gestor sem `tem_acesso_web`, gestor bloqueado e gestor com central de outro negócio → 403, conferindo também a mensagem. Tokens gerados direto (`criar_access_token`); cada chamada passa pelo `bearer_scheme_web` com uma requisição montada. Sem `TestClient`, porque `httpx` não está instalado no venv.
-  - **Checagem de mutação:** o script foi rodado contra cópias da dependency sem a checagem de `tem_acesso_web` e sem a checagem de central do mesmo negócio. Nos dois casos falhou exatamente o caso correspondente (5 e 7), com exit 1. O arquivo real não foi alterado.
+  - Com D4, o script ganhou o caso 8 (central inativa → 403): 10/10, exit 0.
+  - **Checagem de mutação:** o script foi rodado contra cópias da dependency sem a checagem de `tem_acesso_web`, sem a checagem de central do mesmo negócio e sem a checagem de central inativa. Em cada uma falhou exatamente o caso correspondente (5, 7 e 8), com exit 1. O arquivo real não foi alterado.
 - Models: `CentralProducao`, `CalendarioProducao` (+ `DiaSemana`), `Evento`, `EventoLoja`, `EventoProduto` (+ `EscopoLoja`, `EscopoProduto`, `TipoAjuste`). Campos novos em `Produto`, `ProdutoLoja.ativo`, `Usuario.tipo_usuario`/`central_producao_id`, `Loja.central_producao_id` (obrigatório).
 - Check constraint no banco: `ck_usuario_tipo_vs_loja_central` (operador_loja ⇒ loja_id preenchido e central nula; gestor_central ⇒ central preenchida e loja nula).
 - Não há mais `estoque_minimo`/`estoque_maximo` em `produtos_lojas`, e nenhum código da API ou dos serviços os referencia.
 - `UsuarioAutenticado.loja_id` já é `Optional[int]`.
 - `scripts/test_constraint_usuario.py` existe (4 casos: 2 inválidos, 2 válidos).
 
-### Fase 1 — verificação pendente (rodar e registrar o resultado aqui)
+### Fase 1 — verificação (resultados registrados em 2026-10-13)
 
 Na pasta `backend/`, com o venv ativo:
 
@@ -56,15 +57,16 @@ Depois: abrir `/api/health`, e fazer login e uma contagem de estoque no app mobi
 
 - [x] upgrade / downgrade / upgrade sem erro (2026-10-13: 0013 → 0012 → 0013, exit 0)
 - [x] `test_constraint_usuario.py` — 4 casos passam (2026-10-13: a 1ª execução quebrou com `UnicodeEncodeError` ao imprimir o emoji `✅` no console cp1252, antes da limpeza. O script foi corrigido (saída `[OK]`/`[FALHA]`, limpeza de resíduos no início e limpeza final em `try/finally` próprio) e passou 2 vezes seguidas, exit 0, sem deixar dados no banco)
-- [ ] app mobile continua funcionando (login + contagem)
+- [ ] app mobile continua funcionando (login + contagem) — **pendente, teste manual do Ualker no app de verdade.** Sinal indireto já verificado pela API: `POST /auth/login` → 200 para os dois operadores, e `GET /produtos` → 200 com os 11 produtos para cada um.
 - [x] seed + health check ok (2026-10-13: `seed_dev.py` rodou 2 vezes sem duplicar; `GET /api/health` → 200 `{"status":"ok","database":"conectado"}`. Teste extra pela API: `POST /auth/login` → 200 para `admin@teste.com` e `operador.bairro@teste.com`, 403 para `gestor@teste.com`, como esperado)
 
 ### Fase 1 — pendências identificadas (fora da verificação)
 
 1. **`seed_dev.py` (corrigido em 2026-10-13).** Agora é idempotente e garante: negócio `Rede Padaria Teste`; 1 central (reaproveita a existente do negócio: no banco de dev é a `Central Principal (Padrão)`, criada pela migration 0008); lojas `Loja Centro` e `Loja Bairro`; operadores `admin@teste.com` e `operador.bairro@teste.com` (`tem_acesso_app=True`); gestor `gestor@teste.com` (`gestor_central`, `tem_acesso_app=False`). Senha `senha123`. Depois da migration 0014, o gestor passou a ter `tem_acesso_web=True`: o seed **atualizou** o usuário 27 (mesmo id e `criado_em`), sem recriá-lo.
-2. **`backend/README.md` está desatualizado:** lista migrations só até a 0006 e não cita os models novos.
+2. **`backend/README.md` (atualizado em 2026-10-13):** migrations 0001–0014 com o que cada uma faz, models novos, as duas dependencies de autenticação, seeds (o que criam, ordem, idempotência) e scripts de teste (como rodar, saída esperada).
 3. **Resíduos de teste no banco de desenvolvimento (resolvido em 2026-10-13):** havia dois negócios de teste sobrando (`_Teste Constraint`, id 3, de uma versão antiga do script; e `_Teste Constraint 16588216`, id 6, da execução que quebrou), com suas centrais, lojas e usuários. Nenhuma outra tabela apontava para eles. Foram apagados pela limpeza inicial do script corrigido. Os negócios 1 (`Rede Padaria Teste`) e 2 (`Pais e Filhos`) foram mantidos.
-4. **`seed_produtos.py` só vincula produtos à primeira loja do negócio.** A `Loja Bairro` fica sem produtos (o operador dela entra no app com a lista vazia). Precisa ser resolvido antes das Fases 4–5, que calculam necessidade e distribuição por loja.
+4. **`seed_produtos.py` (corrigido em 2026-10-13):** agora habilita cada produto em todas as lojas do negócio. Rodou 2 vezes: na 1ª criou 11 habilitações para a `Loja Bairro` (0 para a `Loja Centro`, que já tinha); na 2ª, 0 em ambas. Banco: 11 produtos × 2 lojas, nenhum par duplicado (o banco também impede: `uq_produto_loja`).
+5. **Observação (não bloqueia):** `seed_produtos.py` usa o primeiro negócio do banco (`order by id`), não o negócio pelo nome como o `seed_dev.py`. No banco de dev é o mesmo (id 1); só faria diferença num banco onde outro negócio tenha sido criado antes.
 
 ### Pendências registradas para a Fase 2
 
@@ -92,7 +94,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | D1 | Como o gestor de central autentica no SaaS web | **A)** nova flag `tem_acesso_web` no usuário (migration 0014) + dependency `obter_gestor_central` que valida `tipo_usuario` e `central_producao_id` no banco. **B)** reaproveitar `tem_acesso_app`. | A: separa as duas portas de entrada; em B o gestor ganharia acesso ao app mobile só para conseguir logar. | **Decidida em 2026-10-13: opção A.** |
 | D2 | Isolamento: schema/banco por cliente (doc §6) vs. `negocio_id` em tabelas compartilhadas (código atual) | A) manter tabelas compartilhadas; B) migrar para schema por cliente | Não recomendado de forma conclusiva ainda: o doc diz "recomendado", não "decidido". Trocar depois de ter clientes reais é caro, então decidir **antes do primeiro cliente real**. Enquanto isso, toda query nova **deve** filtrar por `negocio_id` vindo do token. | Aberta. Não bloqueia as Fases 2–4. |
 | D3 | Cliente piloto e acesso aos dados de venda (PDV) | — | Definir cedo: a Fase 7 depende disso. Alternativa de baixo custo: usar os dados do MVP de loja única (planilha) para testar a Fase 3. | Não definido. |
-| D4 | Central de produção inativa (`centrais_producao.ativa = false`) bloqueia o acesso do gestor ao SaaS? | **A)** sim: `obter_gestor_central` responde 403. **B)** não: o gestor entra e só vê a central como inativa (ex.: para consultar histórico). | Sem recomendação: depende de como o cliente usa a desativação de central. Hoje a dependency **não** olha `ativa`. | Aberta (registrada em 2026-10-13). Não bloqueia a Fase 2. |
+| D4 | Central de produção inativa (`centrais_producao.ativa = false`) bloqueia o acesso do gestor ao SaaS? | **A)** sim: `obter_gestor_central` responde 403. **B)** não: o gestor entra e só vê a central como inativa (ex.: para consultar histórico). | Sem recomendação: depende de como o cliente usa a desativação de central. | **Decidida em 2026-10-13: opção A** (central inativa bloqueia o gestor, 403). Implementada em `obter_gestor_central`. |
 
 ---
 
@@ -102,6 +104,8 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 - **2026-10-13** — O desenvolvimento passa a ser feito **somente com o Claude** (sem GitHub Copilot). O executor principal é o Claude Code no VS Code, no repositório.
 - **2026-10-13** — `docs/` e `CLAUDE.md` no repositório passam a ser a fonte única da verdade. Conversas no claude.ai servem para planejamento solto; o que virar decisão é gravado aqui.
 - **2026-10-13** — **D1 decidida: opção A.** O gestor de central entra no SaaS web por uma flag nova `tem_acesso_web` no usuário, separada de `tem_acesso_app` (migration 0014). A autorização no SaaS fica na dependency `obter_gestor_central`, que exige `status = ativo`, `tem_acesso_web = True` e `tipo_usuario = gestor_central`.
+- **2026-10-13** — **D4 decidida: opção A.** Gestor cuja central está inativa (`centrais_producao.ativa = false`) é recusado pela `obter_gestor_central` com 403 e mensagem própria ("A central de produção vinculada ao seu usuário está inativa"). Coberto pelo caso 8 de `test_obter_gestor_central.py`.
+- **2026-10-13** — Removido `backend/scripts/_fix_migrations_encoding.py` (script temporário, sem uso, que reescrevia as migrations 0012 e 0013 se executado).
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -109,7 +113,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 
 ## 5. Próximo passo
 
-1. Concluir a verificação da Fase 1: falta testar login + contagem no app mobile de verdade.
+1. **Ualker:** testar login + contagem no app mobile de verdade (última caixa da Fase 1). Usuários: `admin@teste.com` (Loja Centro) e `operador.bairro@teste.com` (Loja Bairro), senha `senha123`.
 2. ~~Consequência de D1 = A: migration 0014, dependency `obter_gestor_central` e script de teste~~ (concluídas em 2026-10-13).
-3. Atualizar `backend/README.md`.
+3. ~~Atualizar `backend/README.md`~~ e ~~corrigir `seed_produtos.py`~~ (feitos em 2026-10-13).
 4. Iniciar a Fase 2: rotas `/auth/web/login` e `/auth/web/refresh`, models `venda_diaria`/`perda_diaria`, importação por CSV, consulta `GET /vendas`, stub de `sync_vendas_service`.

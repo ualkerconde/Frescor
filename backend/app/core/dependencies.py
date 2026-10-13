@@ -164,7 +164,8 @@ def obter_gestor_central(
     Respostas:
     - 401: token ausente, inválido, expirado, ou de usuário inexistente.
     - 403: usuário autenticado, mas bloqueado, sem tem_acesso_web, que não
-      é gestor_central, ou cuja central não pertence ao seu negócio.
+      é gestor_central, cuja central não pertence ao seu negócio, ou cuja
+      central está inativa (decisão D4).
 
     negocio_id e central_producao_id vêm do registro atual do usuário no
     banco (não do token nem da requisição), para que uma revogação feita
@@ -206,6 +207,13 @@ def obter_gestor_central(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Seu usuário não está vinculado a uma central de produção válida. Fale com o administrador.",
+        )
+
+    # Decisão D4 (docs/STATUS.md): central desativada bloqueia o gestor.
+    if not central.ativa:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A central de produção vinculada ao seu usuário está inativa. Fale com o administrador.",
         )
 
     return GestorCentralAutenticado(

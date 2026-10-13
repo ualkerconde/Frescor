@@ -1,7 +1,12 @@
-# Backend — App de Coleta de Dados (Contagem de Estoque)
+# Backend — Projeto Bakery
 
-API em **Python + FastAPI**, com banco de dados **PostgreSQL**, que serve de
-backend para o app móvel (PWA) e para a integração com o software web.
+API em **Python + FastAPI**, com banco de dados **PostgreSQL**. Backend único,
+multiempresa, para as duas portas de entrada do produto:
+
+- **App móvel (PWA)** — as lojas fazem a contagem de estoque (em produção).
+- **SaaS web** — a central de produção compila a demanda das lojas (em construção).
+
+Estado do projeto, decisões e próximos passos: `../docs/STATUS.md`.
 
 ---
 
@@ -16,7 +21,15 @@ backend/
 │   │   ├── 0003_unidade_medida_e_estoque_calculado.py
 │   │   ├── 0004_adiciona_codigo_produto.py
 │   │   ├── 0005_peso_informado_kg.py
-│   │   └── 0006_niveis_classificacao_produtos.py
+│   │   ├── 0006_niveis_classificacao_produtos.py
+│   │   ├── 0007_central_producao.py
+│   │   ├── 0008_loja_central_producao_id.py
+│   │   ├── 0009_usuario_tipo_e_central.py
+│   │   ├── 0010_produto_campos_producao.py
+│   │   ├── 0011_produto_loja_ativo.py
+│   │   ├── 0012_calendario_producao.py
+│   │   ├── 0013_evento_e_associacoes.py
+│   │   └── 0014_usuario_tem_acesso_web.py
 │   ├── env.py
 │   └── script.py.mako
 ├── alembic.ini
@@ -29,7 +42,8 @@ backend/
 │   ├── core/
 │   │   ├── config.py          # Leitura do .env
 │   │   ├── security.py        # Hash de senha + JWT
-│   │   ├── dependencies.py    # Extração de negocio_id/loja_id do token (CRÍTICO)
+│   │   ├── dependencies.py    # Autenticação e isolamento multiempresa (CRÍTICO):
+│   │   │                      #   obter_usuario_autenticado (app) e obter_gestor_central (SaaS)
 │   │   └── scheduler.py       # Agendador APScheduler (zeragem automática)
 │   ├── db/
 │   │   └── session.py         # Conexão com o banco
@@ -43,7 +57,10 @@ backend/
 │   │   ├── estoque_atual.py
 │   │   ├── historico_contagem.py
 │   │   ├── nivel_classificacao.py     # Níveis de classificação (até 4, por negócio)
-│   │   └── produto_classificacao.py   # Valor de cada produto em cada nível
+│   │   ├── produto_classificacao.py   # Valor de cada produto em cada nível
+│   │   ├── central_producao.py        # Central de produção (cada loja pertence a uma)
+│   │   ├── calendario_producao.py     # Dias da semana em que cada produto é produzido
+│   │   └── evento.py                  # Eventos de demanda atípica + associações com lojas/produtos
 │   ├── schemas/
 │   │   ├── auth.py
 │   │   ├── estoque.py
@@ -54,8 +71,11 @@ backend/
 │   │   └── zeragem_service.py       # Lógica de zeragem diária por loja
 │   └── main.py                 # Ponto de entrada da aplicação
 ├── scripts/
-│   ├── seed_dev.py             # Cria negócio, loja e usuário de teste
-│   └── seed_produtos.py        # Cria produtos de teste e habilita para a loja
+│   ├── seed_dev.py                     # Negócio, central, 2 lojas, operadores e gestor de teste
+│   ├── seed_produtos.py                # Produtos de teste, habilitados em todas as lojas
+│   ├── test_constraint_usuario.py      # Testa ck_usuario_tipo_vs_loja_central
+│   ├── test_obter_gestor_central.py    # Testa a dependency de acesso ao SaaS
+│   └── _check_enums.py                 # Utilitário: lista os tipos enum do PostgreSQL
 ├── .env.example
 ├── .gitignore
 └── requirements.txt
@@ -147,9 +167,26 @@ Cole o valor gerado no campo `SECRET_KEY` do `.env`.
 alembic upgrade head
 ```
 
-Aplica as 3 migrações em sequência, criando todas as tabelas:
-`negocios`, `lojas`, `usuarios`, `permissoes_web`, `produtos`,
-`produtos_lojas`, `estoque_atual`, `historico_contagens`.
+Aplica as 14 migrações em sequência (0001 a 0014). Tabelas criadas:
+`negocios`, `centrais_producao`, `lojas`, `usuarios`, `permissoes_web`,
+`produtos`, `produtos_lojas`, `estoque_atual`, `historico_contagens`,
+`niveis_classificacao`, `produto_classificacoes`, `calendario_producao`,
+`eventos`, `eventos_lojas`, `eventos_produtos`.
+
+| Migração | O que faz |
+| --- | --- |
+| 0001–0006 | Base do app de contagem: negócios, lojas, usuários, produtos, habilitação, estoque, histórico, unidade de medida, código interno, peso informado, níveis de classificação |
+| 0007 | Cria `centrais_producao` |
+| 0008 | `lojas.central_producao_id` (obrigatório); cria uma "Central Principal (Padrão)" para as lojas que já existiam |
+| 0009 | `usuarios.tipo_usuario` (`operador_loja` / `gestor_central`), `central_producao_id`, `loja_id` opcional e o check constraint `ck_usuario_tipo_vs_loja_central` |
+| 0010 | Campos de produção em `produtos` (`tem_producao_propria`, `dias_validade`, `ciclo_previsao`, ...) |
+| 0011 | `produtos_lojas.ativo` |
+| 0012 | Cria `calendario_producao` |
+| 0013 | Cria `eventos`, `eventos_lojas` e `eventos_produtos` |
+| 0014 | `usuarios.tem_acesso_web` (acesso ao SaaS, separado de `tem_acesso_app`) |
+
+Toda migração tem `downgrade` funcional. Para conferir uma migração nova:
+`alembic upgrade head` → `alembic downgrade -1` → `alembic upgrade head`.
 
 ### 3.2 Popular dados de teste
 
@@ -158,13 +195,46 @@ python scripts/seed_dev.py
 python scripts/seed_produtos.py
 ```
 
-Cria:
+Os dois scripts são idempotentes: podem rodar quantas vezes quiser, sem
+duplicar dados (procuram cada registro antes de criar).
+
+Rode **nesta ordem** (o segundo usa as lojas criadas pelo primeiro). Cria:
 
 - **Negócio:** "Rede Padaria Teste"
-- **Loja:** "Loja Centro" (horário de zeragem: 06:00)
-- **Usuário:** `admin@teste.com` / `senha123`
-- **10 produtos:** 6 em UN e 4 em KG (com peso médio cadastrado)
-- **Habilitação:** todos os produtos habilitados para a Loja Centro
+- **Central de produção:** reaproveita a do negócio, se já existir
+- **Lojas:** "Loja Centro" e "Loja Bairro" (horário de zeragem: 06:00)
+- **Usuários** (senha `senha123`):
+
+| E-mail | Perfil | App mobile | SaaS web |
+| --- | --- | --- | --- |
+| `admin@teste.com` | operador da Loja Centro | sim | não |
+| `operador.bairro@teste.com` | operador da Loja Bairro | sim | não |
+| `gestor@teste.com` | gestor da central | não | sim |
+
+- **11 produtos:** 6 em UN, 4 em KG com peso médio e 1 em KG sem peso médio (pesado na hora)
+- **Habilitação:** todos os produtos habilitados em todas as lojas do negócio
+- **Classificação** (Categoria/Subcategoria) e **calendário de produção** de exemplo
+
+> O gestor ainda não consegue fazer login: `/auth/login` é a rota do app e
+> exige `tem_acesso_app`. As rotas de login do SaaS (`/auth/web/login`,
+> `/auth/web/refresh`) estão previstas para a Fase 2.
+
+### 3.3 Scripts de teste
+
+Rodam contra o banco configurado no `.env`, criam os próprios dados de
+teste e apagam tudo ao final (também apagam resíduos de execuções
+anteriores que tenham quebrado no meio). Terminam com exit 0 se tudo
+passou e exit 1 se algum caso falhou.
+
+```bash
+# Check constraint entre tipo_usuario, loja_id e central_producao_id (4 casos)
+python scripts/test_constraint_usuario.py
+
+# Dependency obter_gestor_central (10 casos). Requer o seed_dev.py.
+python scripts/test_obter_gestor_central.py
+```
+
+Saída esperada: uma linha `[OK]` por caso e, no fim, `TODOS OS CASOS PASSARAM`.
 
 ---
 
@@ -185,8 +255,10 @@ uvicorn app.main:app --reload
 
 ```text
 negocio (rede)
+   └─ centrais_producao  (cada loja pertence a exatamente uma central)
+         └─ usuarios     (gestor_central: escopo da central, sem loja)
    └─ lojas         (N lojas, cada uma com horario_zeragem próprio)
-         └─ usuarios (cada usuário pertence a UMA loja fixa)
+         └─ usuarios (operador_loja: pertence a UMA loja fixa)
    └─ produtos      (catálogo da rede — gerenciado pelo software web)
          └─ produtos_lojas   (habilitação: quais produtos cada loja pode contar)
                └─ estoque_atual        (por produto + loja)
@@ -249,10 +321,23 @@ valores é feita pelo software web (fora deste repositório).
 
 ## 7. Segurança — Isolamento Multiempresa
 
-**Regra fundamental:** `negocio_id` e `loja_id` **nunca** vêm de um parâmetro
-enviado pelo app. São sempre extraídos do token JWT validado no backend
+**Regra fundamental:** `negocio_id`, `loja_id` e `central_producao_id`
+**nunca** vêm de um parâmetro enviado pelo cliente. São sempre lidos do
+registro atual do usuário identificado pelo token JWT validado no backend
 (ver `app/core/dependencies.py`). Isso impede que um usuário de um negócio
 acesse dados de outro negócio, mesmo alterando parâmetros na requisição.
+
+Duas dependencies, uma por porta de entrada:
+
+| Dependency | Usada por | Exige | Devolve |
+| --- | --- | --- | --- |
+| `obter_usuario_autenticado` | app mobile | usuário ativo + `tem_acesso_app` | `usuario_id`, `negocio_id`, `loja_id` |
+| `obter_gestor_central` | SaaS web | usuário ativo + `tem_acesso_web` + `gestor_central` + central do mesmo negócio e ativa | `usuario_id`, `negocio_id`, `central_producao_id` |
+
+Na `obter_gestor_central`: token ausente ou inválido → **401**; autenticado
+sem permissão → **403**. (Na dependency do app, token ausente responde 403,
+que é o padrão do FastAPI 0.115; foi mantido para não mudar o comportamento
+do app em produção.)
 
 ---
 
@@ -310,12 +395,16 @@ alembic downgrade -1
 alembic revision --autogenerate -m "descricao da mudanca"
 ```
 
-### Seeds
+### Seeds e testes
 
 ```bash
-# Recriar todos os dados de teste do zero
+# Criar ou completar os dados de teste (idempotente, não apaga nada)
 python scripts/seed_dev.py
 python scripts/seed_produtos.py
+
+# Testes
+python scripts/test_constraint_usuario.py
+python scripts/test_obter_gestor_central.py
 ```
 
 ### Banco (via psql)

@@ -4,6 +4,14 @@ unidade de medida, peso médio e classificação (categoria/subcategoria).
 Também cria registros de exemplo em `calendario_producao` para alguns
 produtos com tem_producao_propria = True.
 
+Habilita cada produto em TODAS as lojas do negócio (produtos_lojas), para
+que o operador de qualquer loja do seed veja o catálogo no app e para que
+as fases de necessidade e distribuição tenham mais de uma loja com dados.
+
+Idempotente: pode rodar quantas vezes quiser. Produto, habilitação,
+classificação e calendário são procurados antes de serem criados (o banco
+também impede habilitação duplicada: uq_produto_loja).
+
 Como rodar:
     python scripts/seed_produtos.py
 """
@@ -65,8 +73,8 @@ def main():
             print("Nenhum negócio encontrado. Rode 'python scripts/seed_dev.py' primeiro.")
             return
 
-        loja = db.query(Loja).filter(Loja.negocio_id == negocio.id).order_by(Loja.id).first()
-        if loja is None:
+        lojas = db.query(Loja).filter(Loja.negocio_id == negocio.id).order_by(Loja.id).all()
+        if not lojas:
             print("Nenhuma loja encontrada. Rode 'python scripts/seed_dev.py' primeiro.")
             return
 
@@ -88,7 +96,7 @@ def main():
         nivel_subcategoria = niveis_por_nome["subcategoria"]
 
         criados = 0
-        habilitados = 0
+        habilitados = {loja.id: 0 for loja in lojas}
         classificados = 0
         for item in PRODUTOS_TESTE:
             produto = (
@@ -120,14 +128,15 @@ def main():
                 produto.dias_validade = item["dias_validade"]
                 produto.ciclo_previsao = item["ciclo_previsao"]
 
-            hab = (
-                db.query(ProdutoLoja)
-                .filter(ProdutoLoja.produto_id == produto.id, ProdutoLoja.loja_id == loja.id)
-                .first()
-            )
-            if hab is None:
-                db.add(ProdutoLoja(produto_id=produto.id, loja_id=loja.id))
-                habilitados += 1
+            for loja in lojas:
+                hab = (
+                    db.query(ProdutoLoja)
+                    .filter(ProdutoLoja.produto_id == produto.id, ProdutoLoja.loja_id == loja.id)
+                    .first()
+                )
+                if hab is None:
+                    db.add(ProdutoLoja(produto_id=produto.id, loja_id=loja.id))
+                    habilitados[loja.id] += 1
 
             # ---- Classificação (Categoria / Subcategoria) ----
             for nivel, valor in ((nivel_categoria, item["categoria"]), (nivel_subcategoria, item["subcategoria"])):
@@ -169,10 +178,11 @@ def main():
         db.commit()
 
         print(f"{criados} produto(s) criado(s) no catálogo de '{negocio.nome}'.")
-        print(f"{habilitados} habilitação(ões) criada(s) para '{loja.nome}'.")
+        for loja in lojas:
+            print(f"{habilitados[loja.id]} habilitação(ões) criada(s) para '{loja.nome}' (id={loja.id}).")
         print(f"{classificados} classificação(ões) criada(s) (Categoria/Subcategoria).")
         print(f"{cal_criados} entrada(s) de calendário de produção criada(s).")
-        if criados == 0 and habilitados == 0 and classificados == 0 and cal_criados == 0:
+        if criados == 0 and sum(habilitados.values()) == 0 and classificados == 0 and cal_criados == 0:
             print("(Produtos já existiam — codigos internos e classificação atualizados se necessário.)")
     finally:
         db.close()

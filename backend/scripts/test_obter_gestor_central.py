@@ -11,6 +11,7 @@ Casos:
   [5]  gestor com tem_acesso_web=False -> 403
   [6]  gestor bloqueado (status != ativo) -> 403
   [7]  gestor ligado a uma central de outro negócio -> 403
+  [8]  gestor ligado a uma central inativa -> 403 (decisão D4)
 
 Os tokens são gerados direto (criar_access_token), sem passar por
 /auth/login: as rotas de login do SaaS só chegam na Fase 2. Cada chamada
@@ -48,7 +49,7 @@ from app.models.usuario import StatusUsuario, TipoUsuario, Usuario  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 9
+TOTAL_CASOS = 10
 
 EMAIL_GESTOR_SEED = "gestor@teste.com"
 
@@ -177,7 +178,9 @@ def main():
 
         central_a = CentralProducao(negocio_id=negocio_a.id, nome="_Central Teste A", ativa=True)
         central_b = CentralProducao(negocio_id=negocio_b.id, nome="_Central Teste B", ativa=True)
-        db.add_all([central_a, central_b])
+        # Mesmo negócio do gestor, mas desativada (caso 8).
+        central_inativa = CentralProducao(negocio_id=negocio_a.id, nome="_Central Teste A Inativa", ativa=False)
+        db.add_all([central_a, central_b, central_inativa])
         db.flush()
 
         loja_a = Loja(
@@ -208,6 +211,11 @@ def main():
         gestor_cruzado = _criar_usuario(
             db, negocio_a.id, run_id, "gestor_cruzado",
             tipo_usuario=TipoUsuario.GESTOR_CENTRAL, central_producao_id=central_b.id,
+            status=StatusUsuario.ATIVO, tem_acesso_web=True,
+        )
+        gestor_central_inativa = _criar_usuario(
+            db, negocio_a.id, run_id, "gestor_central_inativa",
+            tipo_usuario=TipoUsuario.GESTOR_CENTRAL, central_producao_id=central_inativa.id,
             status=StatusUsuario.ATIVO, tem_acesso_web=True,
         )
         db.commit()
@@ -276,6 +284,10 @@ def main():
         _verificar_recusa(
             resultados, "CASO 7 (gestor com central de outro negocio)", db,
             token_de(gestor_cruzado), 403, "central de produção válida",
+        )
+        _verificar_recusa(
+            resultados, "CASO 8 (gestor com central inativa)", db,
+            token_de(gestor_central_inativa), 403, "está inativa",
         )
 
     finally:
