@@ -8,8 +8,14 @@ Verifica 4 casos:
   [VÁLIDO 2]   gestor_central com loja_id=NULL e central_producao_id preenchido → deve passar
 
 Uso: python scripts/test_constraint_usuario.py
+
+Saída só com caracteres que o console do Windows (cp1252) imprime:
+[OK]/[FALHA] e "->" em vez de emojis e setas. Um erro de impressão já
+deixou dados de teste sobrando no banco; por isso o script também apaga
+resíduos de execuções anteriores logo no início.
 """
 
+import re
 import sys
 from datetime import time
 from pathlib import Path
@@ -27,8 +33,13 @@ from app.models.loja import Loja
 from app.models.negocio import Negocio
 from app.models.usuario import StatusUsuario, TipoUsuario, Usuario
 
-PASS = "✅ PASS"
-FAIL = "❌ FAIL"
+PASS = "[OK]"
+FAIL = "[FALHA]"
+
+# Identificação dos dados criados por este teste. O nome sem sufixo vem de
+# uma versão antiga do script, que não usava run_id.
+PREFIXO_NEGOCIO_TESTE = "_Teste Constraint"
+EMAIL_TESTE = re.compile(r"^(in)?valido[12](_[0-9a-f]{8})?@teste[.]com$")
 
 
 def _limpar(db, negocio_id):
@@ -40,14 +51,57 @@ def _limpar(db, negocio_id):
     db.commit()
 
 
-def main():
+def _limpar_residuos():
+    """
+    Apaga dados de teste deixados por execuções anteriores que quebraram
+    antes da limpeza. Mostra o que encontrou antes de apagar.
+    """
     db = SessionLocal()
+    try:
+        negocios = [
+            n for n in db.query(Negocio).all()
+            if n.nome == PREFIXO_NEGOCIO_TESTE or n.nome.startswith(PREFIXO_NEGOCIO_TESTE + " ")
+        ]
+        negocio_ids = {n.id for n in negocios}
+        usuarios_avulsos = [
+            u for u in db.query(Usuario).filter(Usuario.email.like("%@teste.com")).all()
+            if EMAIL_TESTE.match(u.email) and u.negocio_id not in negocio_ids
+        ]
+
+        if not negocios and not usuarios_avulsos:
+            print("[limpeza inicial] Nenhum resíduo de teste encontrado.")
+            return
+
+        print("[limpeza inicial] Resíduos de execuções anteriores encontrados:")
+        for n in negocios:
+            emails = [u.email for u in db.query(Usuario).filter(Usuario.negocio_id == n.id)]
+            print(f"  negocio id={n.id} nome={n.nome!r} usuarios={emails}")
+        for u in usuarios_avulsos:
+            print(f"  usuario avulso id={u.id} email={u.email!r} negocio_id={u.negocio_id}")
+
+        for u in usuarios_avulsos:
+            db.delete(u)
+        db.commit()
+        for n in negocios:
+            _limpar(db, n.id)
+        print("[limpeza inicial] Resíduos apagados.")
+    finally:
+        db.close()
+
+
+def main():
+    _limpar_residuos()
+
+    db = SessionLocal()
+    negocio_id = None
+    resultados = []
     try:
         # --- Setup: cria negócio, central e loja de teste ---
         run_id = uuid.uuid4().hex[:8]
         negocio = Negocio(nome=f"_Teste Constraint {run_id}", ativo=True)
         db.add(negocio)
         db.flush()
+        negocio_id = negocio.id
 
         central = CentralProducao(negocio_id=negocio.id, nome="_Central Teste", ativa=True)
         db.add(central)
@@ -63,8 +117,6 @@ def main():
         db.add(loja)
         db.flush()
         db.commit()
-
-        resultados = []
 
         # ---- CASO INVÁLIDO 1: operador_loja sem loja_id ----
         db2 = SessionLocal()
@@ -86,7 +138,7 @@ def main():
             resultados.append(f"{FAIL} INVÁLIDO 1 (operador_loja sem loja_id): constraint NÃO foi violada — bug!")
         except (IntegrityError, sa.exc.ProgrammingError) as e:
             db2.rollback()
-            resultados.append(f"{PASS} INVÁLIDO 1 (operador_loja sem loja_id): constraint violada corretamente → {type(e).__name__}")
+            resultados.append(f"{PASS} INVÁLIDO 1 (operador_loja sem loja_id): constraint violada corretamente -> {type(e).__name__}")
         finally:
             db2.close()
 
@@ -110,7 +162,7 @@ def main():
             resultados.append(f"{FAIL} INVÁLIDO 2 (gestor_central com loja_id): constraint NÃO foi violada — bug!")
         except (IntegrityError, sa.exc.ProgrammingError) as e:
             db3.rollback()
-            resultados.append(f"{PASS} INVÁLIDO 2 (gestor_central com loja_id): constraint violada corretamente → {type(e).__name__}")
+            resultados.append(f"{PASS} INVÁLIDO 2 (gestor_central com loja_id): constraint violada corretamente -> {type(e).__name__}")
         finally:
             db3.close()
 
@@ -133,7 +185,7 @@ def main():
             db4.commit()
             resultados.append(f"{PASS} VÁLIDO 1 (operador_loja correto): inserido com sucesso (id={u.id})")
         except Exception as e:
-            resultados.append(f"{FAIL} VÁLIDO 1 (operador_loja correto): falhou inesperadamente → {e}")
+            resultados.append(f"{FAIL} VÁLIDO 1 (operador_loja correto): falhou inesperadamente -> {e}")
         finally:
             db4.close()
 
@@ -156,22 +208,32 @@ def main():
             db5.commit()
             resultados.append(f"{PASS} VÁLIDO 2 (gestor_central correto): inserido com sucesso (id={u.id})")
         except Exception as e:
-            resultados.append(f"{FAIL} VÁLIDO 2 (gestor_central correto): falhou inesperadamente → {e}")
+            resultados.append(f"{FAIL} VÁLIDO 2 (gestor_central correto): falhou inesperadamente -> {e}")
         finally:
             db5.close()
 
     finally:
-        print("\n=== Resultado do teste de constraint ===")
-        for r in resultados:
-            print(r)
-        falhas = [r for r in resultados if r.startswith("❌")]
-        print(f"\n{'TODOS OS CASOS PASSARAM' if not falhas else f'{len(falhas)} CASO(S) FALHARAM'}")
-        # Limpeza dos dados de teste
         try:
-            _limpar(db, negocio.id)
-        except Exception as e:
-            print(f"[aviso] Erro na limpeza: {e}")
-        db.close()
+            print("\n=== Resultado do teste de constraint ===")
+            for r in resultados:
+                print(r)
+            falhas = [r for r in resultados if r.startswith(FAIL)]
+            if len(resultados) < 4:
+                print(f"\nTESTE INCOMPLETO: só {len(resultados)} de 4 casos rodaram")
+            else:
+                print(f"\n{'TODOS OS CASOS PASSARAM' if not falhas else f'{len(falhas)} CASO(S) FALHARAM'}")
+        finally:
+            # Roda mesmo que a impressão acima falhe.
+            if negocio_id is not None:
+                try:
+                    db.rollback()
+                    _limpar(db, negocio_id)
+                except Exception as e:
+                    print(f"[aviso] Erro na limpeza: {e}")
+            db.close()
+
+    if len(resultados) < 4 or any(r.startswith(FAIL) for r in resultados):
+        sys.exit(1)
 
 
 if __name__ == "__main__":
