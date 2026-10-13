@@ -13,7 +13,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | Fase | Situação | Observações |
 |---|---|---|
 | 1 — Fundação de dados | **Implementada; verificação pendente** | Migrations 0007–0013, models e seeds existem. Ver pendências abaixo. |
-| 2 — Ingestão de vendas e perdas | Não iniciada | D1 decidida (opção A); migration 0014 aplicada; `obter_gestor_central` implementada. Falta o script de teste dela (passo 6) antes de começar. |
+| 2 — Ingestão de vendas e perdas | Não iniciada | D1 decidida (opção A); migration 0014 aplicada; `obter_gestor_central` implementada e testada (9/9). Pode começar depois do passo 7 (README + STATUS) e do teste no app mobile. |
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
@@ -30,7 +30,9 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
   - **403**: usuário bloqueado; `tem_acesso_web = False`; `tipo_usuario` diferente de `gestor_central`; ou central inexistente ou de outro negócio (checagem extra: nada no banco impede uma central de outro negócio no usuário).
   - Não lê `tem_acesso_app`.
   - A validação do token foi extraída para `_carregar_usuario_do_token`, usada também pela `obter_usuario_autenticado`, com os mesmos passos na mesma ordem. Regressão conferida em `GET /produtos`: 200 com token válido, 403 sem token, 401 com token inválido, iguais ao comportamento anterior. `/auth/login` e `/auth/refresh` não foram alterados.
-  - Verificado após a mudança: `test_constraint_usuario.py` 4/4 e health check 200. **Ainda não testada com usuários reais** (passo 6).
+  - Verificado após a mudança: `test_constraint_usuario.py` 4/4 e health check 200.
+  - **Testada em 2026-10-13** por `scripts/test_obter_gestor_central.py` (9 casos, 2 execuções seguidas, exit 0, banco limpo ao final): gestor do seed → 200 com `negocio_id=1`, `central_producao_id=1`; sem token, token inválido, expirado e refresh no lugar de access → 401; operador de loja (mesmo com `tem_acesso_web`), gestor sem `tem_acesso_web`, gestor bloqueado e gestor com central de outro negócio → 403, conferindo também a mensagem. Tokens gerados direto (`criar_access_token`); cada chamada passa pelo `bearer_scheme_web` com uma requisição montada. Sem `TestClient`, porque `httpx` não está instalado no venv.
+  - **Checagem de mutação:** o script foi rodado contra cópias da dependency sem a checagem de `tem_acesso_web` e sem a checagem de central do mesmo negócio. Nos dois casos falhou exatamente o caso correspondente (5 e 7), com exit 1. O arquivo real não foi alterado.
 - Models: `CentralProducao`, `CalendarioProducao` (+ `DiaSemana`), `Evento`, `EventoLoja`, `EventoProduto` (+ `EscopoLoja`, `EscopoProduto`, `TipoAjuste`). Campos novos em `Produto`, `ProdutoLoja.ativo`, `Usuario.tipo_usuario`/`central_producao_id`, `Loja.central_producao_id` (obrigatório).
 - Check constraint no banco: `ck_usuario_tipo_vs_loja_central` (operador_loja ⇒ loja_id preenchido e central nula; gestor_central ⇒ central preenchida e loja nula).
 - Não há mais `estoque_minimo`/`estoque_maximo` em `produtos_lojas`, e nenhum código da API ou dos serviços os referencia.
@@ -108,6 +110,6 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 ## 5. Próximo passo
 
 1. Concluir a verificação da Fase 1: falta testar login + contagem no app mobile de verdade.
-2. Concluir a consequência de D1 = A: ~~migration 0014~~ e ~~dependency `obter_gestor_central`~~ (feitas em 2026-10-13); falta o script de teste da dependency (passo 6).
+2. ~~Consequência de D1 = A: migration 0014, dependency `obter_gestor_central` e script de teste~~ (concluídas em 2026-10-13).
 3. Atualizar `backend/README.md`.
 4. Iniciar a Fase 2: rotas `/auth/web/login` e `/auth/web/refresh`, models `venda_diaria`/`perda_diaria`, importação por CSV, consulta `GET /vendas`, stub de `sync_vendas_service`.
