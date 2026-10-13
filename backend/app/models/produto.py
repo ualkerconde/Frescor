@@ -8,7 +8,7 @@ Cadastrados e gerenciados exclusivamente pelo software web. O app móvel
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -26,6 +26,9 @@ class CicloPrevisao(str, enum.Enum):
 
 class Produto(Base):
     __tablename__ = "produtos"
+    # Alvo das FKs compostas de vendas_diarias/perdas_diarias (migration
+    # 0015): garante no banco que venda/perda e produto são do mesmo negócio.
+    __table_args__ = (UniqueConstraint("negocio_id", "id", name="uq_produto_negocio_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

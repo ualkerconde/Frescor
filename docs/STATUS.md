@@ -85,7 +85,7 @@ Objetivo (doc §8): ter dado de venda e perda fluindo antes da API do PDV. Crit�
 | Passo | O que | Verificação | Situação |
 |---|---|---|---|
 | P1 | Rotas `/auth/web/login` e `/auth/web/refresh` (router próprio, regras da `obter_gestor_central` compartilhadas); claim `porta: web` nos tokens do SaaS; dependency do app recusa tokens `porta: web` e quem não é `operador_loja` (D10) | Script com `TestClient`: login/refresh do gestor, 401/403 por motivo, token de uma porta recusado na outra; regressão completa do app (login, `/produtos`, `/zeragem`); `test_obter_gestor_central` | **Concluído (2026-10-13)** — ver abaixo |
-| P2 | Migration 0015: `vendas_diarias` e `perdas_diarias` (`negocio_id`, `loja_id`, `produto_id`, `data`, `quantidade` na unidade do produto, `origem`, `criado_em`; perda já com `inferida`); chave única para D5; `lojas.codigo` opcional (D7) | upgrade → downgrade → upgrade; script de chave única e FKs; regressão do app | — |
+| P2 | Migration 0015: `vendas_diarias` e `perdas_diarias` (`negocio_id`, `loja_id`, `produto_id`, `data`, `quantidade` na unidade do produto, `origem`, `criado_em`; perda já com `inferida`); chave única para D5; `lojas.codigo` opcional (D7) | upgrade → downgrade → upgrade; script de chave única e FKs; regressão do app | **Concluído (2026-10-13)** — ver abaixo |
 | P3 | Escopo do gestor: lojas da própria central (D8); `loja_id` como filtro validado contra o escopo (fora → 404) | Script: loja da central, de outra central do mesmo negócio, de outro negócio | — |
 | P4 | Serviço de importação CSV (`;`, vírgula decimal, `dd/mm/aaaa`, produto por `codigo`, loja por `codigo`), tudo ou nada (D9), substitui na reimportação (D5) | Script com CSVs sintéticos: válido, data inválida, produto desconhecido, loja fora do escopo, quantidade negativa, linha duplicada, reimportação | — |
 | P5 | `POST /vendas/importar` e `POST /perdas/importar` | `TestClient`: 401/403, importação válida, relatório de erros | — |
@@ -103,6 +103,15 @@ Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 - **Correção de uma afirmação do plano:** sem a D10, um gestor com `tem_acesso_app` **não** quebrava o app com erro 500: recebia `200` com lista vazia em `/produtos` e `404` em `/zeragem`. O risco era comportamento errado e silencioso.
 - **Brecha corrigida (2026-10-13):** a rota `/auth/refresh` do app aceitava um refresh token web (de um gestor com `tem_acesso_app` ligado) e emitia um access token do app, que depois era recusado (403). Agora ela recusa com 401 qualquer refresh token com a claim `porta` — **única mudança feita nas rotas do app**, aprovada pelo Ualker. Caso W15 do `test_auth_web.py` exige o 401; com a checagem removida (mutação), o W15 falha. Regressão completa do app de novo: 38/38.
 
+**P2 — resultado (2026-10-13):**
+- Migration `0015_vendas_e_perdas_diarias`: tabelas `vendas_diarias` e `perdas_diarias` (`negocio_id`, `loja_id`, `produto_id`, `data`, `quantidade` Numeric(12,3), `origem`, `criado_em`, `atualizado_em`); chave única `(loja_id, produto_id, data, origem)`; check `quantidade >= 0`; índices em `negocio_id` e `produto_id` (a chave única cobre loja + produto + data); enums `origemvenda` (api, manual) e `origemperda` (api, manual, inferida); coluna `lojas.codigo` (String(32), opcional) com única `(negocio_id, codigo)`. **FKs compostas** `(negocio_id, loja_id) → lojas(negocio_id, id)` e `(negocio_id, produto_id) → produtos(negocio_id, id)` nas duas tabelas (pedido do Ualker: garantia de negócio no banco), com as únicas-alvo `uq_loja_negocio_id` e `uq_produto_negocio_id` criadas na própria 0015. Antes, conferido que os dados existentes não violavam nada (vendas/perdas vazias; `id` já é único).
+- Models `VendaDiaria`/`OrigemVenda` e `PerdaDiaria`/`OrigemPerda`, registrados em `app/models/__init__.py`; `Loja.codigo`.
+- upgrade 0014→0015 → downgrade 0015→0014 (tabelas, enums e coluna removidos) → upgrade, todos exit 0.
+- `scripts/test_vendas_perdas_modelo.py` (novo): 20 casos, 2 execuções, exit 0, banco limpo. Cada erro confere o nome da constraint. Inclui o mecanismo do D5 (`INSERT ... ON CONFLICT DO UPDATE` substitui 10 → 15, 1 linha), origens diferentes coexistindo e venda/perda com loja ou produto de **outro negócio** barradas pelas FKs compostas (X1–X4).
+- `seed_dev.py`: preenche `lojas.codigo` (`001` Loja Centro, `002` Loja Bairro) só se estiver vazio; 2 execuções sem duplicar.
+- Regressão: `test_auth_web.py` 38/38 (inclui a regressão completa do app), `test_obter_gestor_central.py` 11/11, `test_constraint_usuario.py` 4/4.
+- **Para o P4:** o banco arredonda quantidades com mais de 3 casas (1,2345 → 1,235) sem erro; o serviço de importação deve recusar esses valores em vez de deixar o banco arredondar. A coerência entre o `negocio_id` da venda e o da loja/produto é garantida no banco (FKs compostas), mas o serviço também valida, para dar mensagem de erro clara.
+
 ---
 
 ## 2. Divergências entre o documento de referência e o código
@@ -115,7 +124,7 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | Eventos | uma entidade `evento` | `eventos` + tabelas de associação `eventos_lojas` e `eventos_produtos` (usadas quando o escopo é "específicas"/"específicos"); `valor_ajuste` é `Numeric(10,4)` |
 | Isolamento multi-tenant (§6 e §10) | recomenda schema/banco por cliente | **Decidido (D2, 2026-10-13):** tabelas compartilhadas, com `negocio_id` em todas as tabelas e isolamento via JWT |
 | Login do gestor (§3.1) | gestor com escopo de central; não fala em flag de acesso ao SaaS | Campo novo `usuarios.tem_acesso_web` (migration 0014, D1 = A), separado de `tem_acesso_app`. A dependency `obter_gestor_central` exige `tem_acesso_web` e `gestor_central` (passo 5, 2026-10-13); `obter_usuario_autenticado` e `/auth/login` continuam exigindo `tem_acesso_app` (rotas `/auth/web/*` ficam para a Fase 2) |
-| Vendas e perdas (§3.6, §3.7) | `venda_diaria`/`perda_diaria`, sem `negocio_id` | Planejado (P2): `vendas_diarias`/`perdas_diarias`, **com** `negocio_id` (D2); quantidade na unidade do produto (D6) |
+| Vendas e perdas (§3.6, §3.7) | `venda_diaria`/`perda_diaria`, sem `negocio_id`; campos `quantidade_vendida`/`quantidade_perdida` | `vendas_diarias`/`perdas_diarias` (migration 0015), **com** `negocio_id` (D2); campo `quantidade` Numeric(12,3) na unidade do produto (D6), não negativa; `criado_em`/`atualizado_em`; chave única (loja, produto, data, origem) (D5) |
 | Escopo do gestor (§3.1) | "negócio/central inteiro" | **Só as lojas da própria central** (D8) |
 
 ---

@@ -24,3 +24,5 @@ from app.models.historico_contagem import HistoricoContagem  # noqa: F401
 from app.models.calendario_producao import CalendarioProducao, DiaSemana  # noqa: F401
 from app.models.evento import Evento, EventoLoja, EventoProduto  # noqa: F401
 from app.models.evento import EscopoLoja, EscopoProduto, TipoAjuste  # noqa: F401
+from app.models.venda_diaria import VendaDiaria, OrigemVenda  # noqa: F401
+from app.models.perda_diaria import PerdaDiaria, OrigemPerda  # noqa: F401

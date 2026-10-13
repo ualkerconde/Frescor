@@ -39,9 +39,11 @@ SENHA_TESTE = "senha123"
 
 # Uma entrada por loja, cada uma com seu operador. A primeira mantém o
 # usuário histórico admin@teste.com, já usado para testar o app mobile.
+# `codigo` identifica a loja no CSV de importação (D7); só é gravado se a
+# loja ainda não tiver código, para não sobrescrever um código definido.
 LOJAS = [
-    {"nome": "Loja Centro", "operador_email": "admin@teste.com", "operador_nome": "Administrador Teste"},
-    {"nome": "Loja Bairro", "operador_email": "operador.bairro@teste.com", "operador_nome": "Operador Loja Bairro"},
+    {"nome": "Loja Centro", "codigo": "001", "operador_email": "admin@teste.com", "operador_nome": "Administrador Teste"},
+    {"nome": "Loja Bairro", "codigo": "002", "operador_email": "operador.bairro@teste.com", "operador_nome": "Operador Loja Bairro"},
 ]
 
 # Gestor da central: não tem loja, não usa o app mobile e entra no SaaS web.
@@ -80,20 +82,25 @@ def _obter_ou_criar_central(db, negocio):
     return central, True
 
 
-def _obter_ou_criar_loja(db, negocio, central, nome):
+def _obter_ou_criar_loja(db, negocio, central, nome, codigo):
+    """Devolve (loja, situacao), situacao em "criado", "atualizado" ou "existente"."""
     loja = db.query(Loja).filter(Loja.negocio_id == negocio.id, Loja.nome == nome).first()
     if loja:
-        return loja, False
+        if loja.codigo is None:
+            loja.codigo = codigo
+            return loja, "atualizado"
+        return loja, "existente"
     loja = Loja(
         negocio_id=negocio.id,
         central_producao_id=central.id,
         nome=nome,
+        codigo=codigo,
         horario_zeragem=time(6, 0),
         ativo=True,
     )
     db.add(loja)
     db.flush()
-    return loja, True
+    return loja, "criado"
 
 
 def _obter_ou_criar_usuario(db, negocio, email, nome, tipo, flags, loja_id=None, central_producao_id=None):
@@ -137,10 +144,10 @@ def main():
         print(f"Central: {central.nome} (id={central.id}) [{'criado' if criado else 'existente'}]")
 
         for item in LOJAS:
-            loja, criado = _obter_ou_criar_loja(db, negocio, central, item["nome"])
+            loja, situacao_loja = _obter_ou_criar_loja(db, negocio, central, item["nome"], item["codigo"])
             print(
-                f"Loja:    {loja.nome} (id={loja.id}, central_producao_id={loja.central_producao_id}) "
-                f"[{'criado' if criado else 'existente'}]"
+                f"Loja:    {loja.nome} (id={loja.id}, codigo={loja.codigo}, central_producao_id={loja.central_producao_id}) "
+                f"[{situacao_loja}]"
             )
             usuario, situacao = _obter_ou_criar_usuario(
                 db,
