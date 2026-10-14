@@ -1,0 +1,4 @@
+data;codigo_loja;codigo_produto;quantidade
+01/10/2026;001;INT-001;5
+31/02/2026;001;INT-001;3
+01/10/2026;001;NAO-EXISTE;1

@@ -1,27 +1,18 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from '@/App'
 import { MENSAGEM_SEM_CONEXAO } from '@/lib/api/cliente'
 import { encerrarSessao, lerTokens, salvarTokens } from '@/lib/api/sessao'
-import { SessaoProvider } from '@/lib/sessao/SessaoProvider'
-
-function resposta(status: number, corpo: unknown = {}): Response {
-  return new Response(JSON.stringify(corpo), { status, headers: { 'Content-Type': 'application/json' } })
-}
+import { ME, renderizarApp, resposta } from '@/test/renderizar'
 
 let fetchSimulado: ReturnType<typeof vi.fn>
 
 function abrir(rota = '/entrar') {
-  render(
-    <MemoryRouter initialEntries={[rota]}>
-      <SessaoProvider>
-        <App />
-      </SessaoProvider>
-    </MemoryRouter>,
-  )
+  renderizarApp(rota)
 }
+
+/** Título da primeira tela depois do login (W6). */
+const TELA_INICIAL = { name: 'Importar vendas e perdas' }
 
 async function preencherEEntrar(email: string, senha: string) {
   const usuario = userEvent.setup()
@@ -32,7 +23,11 @@ async function preencherEEntrar(email: string, senha: string) {
 
 beforeEach(() => {
   localStorage.clear()
-  fetchSimulado = vi.fn()
+  // Padrão: a área autenticada busca /web/me; os testes de login trocam a
+  // resposta do login com mockResolvedValueOnce.
+  fetchSimulado = vi.fn(async (url: string) =>
+    url.endsWith('/web/me') ? resposta(200, ME) : resposta(404, { detail: 'rota não simulada' }),
+  )
   vi.stubGlobal('fetch', fetchSimulado)
 })
 
@@ -130,7 +125,7 @@ describe('tela de login', () => {
     fetchSimulado.mockResolvedValueOnce(resposta(200, { access_token: 'A1', refresh_token: 'R1' }))
     abrir()
     await preencherEEntrar('  gestor@teste.com ', 'senha123')
-    expect(await screen.findByRole('heading', { name: 'Você entrou' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', TELA_INICIAL)).toBeInTheDocument()
     expect(lerTokens()).toEqual({ accessToken: 'A1', refreshToken: 'R1' })
     const corpo = JSON.parse((fetchSimulado.mock.calls[0][1] as RequestInit).body as string)
     expect(corpo).toEqual({ email: 'gestor@teste.com', senha: 'senha123' }) // e-mail sem espaços
@@ -146,7 +141,7 @@ describe('sessão e rotas', () => {
   it('com sessão, /entrar manda para a área autenticada', () => {
     salvarTokens('A1', 'R1')
     abrir('/entrar')
-    expect(screen.getByRole('heading', { name: 'Você entrou' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', TELA_INICIAL)).toBeInTheDocument()
   })
 
   it('sessão encerrada sozinha: volta ao login mostrando o motivo', () => {

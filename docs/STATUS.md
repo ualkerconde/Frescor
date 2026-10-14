@@ -184,8 +184,8 @@ Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** 
 | W2 | Esqueleto `frontend-saas/`: Vite + React + TS, Tailwind, shadcn, tema da skill Frescor, proxy, Vitest | build, testes, checagem de tipos, health pelo proxy | **Concluído (2026-10-13)** — ver abaixo |
 | W3 | Cliente da API e sessão: token `porta: web`, refresh automático uma vez por 401, logout com motivo; sem `Content-Type` forçado em upload | testes com `fetch` simulado | **Concluído (2026-10-13)** — ver abaixo |
 | W4 | Tela de login (401, 403 com a mensagem da API, rotas protegidas) | testes; manual com `gestor@teste.com` e `admin@teste.com` | **Concluído (2026-10-13)** — ver abaixo; conferido no navegador pelo Ualker |
-| W5 | Estrutura autenticada (cabeçalho com `/web/me`, navegação, sair) | testes; manual (recarregar mantém sessão; token inválido volta ao login) | — |
-| W6 | Importação de CSV (vendas/perdas, 5 MB no navegador, modelo de CSV para baixar, relatório 200/422/413, erros e avisos) | testes por tipo de resposta; manual contra o backend | — |
+| W5 | Estrutura autenticada (cabeçalho com `/web/me`, navegação, sair) | testes; manual (recarregar mantém sessão; token inválido volta ao login) | **Concluído (2026-10-13)** — ver abaixo; conferido no navegador pelo Ualker |
+| W6 | Importação de CSV (vendas/perdas, 5 MB no navegador, modelo de CSV para baixar, relatório 200/422/413, erros e avisos) | testes por tipo de resposta; manual contra o backend | **Concluído (2026-10-13)** — ver abaixo; conferido no navegador pelo Ualker |
 | W7 | Consulta (vendas/perdas, período, loja, produto com busca, tabela paginada com total, filtros na URL, formatos pt-BR) | testes; manual contra o seed | — |
 | W8 | Acabamento: acessibilidade básica, build de produção, README do frontend, STATUS | build, testes, roteiro manual login → importar → consultar → sair | — |
 
@@ -227,6 +227,25 @@ Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** 
 - **Achado:** o operador de loja do seed (`admin@teste.com`) recebe "Seu usuário não tem permissão para acessar o sistema web. Fale com o administrador." (o backend checa `tem_acesso_web` antes do perfil), não "restrito a gestores". A mensagem é correta; a orientação "use o app do celular" só aparece para um operador com `tem_acesso_web` ligado por engano. **Decidido pelo Ualker (2026-10-13): fica como está.**
 - Verificações: typecheck ok; lint sem erros (3 avisos `only-export-components` em arquivos do shadcn); **68 testes** (37 + 17 + 14); build ok (JS 305,9 kB, 100,6 kB gzip); `npm audit --omit=dev` 0. Pelo Vite (3001) contra o backend real: `/entrar` 200, login do gestor 200, senha errada 401 com "E-mail ou senha incorretos.", operador 403.
 - Conferência visual no navegador: feita pelo Ualker em 2026-10-13 (ok).
+
+**W5 — resultado (2026-10-13):**
+
+- `src/components/layout/LayoutAutenticado.tsx`: cabeçalho com o logo, navegação "Importar" / "Consultar" (ícone + texto, página atual com `aria-current`), quem está logado (gestor; central · negócio, de `GET /web/me`, com "Carregando…" e mensagem se falhar) e "Sair" como botão discreto (a ação principal é da tela). Link "Pular para o conteúdo". Rotas: `/importar` e `/consultar` dentro do layout protegido; `/` e qualquer outra → `/importar`. `/consultar` com estado vazio útil até o W7. Página provisória do W4 removida.
+- TanStack Query 5.104.2 (`src/lib/query.ts`): não repete 4xx; repete falha de servidor/conexão até 2 vezes. **Ao sair ou quando a sessão termina sozinha, o cache é apagado** (os dados de um gestor não aparecem para o próximo no mesmo navegador).
+- `src/test/renderizar.tsx`: ajudantes de teste (App completo com rotas, sessão e Query; API simulada por rota).
+- `LayoutAutenticado.test.tsx`: 8 testes.
+
+**W6 — resultado (2026-10-13):**
+
+- `src/paginas/Importar.tsx`: escolha "Vendas" / "Perdas" (rádios nativos com aparência segmentada — acessível), área de arquivo (escolher ou arrastar; mostra nome e tamanho; acima de 5 MB recusado no navegador com a explicação), ajuda com o formato das colunas, **um único primário** "Importar vendas"/"Importar perdas" ("Importando…" e sem envio duplo) e o secundário "Baixar modelo de CSV" (UTF-8 com BOM, `;`, exemplos — o Excel em português abre certo).
+- `src/paginas/importar/ResultadoImportacao.tsx` (pedido do Ualker: fácil de entender): **resumo grande no topo** — verde "1.232 linhas importadas" + "1.200 novas · 32 substituídas (já existiam e foram atualizadas)" ou vermelho "Nada foi gravado: 3 erros" + "Corrija as linhas abaixo no arquivo e envie de novo." — e depois a tabela de erros (Linha | O que corrigir; "Arquivo" no lugar de "Linha 0"; "E mais N erros não listados") e a de avisos. Números em pt-BR, singular/plural. 413, sem conexão e servidor num alerta. Nada técnico na tela (sem codificação nem código HTTP). A importação invalida o cache das consultas (para o W7).
+- Tabela do shadcn ajustada à skill (cabeçalho 12px maiúsculo, linhas de 48px, zebra `--surface`).
+- `Importar.test.tsx`: 15 testes.
+- Sabotagem (W5 + W6): 422 sem montar o relatório, "Sair" sem limpar o cache e sem o limite de 5 MB no navegador → 4 falhas; arquivos restaurados.
+- Verificações: typecheck ok; lint sem erros (3 avisos do shadcn); **91 testes**; build ok (JS 354,8 kB, 114,3 kB gzip); `npm audit --omit=dev` 0. Pelo Vite contra o backend real: `/importar` e `/consultar` 200, `/web/me` 200, importação de CSV com erros → 422 com o relatório (linhas 3 e 4) e **total de vendas igual antes e depois (1.232)**.
+- Erros nos meus testes, corrigidos: um teste procurava "200" na tela e achava "1.200 novas"; outro lia o BOM com `blob.text()`, que o remove por definição (agora confere os bytes).
+- Arquivos de exemplo para teste manual em `frontend-saas/exemplos/` (`vendas_valido.csv` grava 4 vendas; `vendas_com_erros.csv` não grava nada), com README.
+- Conferido no navegador pelo Ualker em 2026-10-13 (W5 e W6 ok).
 
 
 **W1 — resultado (2026-10-13):**

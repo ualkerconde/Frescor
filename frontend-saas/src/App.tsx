@@ -1,25 +1,31 @@
 /*
  * Rotas do frontend do SaaS.
- * /entrar: login do gestor. /: área autenticada (provisória até o W5).
+ * /entrar: login do gestor.
+ * Área autenticada (LayoutAutenticado): /importar e /consultar.
+ * / e qualquer outra rota -> /importar (ou login, sem sessão).
  */
 import { Navigate, Route, Routes } from "react-router"
-import { Entrar } from "@/paginas/Entrar"
-import { PainelProvisorio } from "@/paginas/PainelProvisorio"
+import { LayoutAutenticado } from "@/components/layout/LayoutAutenticado"
 import { RotaProtegida } from "@/lib/sessao/RotaProtegida"
+import { Consultar } from "@/paginas/Consultar"
+import { Entrar } from "@/paginas/Entrar"
+import { Importar } from "@/paginas/Importar"
 
 function App() {
   return (
     <Routes>
       <Route path="/entrar" element={<Entrar />} />
       <Route
-        path="/"
         element={
           <RotaProtegida>
-            <PainelProvisorio />
+            <LayoutAutenticado />
           </RotaProtegida>
         }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      >
+        <Route path="/importar" element={<Importar />} />
+        <Route path="/consultar" element={<Consultar />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/importar" replace />} />
     </Routes>
   )
 }

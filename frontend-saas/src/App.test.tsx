@@ -1,20 +1,16 @@
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
-import { beforeEach, describe, expect, it } from 'vitest'
-import App from './App'
-import { SessaoProvider } from './lib/sessao/SessaoProvider'
+import { screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderizarApp, simularApi } from './test/renderizar'
 
 describe('App (rotas)', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    simularApi()
+  })
+  afterEach(() => vi.unstubAllGlobals())
 
   it('sem sessão, qualquer rota leva ao login', () => {
-    render(
-      <MemoryRouter initialEntries={['/qualquer-coisa']}>
-        <SessaoProvider>
-          <App />
-        </SessaoProvider>
-      </MemoryRouter>,
-    )
+    renderizarApp('/qualquer-coisa')
     expect(screen.getByRole('heading', { level: 1, name: 'Entrar' })).toBeInTheDocument()
   })
 })
