@@ -208,8 +208,15 @@ def importar_csv(
     try:
         texto, resultado.codificacao = _decodificar(conteudo)
         linhas = list(csv.reader(io.StringIO(texto, newline=""), delimiter=SEPARADOR))
-    except (ValueError, csv.Error) as e:
+    except ValueError as e:
         return _resultado_erro(resultado, [ErroLinha(0, str(e))])
+    except csv.Error as e:
+        # Mensagem do módulo csv é em inglês (ex.: campo maior que 128 KB);
+        # o detalhe técnico vai entre parênteses para o suporte.
+        return _resultado_erro(resultado, [ErroLinha(0, (
+            "o arquivo não pôde ser lido como CSV: há um campo grande demais ou mal formatado "
+            f"(confira se o separador é ponto e vírgula; detalhe técnico: {e})"
+        ))])
 
     # Cabeçalho: comparação sem diferenciar maiúsculas e ignorando espaços.
     cabecalho = [c.strip().lower() for c in linhas[0]] if linhas else []

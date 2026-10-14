@@ -279,6 +279,10 @@ def main():
                   (not res.sucesso) and len(res.erros) == 1 and len(res.avisos) == 1 and n == 0,
                   f"erros={[e.linha for e in res.erros]}, avisos={[a.linha for a in res.avisos]}, gravadas={n}")
 
+        # E25: campo maior que o limite do módulo csv (128 KB) -> mensagem em português.
+        caso_erro(db, g, "E25 campo grande demais para o leitor de CSV",
+                  csv_bytes(["01/09/2026;T01;P-UN;1", " " * 200_000]), 0, "não pôde ser lido como CSV")
+
         # E23/E24: arquivo que não é texto não derruba o serviço.
         caso_erro(db, g, "E23 arquivo binario (byte nulo)", bytes(range(256)) * 4, 0, "bytes nulos")
         caso_erro(db, g, "E24 bytes que nao sao UTF-8 nem Windows-1252", CAB.encode() + b"\r\n\x81\x8d;T01;P-UN;1\r\n",
