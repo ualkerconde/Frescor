@@ -26,14 +26,14 @@ export function resposta(status: number, corpo: unknown = {}): Response {
  * Rota não mapeada responde 404 (o teste falha de forma visível).
  */
 export function simularApi(
-  rotas: Record<string, Response | ((init: RequestInit) => Response | Promise<Response>)> = {},
+  rotas: Record<string, Response | ((init: RequestInit, url: URL) => Response | Promise<Response>)> = {},
 ) {
   const fetchSimulado = vi.fn(async (url: string, init: RequestInit = {}) => {
     const caminho = url.replace(/^\/backend/, "").split("?")[0]
     const chave = `${(init.method ?? "GET").toUpperCase()} ${caminho}`
     const alvo = rotas[chave]
     if (!alvo) return resposta(404, { detail: `rota não simulada no teste: ${chave}` })
-    return typeof alvo === "function" ? alvo(init) : alvo.clone()
+    return typeof alvo === "function" ? alvo(init, new URL(url, "http://localhost")) : alvo.clone()
   })
   vi.stubGlobal("fetch", fetchSimulado)
   return fetchSimulado

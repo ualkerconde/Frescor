@@ -22,7 +22,13 @@ from sqlalchemy.orm import Session
 from app.api.escopo import loja_no_escopo_ou_404
 from app.core.dependencies import GestorCentralAutenticado, obter_gestor_central
 from app.db.session import get_db
-from app.schemas.consulta import ConsultaDiariaResponse, ItemDiarioResponse, LojaResumo, ProdutoResumo
+from app.schemas.consulta import (
+    ConsultaDiariaResponse,
+    ItemDiarioResponse,
+    LojaResumo,
+    ProdutoResumo,
+    TotalPorUnidadeResponse,
+)
 from app.services.consulta_service import PeriodoInvalido, TipoConsulta, consultar
 
 LIMIT_MAXIMO = 1000
@@ -34,13 +40,14 @@ def _consultar(db, gestor, tipo, data_inicio, data_fim, loja_id, produto_id, lim
     if loja_id is not None:
         loja_no_escopo_ou_404(db, gestor, loja_id)
     try:
-        total, itens = consultar(db, gestor, tipo, data_inicio, data_fim, loja_id, produto_id, limit, offset)
+        resultado = consultar(db, gestor, tipo, data_inicio, data_fim, loja_id, produto_id, limit, offset)
     except PeriodoInvalido as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     return ConsultaDiariaResponse(
-        total=total,
+        total=resultado.total,
         limit=limit,
         offset=offset,
+        totais=[TotalPorUnidadeResponse(unidade=t.unidade, quantidade=t.quantidade) for t in resultado.totais],
         itens=[
             ItemDiarioResponse(
                 data=i.data,
@@ -50,7 +57,7 @@ def _consultar(db, gestor, tipo, data_inicio, data_fim, loja_id, produto_id, lim
                 unidade=i.unidade,
                 origem=i.origem,
             )
-            for i in itens
+            for i in resultado.itens
         ],
     )
 

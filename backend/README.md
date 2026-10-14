@@ -31,7 +31,8 @@ backend/
 │   │   ├── 0013_evento_e_associacoes.py
 │   │   ├── 0014_usuario_tem_acesso_web.py
 │   │   ├── 0015_vendas_e_perdas_diarias.py
-│   │   └── 0016_produto_codigo_unico.py
+│   │   ├── 0016_produto_codigo_unico.py
+│   │   └── 0017_extensao_unaccent.py
 │   ├── env.py
 │   └── script.py.mako
 ├── alembic.ini
@@ -188,7 +189,7 @@ Cole o valor gerado no campo `SECRET_KEY` do `.env`.
 alembic upgrade head
 ```
 
-Aplica as 16 migrações em sequência (0001 a 0016). Tabelas criadas:
+Aplica as 17 migrações em sequência (0001 a 0017). Tabelas criadas:
 `negocios`, `centrais_producao`, `lojas`, `usuarios`, `permissoes_web`,
 `produtos`, `produtos_lojas`, `estoque_atual`, `historico_contagens`,
 `niveis_classificacao`, `produto_classificacoes`, `calendario_producao`,
@@ -208,6 +209,7 @@ Aplica as 16 migrações em sequência (0001 a 0016). Tabelas criadas:
 | 0014 | `usuarios.tem_acesso_web` (acesso ao SaaS, separado de `tem_acesso_app`) |
 | 0015 | Cria `vendas_diarias` e `perdas_diarias` (única por loja + produto + data + origem; FKs compostas com `negocio_id`); `lojas.codigo` |
 | 0016 | Código de produto único no negócio (para antes de criar se houver códigos repetidos, listando cada um) |
+| 0017 | Extensão `unaccent` do PostgreSQL: a busca de produtos ignora acentos ("pao" acha "Pão"). Precisa estar disponível no PostgreSQL de produção |
 
 Toda migração tem `downgrade` funcional. Para conferir uma migração nova:
 `alembic upgrade head` → `alembic downgrade -1` → `alembic upgrade head`.
@@ -267,8 +269,9 @@ python scripts/test_vendas_perdas_modelo.py   # regras de banco de vendas/perdas
 python scripts/test_escopo_gestor.py          # escopo do gestor: só a própria central (13)
 python scripts/test_importacao_csv.py         # serviço de importação de CSV (45)
 python scripts/test_importacao_rotas.py       # POST /vendas/importar e /perdas/importar (14)
-python scripts/test_consulta_rotas.py         # GET /vendas e /perdas + importar e consultar (33)
+python scripts/test_consulta_rotas.py         # GET /vendas e /perdas, totais + importar e consultar (40)
 python scripts/test_sync_vendas_stub.py       # stub da integração com o PDV (5)
+python scripts/test_web_apoio.py              # /web/me, /web/lojas, /web/produtos (25)
 ```
 
 Saída esperada: uma linha `[OK]` por caso e, no fim, `TODOS OS CASOS PASSARAM`
@@ -372,6 +375,18 @@ Os tokens do SaaS e do app não são intercambiáveis: cada porta recusa o token
 | `POST` | `/perdas/importar` | Igual, para perdas. |
 | `GET` | `/vendas` | `data_inicio` e `data_fim` obrigatórios (AAAA-MM-DD, até 366 dias); `loja_id`, `produto_id`; `limit` (1–1000, padrão 100), `offset`. Só lojas da central do gestor; loja fora do escopo → 404. Resposta `{total, limit, offset, itens}`, ordenada por data, loja, produto e origem. |
 | `GET` | `/perdas` | Igual, para perdas. |
+
+A resposta de `GET /vendas` e `GET /perdas` traz também `totais`: a soma do período por unidade (`UN` e `KG` não se somam), com os mesmos filtros e **sem** paginação — usada no resumo do topo da tela de consulta.
+
+Quando o mesmo loja + produto + data tem registro `api` (PDV) e `manual` (CSV), **vale o `api`**: o `manual` continua gravado como reserva, mas não aparece na listagem nem entra nos totais (decisão D16). O critério fica num lugar só, `app/services/registros_efetivos.py`, e deve ser usado por toda leitura de vendas/perdas para números de negócio (inclusive o motor de previsão).
+
+### SaaS web — apoio às telas (exigem token do SaaS)
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `GET` | `/web/me` | Gestor logado, sua central e seu negócio (cabeçalho). |
+| `GET` | `/web/lojas` | Lojas da central do gestor, ativas e inativas (campo `ativo`). |
+| `GET` | `/web/produtos?busca=&limit=&offset=` | Produtos do negócio (ativos e inativos), busca por código ou nome sem diferenciar maiúsculas nem acentos; `%` e `_` são texto; `limit` até 200. |
 
 ---
 

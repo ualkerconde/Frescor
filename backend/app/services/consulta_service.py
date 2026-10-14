@@ -15,6 +15,11 @@ Regras:
 - Ordenação estável: data, loja, produto, origem e id (a origem e o id
   desempatam venda manual e via API do mesmo dia), para a paginação por
   limit/offset nunca repetir nem pular linha.
+- Totais do período (frontend W7): soma das quantidades com os mesmos
+  filtros, SEM paginação, separada por unidade (UN e KG não se somam).
+- D16: quando um dia tem `manual` e `api` para a mesma loja + produto, vale
+  a `api` -- a `manual` não aparece na listagem nem entra nos totais. O
+  critério fica em registros_efetivos.py (único lugar; a Fase 3 usa o mesmo).
 """
 
 import enum
@@ -23,6 +28,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import GestorCentralAutenticado
@@ -31,6 +37,7 @@ from app.models.perda_diaria import PerdaDiaria
 from app.models.produto import Produto
 from app.models.venda_diaria import VendaDiaria
 from app.services.escopo_service import consulta_lojas_do_gestor
+from app.services.registros_efetivos import condicao_registro_efetivo
 
 PERIODO_MAXIMO_DIAS = 366
 
@@ -42,6 +49,19 @@ class TipoConsulta(str, enum.Enum):
 
 class PeriodoInvalido(ValueError):
     """Período de consulta inválido; a mensagem vai para o usuário."""
+
+
+@dataclass
+class TotalPorUnidade:
+    unidade: str
+    quantidade: Decimal
+
+
+@dataclass
+class ResultadoConsulta:
+    total: int
+    itens: list["ItemConsulta"]
+    totais: list[TotalPorUnidade]
 
 
 @dataclass
@@ -79,8 +99,8 @@ def consultar(
     produto_id: Optional[int] = None,
     limit: int = 100,
     offset: int = 0,
-) -> tuple[int, list[ItemConsulta]]:
-    """Devolve (total de linhas que atendem aos filtros, itens da página)."""
+) -> ResultadoConsulta:
+    """Total de linhas, itens da página e totais por unidade do período (sem paginação)."""
     validar_periodo(data_inicio, data_fim)
     modelo = VendaDiaria if tipo == TipoConsulta.VENDA else PerdaDiaria
 
@@ -94,6 +114,7 @@ def consultar(
             modelo.loja_id.in_(lojas_do_escopo),
             modelo.data >= data_inicio,
             modelo.data <= data_fim,
+            condicao_registro_efetivo(modelo),  # D16: api prevalece sobre manual
         )
     )
     if loja_id is not None:
@@ -102,6 +123,19 @@ def consultar(
         consulta = consulta.filter(modelo.produto_id == produto_id)
 
     total = consulta.count()
+
+    # Mesmos filtros, sem paginação, uma soma por unidade (UN antes de KG).
+    somas = (
+        consulta.with_entities(Produto.unidade_medida, func.sum(modelo.quantidade))
+        .group_by(Produto.unidade_medida)
+        .all()
+    )
+    ordem_unidades = {"UN": 0, "KG": 1}
+    totais = sorted(
+        (TotalPorUnidade(unidade=unidade.value, quantidade=soma) for unidade, soma in somas),
+        key=lambda t: ordem_unidades.get(t.unidade, 9),
+    )
+
     linhas = (
         consulta.order_by(modelo.data, modelo.loja_id, modelo.produto_id, modelo.origem, modelo.id)
         .limit(limit)
@@ -122,4 +156,4 @@ def consultar(
         )
         for registro, loja, produto in linhas
     ]
-    return total, itens
+    return ResultadoConsulta(total=total, itens=itens, totais=totais)

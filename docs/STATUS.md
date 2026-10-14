@@ -19,7 +19,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
-| 6 — Frontend do SaaS (`frontend-saas/`) | **Em andamento** (plano aprovado em 2026-10-13) | Passos W1–W8 na seção "Frontend do SaaS — plano" abaixo. Cobre login, importação e consulta (as telas da Fase 2); as telas das Fases 4–5 vêm depois. |
+| 6 — Frontend do SaaS (`frontend-saas/`) | **Telas da Fase 2 concluídas** (W1–W8, 2026-10-13, conferidas no navegador) | Login, importação e consulta. As telas das Fases 3–5 (previsão, ordem de produção, romaneio) entram junto com cada fase, **com o código dividido por tela** (ver observação do W8). |
 | 7 — Validação com dado real | Não iniciada | Depende de cliente piloto (D3) |
 | 8 — Refino V1.5 | Não iniciada | |
 
@@ -186,8 +186,8 @@ Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** 
 | W4 | Tela de login (401, 403 com a mensagem da API, rotas protegidas) | testes; manual com `gestor@teste.com` e `admin@teste.com` | **Concluído (2026-10-13)** — ver abaixo; conferido no navegador pelo Ualker |
 | W5 | Estrutura autenticada (cabeçalho com `/web/me`, navegação, sair) | testes; manual (recarregar mantém sessão; token inválido volta ao login) | **Concluído (2026-10-13)** — ver abaixo; conferido no navegador pelo Ualker |
 | W6 | Importação de CSV (vendas/perdas, 5 MB no navegador, modelo de CSV para baixar, relatório 200/422/413, erros e avisos) | testes por tipo de resposta; manual contra o backend | **Concluído (2026-10-13)** — ver abaixo; conferido no navegador pelo Ualker |
-| W7 | Consulta (vendas/perdas, período, loja, produto com busca, tabela paginada com total, filtros na URL, formatos pt-BR) | testes; manual contra o seed | — |
-| W8 | Acabamento: acessibilidade básica, build de produção, README do frontend, STATUS | build, testes, roteiro manual login → importar → consultar → sair | — |
+| W7 | Consulta (vendas/perdas, período, loja, produto com busca, tabela paginada com total, filtros na URL, formatos pt-BR) | testes; manual contra o seed | **Concluído (2026-10-13)** — ver abaixo; conferido no navegador pelo Ualker |
+| W8 | Acabamento: acessibilidade básica, build de produção, README do frontend, STATUS | build, testes, roteiro manual login → importar → consultar → sair | **Concluído (2026-10-13)** — ver abaixo; roteiro manual feito pelo Ualker |
 
 **Skill de design Frescor (2026-10-13):** recebida do Ualker e salva em `.claude/skills/frescor-design-system/SKILL.md` (direção B, "Central de produção"; vale para o `frontend-saas/` e para mudanças futuras no app mobile). Contrastes da tabela da skill recalculados pela fórmula WCAG 2.1: os 14 pares batem (diferença máxima 0,05) e são AA. Pares extras usados no W2 também passam (ex.: `--input-border` sobre branco 3,54:1, `--primary-hover` com branco 8,72:1), exceto `--line` sobre branco (1,38:1) — permitido porque a skill o restringe a divisórias decorativas; **nunca usar `--line` como borda de controle**.
 
@@ -246,6 +246,23 @@ Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** 
 - Erros nos meus testes, corrigidos: um teste procurava "200" na tela e achava "1.200 novas"; outro lia o BOM com `blob.text()`, que o remove por definição (agora confere os bytes).
 - Arquivos de exemplo para teste manual em `frontend-saas/exemplos/` (`vendas_valido.csv` grava 4 vendas; `vendas_com_erros.csv` não grava nada), com README.
 - Conferido no navegador pelo Ualker em 2026-10-13 (W5 e W6 ok).
+
+**W7 — resultado (2026-10-13):**
+
+- **Backend (mudança só de acréscimo):** `GET /vendas` e `GET /perdas` passam a devolver `totais` — soma do período por unidade (UN e KG não se somam), com os mesmos filtros e **sem** paginação (`consulta_service` com `ResultadoConsulta`; schema `TotalPorUnidadeResponse`). `test_consulta_rotas.py` ganhou T1–T7 (totais por unidade, independem da página, respeitam loja, produto, período, escopo do gestor; período vazio → `[]`; perdas): 40 verificações. O total soma todas as origens listadas — **ver D16**.
+- **Tela `/consultar`:** período (padrão: últimos 7 dias até ontem; validação no navegador de data invertida e de mais de 366 dias), loja (Select do shadcn com as lojas da central; inativa marcada) e produto (combobox Popover + Command com busca em `/web/produtos`, que ignora acentos; espera 300 ms). Um único primário "Consultar". **Resumo do período no topo** (pedido do Ualker): "Vendido no período" e "Perda no período", um número grande por unidade ("1.780 un", "603,059 kg"), antes da tabela. "Vendas"/"Perdas" troca a tabela na hora. Tabela: data dd/mm/aaaa, "001 · Loja Centro", "INT-007 · Pão Francês", quantidade à direita com unidade, origem em português (Importação / PDV / Calculada). Paginação de 50 com "Mostrando 1–50 de N linhas". Filtros aplicados na URL (recarregar, compartilhar e voltar do navegador mantêm a consulta; o formulário acompanha). Estado vazio útil com "Importar CSV". Erros em português.
+- Componentes do shadcn adicionados e ajustados à skill: Select (44px, borda de controle, foco 2px), Popover, Command (campo e itens de 44px). `formato.ts`: `formatarQuantidade`, `formatarData` (sem `Date`, evita erro de fuso), `dataIso`, `diasNoPeriodo` (+ `formato.test.ts`, 7 testes).
+- `Consultar.test.tsx`: 13 testes. Achado pelo teste e corrigido: o campo de busca do produto ficava **sem nome acessível** (o cmdk usa `aria-labelledby` a partir da prop `label` do Command, que eu não tinha passado). Sabotagem: filtro de produto não enviado à API → o teste falha.
+
+**W8 — resultado (2026-10-13):**
+
+- **Acessibilidade automática:** `src/acessibilidade.test.tsx` roda o **axe-core 4.14** (regras WCAG) no login (vazio e com erros), na importação (vazia, com sucesso e com erros) e na consulta (com dados e vazia): **0 violações**. Sabotagem: label do e-mail sem vínculo → o axe acusa "label (critical)". Limitação: no jsdom o axe não mede contraste (coberto pelo `tema.test.ts`).
+- `frontend-saas/README.md` reescrito em português (como rodar, comandos, telas, estrutura, decisões, testes e acessibilidade). `backend/README.md` atualizado (migration 0017, rotas `/web/*`, `totais`, `test_web_apoio`).
+- **Verificações finais:** frontend — typecheck ok; lint sem erros (3 avisos `only-export-components` em arquivos do shadcn); **116 testes** em 10 arquivos; build ok (JS 481,4 kB / 153,4 kB gzip; CSS 68,4 kB); `npm audit --omit=dev` 0 (7 "high" só nas ferramentas de desenvolvimento do shadcn, já analisadas no W2). Backend — alembic 0017 (head); os 10 scripts de teste passaram. Fluxo real pelo Vite: `/entrar`, `/importar`, `/consultar` 200; resumo padrão (06 a 12/10/2026) com totais de vendas e perdas; busca "pao" → 3 pães; importação com erro → 422.
+- **Tamanho do JS (registrado a pedido do Ualker):** o JS de produção está em 481 kB (153 kB gzip), perto do aviso de 500 kB do Vite. **Regra para as próximas fases:** cada tela nova (previsão, ordem de produção, romaneio...) entra com o código dividido por tela (`React.lazy` + `import()` por rota), carregada só quando aberta; conferir o tamanho no `npm run build` de cada passo.
+- Roteiro manual completo (login → importar → consultar → sair, 14 passos) feito pelo Ualker no navegador em 2026-10-13: ok.
+
+**D16 aplicada (2026-10-13):** `backend/app/services/registros_efetivos.py` (novo) é o **único lugar** do critério: `condicao_registro_efetivo(modelo)` deixa de fora a linha `manual` quando existe `api` para a mesma loja + produto + data (vendas e perdas; a origem `inferida` não é afetada). A manual continua gravada (reserva). Aplicada no `consulta_service` (listagem e totais); a Fase 3 deve usar a mesma função. `test_consulta_rotas.py`: dados novos (venda `api` na T02 dia 3, perda `api` na T01 dia 1) e casos D16a–D16e (api prevalece; api de outra loja não esconde; dia sem api vale a manual; perdas; a manual oculta continua gravada), com os totais recalculados (UN 171 → 210, sem contar em dobro): 44 verificações. Sabotagem: sem a regra → 10 falhas; regra sem comparar a loja → 10 falhas (inclusive uma venda `api` de outro negócio escondendo vendas de quem não tinha nada a ver — vazamento de efeito entre clientes, pego pelo teste). Regressão completa: backend 10/10 scripts, frontend 116 testes.
 
 
 **W1 — resultado (2026-10-13):**
@@ -318,6 +335,7 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D13 | Regras de conteúdo do CSV: (a) fração em produto UN; (b) produto inativo; (c) produto não habilitado na loja; (d) data futura | — | — | **Decidida em 2026-10-13:** (a) **recusar** (erro na linha; `2,0` vale); (b) **aceitar**; (c) **aceitar com AVISO** (lista separada de avisos no relatório, sem erro e sem bloquear o arquivo; vale também para produto habilitado mas desabilitado na loja, `ativo = false`); (d) **recusar** (hoje é aceito). Junto: única `(negocio_id, codigo)` em `produtos` (migration 0016). |
 | D14 | **Escopo ampliado para outros perecíveis** (açougue, hortifruti; itens produzidos e não produzidos): como modelar | Ver "Escopo ampliado — impactos possíveis" na seção 2 | Decidir antes de planejar a Fase 4 (necessidade e produção), que é onde a maior parte do impacto aparece. As Fases 2 e 3 servem para qualquer perecível sem mudança, salvo os pontos marcados lá. | **Aberta (2026-10-13)** até o planejamento da Fase 4. Nada implementado. |
 | D15 | Renomear para Frescor os nomes que ainda dizem "Bakery" | Títulos de `CLAUDE.md` e `backend/README.md` (baixo custo); nome do arquivo `docs/documento-referencia-saas-bakery.md` (exige atualizar os links); pasta do repositório; banco de dados `bakery` (exige mudar o `.env` de cada ambiente e, em produção, migrar/renomear o banco) | Títulos agora; arquivo e pasta quando for conveniente; o banco só se houver motivo além do nome. | **Adiada (2026-10-13): resolver antes do deploy de produção.** |
+| D16 | Quando o mesmo dia de loja + produto tiver venda (ou perda) `manual` **e** `api` (permitido pela D5, para comparar as duas na transição), qual vale nos totais e no motor de previsão? | A) a `api` prevalece; B) a `manual` prevalece; C) soma as duas (comportamento atual dos totais da consulta: conta em dobro) | A, quando a integração existir (o PDV é a fonte oficial; a manual serve para comparar e cobrir dias sem integração). | **Decidida em 2026-10-13: A (vale a `api`; a `manual` fica como reserva).** Critério num lugar só (`registros_efetivos.py`), aplicado na consulta (listagem e totais); a Fase 3 usa o mesmo. A origem `inferida` não é afetada. |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -349,6 +367,9 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 - **2026-10-13** — D15 (renomear nomes técnicos para Frescor) adiada para antes do deploy de produção. D14 (escopo ampliado) segue aberta até o planejamento da Fase 4.
 - **2026-10-13** — Skill de design Frescor salva no projeto; os 8 pontos de aplicação ao frontend aprovados. **Fontes via `@fontsource`** (servidas pelo próprio projeto).
 - **2026-10-13** — Busca de produtos ignora acentos: migration 0017 (extensão `unaccent`).
+- **2026-10-13** — **Frontend do SaaS (W1–W8) concluído** e conferido no navegador pelo Ualker (login, importação, consulta com resumo do período).
+- **2026-10-13** — **D16 decidida:** com `api` e `manual` para a mesma loja + produto + data, vale a `api`; a `manual` fica como reserva. Critério num lugar só (`registros_efetivos.py`), usado pela consulta e, depois, pela Fase 3.
+- **2026-10-13** — Regra de frontend: telas novas entram com o código dividido por tela (JS de produção em 481 kB, perto do aviso de 500 kB do Vite).
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -360,5 +381,5 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 2. ~~Consequência de D1 = A: migration 0014, dependency `obter_gestor_central` e script de teste~~ (concluídas em 2026-10-13).
 3. ~~Atualizar `backend/README.md`~~ e ~~corrigir `seed_produtos.py`~~ (feitos em 2026-10-13).
 4. ~~Fase 2 (P1–P8)~~ — concluída em 2026-10-13.
-5. **Em andamento:** frontend do SaaS (W1–W8, seção 1). Antes do W2: colocar a skill Frescor em `.claude/skills/frescor-design-system/SKILL.md`.
-6. Depois: planejar a Fase 3 (motor de previsão) — já há 8 semanas de vendas no seed.
+5. ~~Frontend do SaaS (W1–W8)~~ — telas da Fase 2 concluídas em 2026-10-13.
+6. **Próximo:** planejar a Fase 3 (motor de previsão) — já há 8 semanas de vendas no seed.

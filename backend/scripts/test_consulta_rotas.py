@@ -7,9 +7,13 @@ Cenário (dados inseridos direto no banco, em setembro de 2026):
   negócio A, central A1: lojas T01 e T02; central A2: loja T03
   negócio B, central B: loja TB1
   produtos de A: P1 (UN), P2 (KG); de B: PB
-  vendas A1: T01/P1 dias 1-5 (manual) + dia 1 (api); T01/P2 dias 1-3; T02/P1 dia 2 -> 10 linhas
+  vendas A1: T01/P1 dias 1-5 (manual: 11..15) + dia 1 (api: 99); T01/P2 dias 1-3 (1,250 kg);
+             T02/P1 dia 2 (manual: 7) + dia 3 (api: 50)
+             -> 11 linhas gravadas, 10 efetivas (D16: a manual de T01/P1 no dia 1 fica
+                oculta pela api do mesmo dia; a api de T02 no dia 3 NÃO esconde a manual
+                de T01 no dia 3, porque a loja é outra)
   vendas A2: T03/P1 dia 1; vendas B: TB1/PB dia 1
-  perdas A1: T01/P1 dia 1 e dia 2 -> 2 linhas
+  perdas A1: T01/P1 dia 1 (manual: 1, oculta pela api: 5) e dia 2 (manual: 1) -> 2 efetivas
 Usuários: gestor de A1, gestor de A2, gestor de B, gestor de A1 sem
 tem_acesso_web, operador de loja (token do app).
 
@@ -150,11 +154,15 @@ def main():
         for d in range(1, 4):
             venda(neg_a, t01, p2, d, "1.250")
         venda(neg_a, t02, p1, 2, "7")
+        venda(neg_a, t02, p1, 3, "50", OrigemVenda.API)  # D16: não pode esconder a manual de T01 no dia 3
         venda(neg_a, t03, p1, 1, "5")
         venda(neg_b, tb1, pb, 1, "3")
         for d in (1, 2):
             db.add(PerdaDiaria(negocio_id=neg_a.id, loja_id=t01.id, produto_id=p1.id, data=SET(d),
                                quantidade=Decimal("1"), origem=OrigemPerda.MANUAL))
+        # D16: perda api no dia 1 esconde a manual do mesmo dia.
+        db.add(PerdaDiaria(negocio_id=neg_a.id, loja_id=t01.id, produto_id=p1.id, data=SET(1),
+                           quantidade=Decimal("5"), origem=OrigemPerda.API))
 
         def usuario(rotulo, neg, **campos):
             u = Usuario(negocio_id=neg.id, nome=f"Teste {rotulo}", email=f"tcr_{rotulo}_{run_id}@teste.com",
@@ -193,14 +201,14 @@ def main():
         tudo = b["itens"] if r.status_code == 200 else []
 
         r = get("/vendas", ta1, loja_id=t01.id, **PERIODO)
-        registrar("F2 loja_id=T01", corpo(r).get("total") == 9, f"total={corpo(r).get('total')}")
+        registrar("F2 loja_id=T01 (9 gravadas, 8 efetivas)", corpo(r).get("total") == 8, f"total={corpo(r).get('total')}")
         r = get("/vendas", ta1, produto_id=p2.id, **PERIODO)
         registrar("F3 produto_id=P2", corpo(r).get("total") == 3, f"total={corpo(r).get('total')}")
         r = get("/vendas", ta1, loja_id=t02.id, produto_id=p1.id, **PERIODO)
-        registrar("F4 loja_id=T02 + produto_id=P1", corpo(r).get("total") == 1, f"total={corpo(r).get('total')}")
+        registrar("F4 loja_id=T02 + produto_id=P1", corpo(r).get("total") == 2, f"total={corpo(r).get('total')}")
         r = get("/vendas", ta1, data_inicio="2026-09-02", data_fim="2026-09-03")
         datas = sorted({i["data"] for i in corpo(r)["itens"]})
-        registrar("F5 periodo 02 a 03/09 (inclusive)", corpo(r).get("total") == 5 and datas == ["2026-09-02", "2026-09-03"],
+        registrar("F5 periodo 02 a 03/09 (inclusive)", corpo(r).get("total") == 6 and datas == ["2026-09-02", "2026-09-03"],
                   f"total={corpo(r).get('total')}, datas={datas}")
         r = get("/vendas", ta1, produto_id=pb.id, **PERIODO)
         registrar("F6 produto de outro negocio -> lista vazia", r.status_code == 200 and corpo(r)["total"] == 0,
@@ -212,9 +220,30 @@ def main():
                     "produto": {"id": p2.id, "codigo": "P2", "nome": "_Produto Dois"},
                     "quantidade": "1.250", "unidade": "KG", "origem": "manual"}
         registrar("I1 campos do item (produto KG)", kg == esperado, f"{kg}")
-        api = [i for i in tudo if i["origem"] == "api"]
-        registrar("I2 origem api listada junto com a manual do mesmo dia",
-                  len(api) == 1 and api[0]["quantidade"] == "99.000", f"{api}")
+        # ---------------- D16: api prevalece sobre manual no mesmo loja + produto + data ----------------
+        def linhas_de(itens, loja, produto, dia):
+            return [(i["origem"], i["quantidade"]) for i in itens
+                    if i["loja"]["codigo"] == loja and i["produto"]["codigo"] == produto and i["data"] == dia]
+
+        registrar("D16a T01/P1 dia 1: so a api (99) aparece, a manual (11) fica oculta",
+                  linhas_de(tudo, "T01", "P1", "2026-09-01") == [("api", "99.000")],
+                  f"{linhas_de(tudo, 'T01', 'P1', '2026-09-01')}")
+        registrar("D16b api de OUTRA loja (T02, dia 3) nao esconde a manual de T01 no dia 3",
+                  linhas_de(tudo, "T01", "P1", "2026-09-03") == [("manual", "13.000")]
+                  and linhas_de(tudo, "T02", "P1", "2026-09-03") == [("api", "50.000")],
+                  f"T01={linhas_de(tudo, 'T01', 'P1', '2026-09-03')}, T02={linhas_de(tudo, 'T02', 'P1', '2026-09-03')}")
+        registrar("D16c dia sem api: a manual vale (T01/P1 dia 2)",
+                  linhas_de(tudo, "T01", "P1", "2026-09-02") == [("manual", "12.000")],
+                  f"{linhas_de(tudo, 'T01', 'P1', '2026-09-02')}")
+        r = get("/perdas", ta1, **PERIODO)
+        registrar("D16d perdas: no dia 1 vale a api (5), no dia 2 a manual (1)",
+                  sorted((i["data"], i["origem"], i["quantidade"]) for i in corpo(r)["itens"])
+                  == [("2026-09-01", "api", "5.000"), ("2026-09-02", "manual", "1.000")],
+                  f"{[(i['data'], i['origem'], i['quantidade']) for i in corpo(r)['itens']]}")
+        db.expire_all()
+        gravadas = db.query(VendaDiaria).filter(VendaDiaria.loja_id == t01.id, VendaDiaria.produto_id == p1.id,
+                                                VendaDiaria.data == SET(1)).count()
+        registrar("D16e a manual oculta continua gravada (reserva)", gravadas == 2, f"{gravadas} linha(s) gravada(s) em T01/P1 dia 1")
 
         # ---------------- ordenação e paginação ----------------
         ordem = [(i["data"], i["loja"]["id"], i["produto"]["id"], i["origem"]) for i in tudo]
@@ -269,6 +298,33 @@ def main():
                   f"{chaves(corpo(r)['itens'])}")
         r = get("/vendas", tk(g_b), loja_id=t01.id, **PERIODO)
         registrar("S3 gestor B pedindo loja de A -> 404", r.status_code == 404, f"{r.status_code}")
+
+        # ---------------- totais do período (frontend W7) ----------------
+        # UN (D16, sem contar em dobro): T01/P1 api 99 (no lugar da manual 11) + manual 12..15 = 54 -> 153;
+        # T02/P1 manual 7 + api 50 = 57 -> UN 210. KG: T01/P2 3 x 1,250 = 3,750.
+        r = get("/vendas", ta1, **PERIODO)
+        registrar("T1 totais por unidade (UN antes de KG), sem contar o dia em dobro (D16)",
+                  corpo(r)["totais"] == [{"unidade": "UN", "quantidade": "210.000"}, {"unidade": "KG", "quantidade": "3.750"}],
+                  f"{corpo(r).get('totais')}")
+        r = get("/vendas", ta1, limit=3, offset=6, **PERIODO)
+        registrar("T2 totais nao dependem da pagina",
+                  corpo(r)["totais"] == [{"unidade": "UN", "quantidade": "210.000"}, {"unidade": "KG", "quantidade": "3.750"}],
+                  f"{corpo(r).get('totais')}")
+        r = get("/vendas", ta1, loja_id=t02.id, **PERIODO)
+        registrar("T3 totais respeitam o filtro de loja (T02: 7 + 50)", corpo(r)["totais"] == [{"unidade": "UN", "quantidade": "57.000"}],
+                  f"{corpo(r).get('totais')}")
+        r = get("/vendas", ta1, produto_id=p2.id, data_inicio="2026-09-02", data_fim="2026-09-03")
+        registrar("T4 totais respeitam produto e periodo", corpo(r)["totais"] == [{"unidade": "KG", "quantidade": "2.500"}],
+                  f"{corpo(r).get('totais')}")
+        r = get("/vendas", ta1, data_inicio="2026-01-01", data_fim="2026-01-31")
+        registrar("T5 periodo sem vendas: totais vazio", r.status_code == 200 and corpo(r)["totais"] == [] and corpo(r)["total"] == 0,
+                  f"{r.status_code} -> {corpo(r)}")
+        r = get("/vendas", tk(g_a2), **PERIODO)
+        registrar("T6 totais respeitam o escopo do gestor (A2 so T03)", corpo(r)["totais"] == [{"unidade": "UN", "quantidade": "5.000"}],
+                  f"{corpo(r).get('totais')}")
+        r = get("/perdas", ta1, **PERIODO)
+        registrar("T7 totais de perdas (api 5 no dia 1 + manual 1 no dia 2)",
+                  corpo(r)["totais"] == [{"unidade": "UN", "quantidade": "6.000"}], f"{corpo(r).get('totais')}")
 
         # ---------------- perdas ----------------
         r = get("/perdas", ta1, **PERIODO)

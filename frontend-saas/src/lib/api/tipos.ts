@@ -30,3 +30,53 @@ export interface RelatorioImportacao {
 }
 
 export type TipoImportacao = 'vendas' | 'perdas'
+
+/** GET /web/lojas (lojas da central do gestor). */
+export interface LojaWeb {
+  id: number
+  codigo: string | null
+  nome: string
+  ativo: boolean
+}
+
+export type Unidade = 'UN' | 'KG'
+
+/** Item de GET /web/produtos. */
+export interface ProdutoWeb {
+  id: number
+  codigo: string | null
+  nome: string
+  unidade: Unidade
+  ativo: boolean
+}
+
+export interface ProdutosWeb {
+  total: number
+  limit: number
+  offset: number
+  itens: ProdutoWeb[]
+}
+
+/** Item de GET /vendas e /perdas. `quantidade` vem como texto decimal ("1.250"). */
+export interface ItemDiario {
+  data: string // AAAA-MM-DD
+  loja: { id: number; codigo: string | null }
+  produto: { id: number; codigo: string | null; nome: string }
+  quantidade: string
+  unidade: Unidade
+  origem: 'manual' | 'api' | 'inferida'
+}
+
+export interface TotalPorUnidade {
+  unidade: Unidade
+  quantidade: string
+}
+
+/** GET /vendas e /perdas. */
+export interface ConsultaDiaria {
+  total: number
+  limit: number
+  offset: number
+  itens: ItemDiario[]
+  totais: TotalPorUnidade[]
+}
