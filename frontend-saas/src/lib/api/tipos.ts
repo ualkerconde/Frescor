@@ -80,3 +80,89 @@ export interface ConsultaDiaria {
   itens: ItemDiario[]
   totais: TotalPorUnidade[]
 }
+
+// ---- previsão (Fase 3 / F8; backend/app/schemas/previsao.py) ----
+// Números decimais chegam como texto ("40.0000"); null = sem valor.
+
+export interface EventoAplicado {
+  id: number
+  nome: string
+  tipo_ajuste: 'multiplicador' | 'valor_fixo'
+  valor_ajuste: string
+}
+
+/** Item de GET /previsoes: o número do dia e as peças que o compõem. */
+export interface ItemPrevisao {
+  data: string // AAAA-MM-DD
+  loja: { id: number; codigo: string | null; nome: string }
+  produto: { id: number; codigo: string | null; nome: string }
+  unidade: Unidade
+  /** null = sem histórico, sem proxy e sem evento de valor fixo. */
+  previsao: string | null
+  previsao_sem_evento: string | null
+  /** Só com o histórico do produto na loja (base × tendência). */
+  previsao_propria: string | null
+  /** null = a loja não tem dado daquele dia. */
+  venda_semana_passada: string | null
+  metodo: 'semanal' | 'sazonal'
+  estatistica: string
+  base: string | null
+  semanas_na_base: number
+  /** Fator aplicado, já limitado a 0,7–1,3. */
+  tendencia: string
+  /** Antes do limite; null = poucos dias para calcular (fator 1). */
+  tendencia_bruta: string | null
+  dias_na_tendencia: number
+  inicio_historico: string | null
+  /** 0 a 1; menor que 1 = pouco histórico (cold start). */
+  peso_historico: string
+  pouco_historico: boolean
+  proxy: string | null
+  origem_proxy: 'outras_lojas' | 'categoria' | 'unidade' | null
+  eventos: EventoAplicado[]
+  data_referencia: string
+  gerado_em: string
+  versao_metodo: string
+}
+
+export interface TotalPrevisto {
+  unidade: Unidade
+  previsto: string
+  vendido_semana_passada: string
+}
+
+/** GET /previsoes. Lista vazia = ainda não gerou para esse dia. */
+export interface Previsoes {
+  data: string
+  itens: ItemPrevisao[]
+  totais: TotalPrevisto[]
+}
+
+/** POST /previsoes/gerar */
+export interface GeracaoPrevisoes {
+  data_referencia: string
+  data_inicio: string
+  data_fim: string
+  gravadas: number
+  sem_previsao: number
+  substituidas: number
+  versao_metodo: string
+}
+
+/** Métricas por unidade; frações com 4 casas ("0.1165" = 11,65%). */
+export interface QualidadeUnidade {
+  unidade: Unidade
+  pares: number
+  wape: string | null
+  vies: string | null
+  ingenuo_wape: string | null
+  ingenuo_vies: string | null
+  vence_ingenuo: boolean | null
+}
+
+/** GET /previsoes/qualidade */
+export interface QualidadePrevisao {
+  data_inicio: string
+  data_fim: string
+  por_unidade: QualidadeUnidade[]
+}

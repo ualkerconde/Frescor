@@ -24,6 +24,56 @@ export function formatarQuantidade(valor: string | number, unidade: "UN" | "KG")
   return `${quantidade.format(Number(valor))} ${unidade === "KG" ? "kg" : "un"}`
 }
 
+const previsaoUn = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 })
+const previsaoKg = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 })
+
+/**
+ * Número previsto para exibir: o backend grava 4 casas (D21, sem
+ * arredondar); na tela, 1 casa em UN e 2 em KG bastam para ler.
+ * ("44.1234", "UN") -> "44,1 un"; ("25.4567", "KG") -> "25,46 kg".
+ */
+export function formatarPrevisao(valor: string | number, unidade: "UN" | "KG"): string {
+  const n = Number(valor)
+  return unidade === "KG" ? `${previsaoKg.format(n)} kg` : `${previsaoUn.format(n)} un`
+}
+
+const percentual = new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 })
+
+/** Fração -> percentual: "0.0960" -> "9,6%"; "-0.03" -> "-3%". */
+export function formatarPercentual(fracao: string | number): string {
+  return percentual.format(Number(fracao))
+}
+
+/**
+ * Fator -> variação em % arredondada: "1.10" -> "+10%"; "0.85" -> "-15%";
+ * "1.004" -> "0%".
+ */
+export function formatarVariacao(fator: string | number): string {
+  const pontos = Math.round((Number(fator) - 1) * 100)
+  if (pontos === 0) return "0%"
+  return `${pontos > 0 ? "+" : "−"}${formatarInteiro(Math.abs(pontos))}%`
+}
+
+const DIAS_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"]
+const DIAS_SEMANA_PLURAL = ["domingos", "segundas", "terças", "quartas", "quintas", "sextas", "sábados"]
+
+function diaDaSemanaIndice(iso: string): number {
+  const [a, m, d] = iso.slice(0, 10).split("-").map(Number)
+  return new Date(Date.UTC(a, m - 1, d)).getUTCDay()
+}
+
+/** "2026-10-14" -> "terça" (ou "terças" no plural), sem erro de fuso. */
+export function diaDaSemana(iso: string, plural = false): string {
+  return (plural ? DIAS_SEMANA_PLURAL : DIAS_SEMANA)[diaDaSemanaIndice(iso)]
+}
+
+/** Soma dias a uma data ISO: ("2026-10-14", -7) -> "2026-10-07". */
+export function somarDias(iso: string, dias: number): string {
+  const [a, m, d] = iso.slice(0, 10).split("-").map(Number)
+  const data = new Date(Date.UTC(a, m - 1, d + dias))
+  return data.toISOString().slice(0, 10)
+}
+
 /** "2026-09-01" -> "01/09/2026", sem passar por Date (evita erro de fuso horário). */
 export function formatarData(iso: string): string {
   const [ano, mes, dia] = iso.slice(0, 10).split("-")

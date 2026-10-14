@@ -1,7 +1,8 @@
 /*
  * Verificação automática de acessibilidade (passo W8) com o axe-core, nas
  * telas e nos estados principais: login (vazio e com erro), importação
- * (vazia, com sucesso e com erros) e consulta (com dados e vazia).
+ * (vazia, com sucesso e com erros), consulta (com dados e vazia) e previsão
+ * (com dados e a conta aberta, vazia, com erro ao gerar).
  *
  * Limitação: no jsdom o axe não calcula contraste de cor (não há
  * renderização real). Os contrastes são garantidos pelo tema.test.ts, que
@@ -12,6 +13,8 @@ import userEvent from '@testing-library/user-event'
 import axe from 'axe-core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { salvarTokens } from '@/lib/api/sessao'
+import { dataIso, somarDias } from '@/lib/formato'
+import { itemPrevisao } from '@/test/previsao'
 import { ME, renderizarApp, resposta, simularApi } from '@/test/renderizar'
 
 async function violacoes(): Promise<string[]> {
@@ -99,6 +102,60 @@ describe('acessibilidade (axe-core, WCAG)', () => {
       })
       renderizarApp('/consultar')
       await screen.findByRole('table')
+      expect(await violacoes()).toEqual([])
+    })
+
+    it('previsão com dados (resumo, tabela, conta aberta e qualidade)', async () => {
+      const amanha = somarDias(dataIso(new Date()), 1)
+      simularApi({
+        'GET /web/me': resposta(200, ME),
+        'GET /web/lojas': resposta(200, LOJAS),
+        'GET /previsoes': resposta(200, {
+          data: amanha,
+          itens: [
+            itemPrevisao({ data: amanha }),
+            itemPrevisao({
+              data: amanha,
+              produto: { id: 30, codigo: 'INT-030', nome: 'Bolo de Milho' },
+              previsao: null,
+              previsao_sem_evento: null,
+              previsao_propria: null,
+              base: null,
+              pouco_historico: true,
+              peso_historico: '0',
+              eventos: [{ id: 3, nome: 'Feriado', tipo_ajuste: 'multiplicador', valor_ajuste: '1.5000' }],
+            }),
+          ],
+          totais: [{ unidade: 'KG', previsto: '44.0000', vendido_semana_passada: '41.500' }],
+        }),
+        'GET /previsoes/qualidade': resposta(200, {
+          data_inicio: '2026-09-16',
+          data_fim: '2026-10-13',
+          por_unidade: [{ unidade: 'KG', pares: 10, wape: '0.1', vies: '-0.02', ingenuo_wape: '0.08', ingenuo_vies: '0', vence_ingenuo: false }],
+        }),
+      })
+      renderizarApp('/previsao')
+      await screen.findByText('Errou em média 10% do volume')
+      await screen.findByRole('table')
+      expect(await violacoes()).toEqual([])
+      await userEvent.click(screen.getByRole('button', { name: 'Ver a conta de Pão Francês na loja 001' }))
+      expect(await violacoes()).toEqual([])
+    })
+
+    it('previsão vazia e com erro ao gerar', async () => {
+      simularApi({
+        'GET /web/me': resposta(200, ME),
+        'GET /web/lojas': resposta(200, LOJAS),
+        'GET /previsoes': (_init, url) => resposta(200, { data: url.searchParams.get('data'), itens: [], totais: [] }),
+        'GET /previsoes/qualidade': resposta(200, { data_inicio: '2026-09-16', data_fim: '2026-10-13', por_unidade: [] }),
+        'POST /previsoes/gerar': resposta(500, 'erro'),
+      })
+      renderizarApp('/previsao')
+      await screen.findByText(/^Nenhuma previsão gerada para/)
+      await screen.findByText(/^Ainda não há vendas suficientes/)
+      expect(await violacoes()).toEqual([])
+      await userEvent.click(screen.getByRole('button', { name: 'Gerar previsão' }))
+      await screen.findByRole('alert')
       expect(await violacoes()).toEqual([])
     })
 
