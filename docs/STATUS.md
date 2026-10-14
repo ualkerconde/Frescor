@@ -180,7 +180,7 @@ Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** 
 
 | Passo | O que | Verificação | Situação |
 |---|---|---|---|
-| W1 | Backend: `GET /web/me` (gestor, central, negócio), `GET /web/lojas` (lojas da central), `GET /web/produtos` (produtos do negócio, com busca), com `obter_gestor_central` | `TestClient`: 401/403, escopo, isolamento, busca; regressão completa | Em andamento |
+| W1 | Backend: `GET /web/me` (gestor, central, negócio), `GET /web/lojas` (lojas da central), `GET /web/produtos` (produtos do negócio, com busca), com `obter_gestor_central` | `TestClient`: 401/403, escopo, isolamento, busca; regressão completa | **Concluído (2026-10-13)** — ver abaixo |
 | W2 | Esqueleto `frontend-saas/`: Vite + React + TS, Tailwind, shadcn, tema da skill Frescor, proxy, Vitest | build, testes, checagem de tipos, health pelo proxy | — |
 | W3 | Cliente da API e sessão: token `porta: web`, refresh automático uma vez por 401, logout com motivo; sem `Content-Type` forçado em upload | testes com `fetch` simulado | — |
 | W4 | Tela de login (401, 403 com a mensagem da API, rotas protegidas) | testes; manual com `gestor@teste.com` e `admin@teste.com` | — |
@@ -189,7 +189,28 @@ Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** 
 | W7 | Consulta (vendas/perdas, período, loja, produto com busca, tabela paginada com total, filtros na URL, formatos pt-BR) | testes; manual contra o seed | — |
 | W8 | Acabamento: acessibilidade básica, build de produção, README do frontend, STATUS | build, testes, roteiro manual login → importar → consultar → sair | — |
 
-**Pendência do W2:** o arquivo `.claude/skills/frescor-design-system/SKILL.md` **não existe** no projeto nem nas skills do usuário (procurado em 2026-10-13). Precisa ser colocado antes do W2.
+**Skill de design Frescor (2026-10-13):** recebida do Ualker e salva em `.claude/skills/frescor-design-system/SKILL.md` (direção B, "Central de produção"; vale para o `frontend-saas/` e para mudanças futuras no app mobile). Contrastes da tabela da skill recalculados pela fórmula WCAG 2.1: os 14 pares batem (diferença máxima 0,05) e são AA. Pares extras usados no W2 também passam (ex.: `--input-border` sobre branco 3,54:1, `--primary-hover` com branco 8,72:1), exceto `--line` sobre branco (1,38:1) — permitido porque a skill o restringe a divisórias decorativas; **nunca usar `--line` como borda de controle**.
+
+**Como a skill se aplica ao frontend do SaaS (aprovado pelo Ualker em 2026-10-13):**
+1. Tokens da skill como variáveis CSS; com Tailwind 4 o mapeamento é no CSS (`@theme`), não em `tailwind.config` (mesmo efeito).
+2. **Fontes Sora e Source Sans 3 servidas pelo próprio projeto (`@fontsource`)**, não pelo Google Fonts (sem dependência externa nem envio de acesso ao Google).
+3. Uma ação principal por tela: na importação o primário é "Importar vendas/perdas" ("Baixar modelo de CSV" é secundário); na consulta, "Consultar".
+4. Erros sem código técnico na tela (nada de "Erro 422"): o que deu errado + o que fazer.
+5. Quantidade sempre com unidade e em pt-BR (`18,5 kg`, `36 un`), números à direita na tabela.
+6. A skill vale também para o app mobile, mas o app atual não é alterado agora — só quando houver mudança planejada nele.
+7. Modo escuro, "Fornada" e "Quebra Zero" seguem indefinidos na skill; não inventar.
+8. A prévia visual (artifact citado na skill) pode ser consultada como referência no W2.
+
+**W1 — resultado (2026-10-13):**
+- `app/api/web.py` (novo, prefixo `/web`, DF4), `app/services/catalogo_service.py` (novo), `app/schemas/web.py` (novo); registrado em `main.py`. Todas as rotas com `obter_gestor_central` (401 sem token ou com token do app; 403 sem permissão).
+  - `GET /web/me` → `{usuario {id, nome, email}, central {id, nome}, negocio {id, nome}}`.
+  - `GET /web/lojas` → lojas da central do gestor (escopo do P3), **ativas e inativas** com o campo `ativo`, ordenadas por código e nome.
+  - `GET /web/produtos?busca=&limit=&offset=` → `{total, limit, offset, itens}` com `id, codigo, nome, unidade, ativo`; produtos do **negócio** (ativos e inativos); busca por código ou nome sem diferenciar maiúsculas **nem acentos** (migration 0017); `%` e `_` são texto (não curinga); `limit` 1–200 (padrão 50).
+- **Busca sem acento (pedido do Ualker, resolvido no W1):** migration `0017_extensao_unaccent` (`CREATE EXTENSION IF NOT EXISTS unaccent`; downgrade `DROP EXTENSION IF EXISTS`, sem CASCADE). PostgreSQL de dev: 18.1, extensão disponível e "trusted". A busca compara `lower(unaccent(coluna))` com `lower(unaccent(padrão))` via `LIKE ... ESCAPE`, com `\`, `%` e `_` escapados em Python (o `unaccent` não altera esses caracteres). Ciclo upgrade → downgrade → upgrade ok; **com a extensão removida, o teste falha** (`função unaccent(character varying) não existe`), o que prova a dependência. Antes do deploy: a extensão precisa estar disponível no PostgreSQL de produção.
+- `scripts/test_web_apoio.py` (novo): 25 verificações (P8 agora exige "pao" → "Pão"; P8b "FRANCES" → "Pão Francês"; P8c barra invertida não quebra), 2 execuções, exit 0, banco limpo — autenticação nas três rotas (401/401/403), `/web/me` de dois gestores, lojas só da central (com a inativa) para três gestores, produtos só do negócio, inativo com `ativo=false`, busca por nome/código/maiúsculas, `%` e `_` literais, paginação, `limit` 201 → 422, gestor do seed (lojas `001`/`002`, 11 produtos). A 1ª versão do caso P7 testava um trecho que não existia no nome do produto (não provava nada); trocado por `p_o`, que só acharia "Pão" se `_` fosse curinga.
+- Sabotagem: lojas do negócio inteiro (sem o escopo da central) → falham L1 e L3; produtos sem o filtro de negócio → falham 8 verificações; busca sem tratar `%`/`_` → falham P6, P7 e P7b; busca sem o `unaccent` → falham P3, P4, P8 e P8b.
+- Servidor real (uvicorn) com o `gestor@teste.com`: `/web/me`, `/web/lojas` (001 e 002) e `/web/produtos?busca=bolo` (2 itens), todos 200.
+- Regressão completa: `test_constraint_usuario`, `test_obter_gestor_central`, `test_auth_web` 38, `test_vendas_perdas_modelo`, `test_escopo_gestor`, `test_importacao_csv` 45, `test_importacao_rotas` 14, `test_consulta_rotas` 33, `test_sync_vendas_stub` — todos passaram.
 
 ---
 
@@ -279,6 +300,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 - **2026-10-13** — **Escopo ampliado:** além da padaria, outros perecíveis, incluindo itens não produzidos e itens produzidos para açougue e hortifruti. Impactos possíveis listados na seção 2; decisão de modelagem em aberto (D14). Nada implementado.
 - **2026-10-13** — **Plano do frontend do SaaS aprovado** (W1–W8). DF1 TypeScript; DF2 localStorage (endurecimento com cookie `httpOnly` antes da produção); DF3 TanStack Query; DF4 rotas de apoio com prefixo `/web/`; DF5 Playwright depois. Visual pela skill Frescor a partir do W2.
 - **2026-10-13** — D15 (renomear nomes técnicos para Frescor) adiada para antes do deploy de produção. D14 (escopo ampliado) segue aberta até o planejamento da Fase 4.
+- **2026-10-13** — Skill de design Frescor salva no projeto; os 8 pontos de aplicação ao frontend aprovados. **Fontes via `@fontsource`** (servidas pelo próprio projeto).
+- **2026-10-13** — Busca de produtos ignora acentos: migration 0017 (extensão `unaccent`).
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 

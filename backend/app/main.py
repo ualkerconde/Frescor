@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import auth, auth_web, consultas, health, importacao, produtos, zeragem
+from app.api import auth, auth_web, consultas, health, importacao, produtos, web, zeragem
 from app.core.scheduler import iniciar_agendador, parar_agendador
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -62,6 +62,7 @@ app.include_router(produtos.router, tags=["Produtos e Estoque"])
 app.include_router(zeragem.router, tags=["Zeragem"])
 app.include_router(importacao.router, tags=["Importação (SaaS web)"])
 app.include_router(consultas.router, tags=["Consultas (SaaS web)"])
+app.include_router(web.router, prefix="/web", tags=["Apoio às telas (SaaS web)"])
 
 
 @app.get("/")
