@@ -19,6 +19,9 @@ Casos:
   L1  dois códigos de loja iguais no mesmo negócio -> barrado
   L2  mesmo código de loja em outro negócio -> aceito
   L3  duas lojas sem código no mesmo negócio -> aceito
+  L4  dois produtos com o mesmo código no mesmo negócio -> barrado (migration 0016)
+  L5  mesmo código de produto em outro negócio -> aceito
+  L6  dois produtos sem código no mesmo negócio -> aceito
   X1  venda com loja de outro negócio -> barrada pela FK composta (negocio_id, loja_id)
   X2  venda com produto de outro negócio -> barrada pela FK composta (negocio_id, produto_id)
   X3  perda com loja de outro negócio -> barrada pela FK composta
@@ -55,7 +58,7 @@ from app.models.venda_diaria import OrigemVenda, VendaDiaria  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 20
+TOTAL_CASOS = 23
 PREFIXO_NEGOCIO_TESTE = "_Teste Vendas Modelo"
 DIA = date(2026, 10, 1)
 INEXISTENTE = 2_000_000_000
@@ -161,7 +164,10 @@ def main():
         loja_b = Loja(negocio_id=neg_b.id, central_producao_id=central_b.id, nome="_Loja B",
                       horario_zeragem=time(6, 0), ativo=True)
         prod_b = Produto(negocio_id=neg_b.id, nome="_Produto B", unidade_medida=UnidadeMedida.UN, ativo=True)
-        db.add_all([prod_un, prod_kg, loja_b, prod_b])
+        # Produto com código, alvo do caso L4 (código repetido).
+        prod_c1 = Produto(negocio_id=neg_a.id, nome="_Produto C-1", codigo="C-1",
+                          unidade_medida=UnidadeMedida.UN, ativo=True)
+        db.add_all([prod_un, prod_kg, loja_b, prod_b, prod_c1])
         db.commit()
         ids = dict(neg=neg_a.id, neg_b=neg_b.id, loja=loja.id, un=prod_un.id, kg=prod_kg.id,
                    central_a=central_a.id, central_b=central_b.id, loja_b=loja_b.id, prod_b=prod_b.id)
@@ -260,6 +266,17 @@ def main():
         deve_inserir("L3 duas lojas sem codigo no mesmo negocio",
                      lambda s: s.add_all([loja_nova(ids["neg"], ids["central_a"], None),
                                           loja_nova(ids["neg"], ids["central_a"], None)]))
+
+        # ---- produtos.codigo (migration 0016) ----
+        def produto_novo(negocio_id, codigo):
+            return Produto(negocio_id=negocio_id, nome=f"_Produto {codigo}", codigo=codigo,
+                           unidade_medida=UnidadeMedida.UN, ativo=True)
+
+        deve_barrar("L4 codigo de produto repetido no mesmo negocio",
+                    lambda s: s.add(produto_novo(ids["neg"], "C-1")), "uq_produto_negocio_codigo")
+        deve_inserir("L5 mesmo codigo de produto em outro negocio", lambda s: s.add(produto_novo(ids["neg_b"], "C-1")))
+        deve_inserir("L6 dois produtos sem codigo no mesmo negocio",
+                     lambda s: s.add_all([produto_novo(ids["neg"], None), produto_novo(ids["neg"], None)]))
 
         # ---- outro negócio (FKs compostas) ----
         deve_barrar("X1 venda com loja de outro negocio",

@@ -28,7 +28,12 @@ class Produto(Base):
     __tablename__ = "produtos"
     # Alvo das FKs compostas de vendas_diarias/perdas_diarias (migration
     # 0015): garante no banco que venda/perda e produto são do mesmo negócio.
-    __table_args__ = (UniqueConstraint("negocio_id", "id", name="uq_produto_negocio_id"),)
+    __table_args__ = (
+        UniqueConstraint("negocio_id", "id", name="uq_produto_negocio_id"),
+        # O código identifica o produto na importação de CSV (D7); único no
+        # negócio para não haver linha ambígua (migration 0016).
+        UniqueConstraint("negocio_id", "codigo", name="uq_produto_negocio_codigo"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
