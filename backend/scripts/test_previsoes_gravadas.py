@@ -18,7 +18,8 @@ Casos:
       versão do método; L2/P5 gravada com previsão NULL
   G04 auditoria: data de referência, quem gerou, quando
   G05 gerar de novo não duplica: 49 linhas, todas substituídas (ids novos)
-  G06 dado novo muda a regravação (venda api alta ontem em L2/P2 -> tendência 1,3)
+  G06 dado novo muda a regravação (alta sustentada via api nos últimos 7
+      dias em L2/P2 -> tendência 1,3)
   G07 produto desabilitado na loja some na regravação (não fica linha velha)
   G08 previsões da central A2 e do negócio B ficam intactas
   G09 falha no meio da geração não deixa nada pela metade (vale a anterior)
@@ -268,8 +269,11 @@ def main():
 
         # ---- G06 ----
         antes = linha(c_a1, l2, p2, HORIZONTE[0]).previsao
-        db.add(VendaDiaria(negocio_id=neg_a.id, loja_id=l2.id, produto_id=p2.id, data=REF, quantidade=D("200"),
-                           origem=OrigemVenda.API))
+        # Alta sustentada (30 em vez de 20 nos últimos 7 dias, via api, D16): com a
+        # tendência pela mediana (D31), um pico isolado não mudaria o número.
+        for k in range(7):
+            db.add(VendaDiaria(negocio_id=neg_a.id, loja_id=l2.id, produto_id=p2.id, data=REF - timedelta(days=k),
+                               quantidade=D("30"), origem=OrigemVenda.API))
         db.commit()
         gerar_previsoes(db, neg_a.id, c_a1.id, REF)
         depois = linha(c_a1, l2, p2, HORIZONTE[0])

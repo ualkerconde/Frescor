@@ -138,8 +138,10 @@ def parte_pura():
     # E11: 2 dos últimos 7 dias venderam 30 por causa de um evento.
     ev_ini = REF - timedelta(days=1)
     s_ult = serie(56, lambda d: D("30") if d >= ev_ini else D("10"))
-    sem = prever(s_ult, REF, ALVO)
-    com = prever(s_ult, REF, ALVO, [ev(1, MULT, "3", inicio=ev_ini, fim=REF)])
+    # Tendência pela soma de propósito: com a mediana (padrão, D31), dois dias
+    # de pico já não movem o fator e o teste não mostraria a exclusão.
+    sem = prever(s_ult, REF, ALVO, metodo_tendencia="soma")
+    com = prever(s_ult, REF, ALVO, [ev(1, MULT, "3", inicio=ev_ini, fim=REF)], metodo_tendencia="soma")
     registrar("E11 dias de evento saem da tendencia",
               com.tendencia == D("1") and com.dias_na_tendencia == 5 and sem.tendencia == D("1.3"),
               f"com evento tendência {com.tendencia} ({com.dias_na_tendencia} dias); sem o evento {sem.tendencia}")

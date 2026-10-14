@@ -33,7 +33,9 @@ from app.services.previsao_service import PrevisaoProduto, lojas_ativas_da_centr
 HORIZONTE_DIAS = 7  # D22
 # Identifica o método que gerou o número. Mudou uma regra do motor (base,
 # tendência, cold start, eventos, sazonal), muda a versão.
-VERSAO_METODO = "2026.10-v1"
+# v1: base mediana (D25), tendência pela soma (D19).
+# v2 (2026-10-14): tendência pela mediana das razões diárias (D31).
+VERSAO_METODO = "2026.10-v2"
 # Primeiro inteiro da trava: separa as travas deste serviço de outras que
 # venham a usar pg_advisory_xact_lock(int, int) com o id da central.
 _TRAVA_GERACAO = 3001

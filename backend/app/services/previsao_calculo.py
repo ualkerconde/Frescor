@@ -10,8 +10,8 @@ Método (docs/STATUS.md, "Fase 3 — plano"):
   mais que segunda) sem precisar de fatores configurados; a mediana não
   se deixa levar por um dia de pico (promoção não cadastrada, erro de
   digitação), ao contrário da média.
-- Tendência (D19): soma do real dos últimos 7 dias ÷ soma da base desses
-  mesmos dias, limitada a 0,7–1,3. Corrige a base quando o movimento
+- Tendência (D19 e D31): mediana das razões diárias real ÷ base dos
+  últimos 7 dias, limitada a 0,7–1,3. Corrige a base quando o movimento
   mudou nas últimas semanas. O limite impede que uma semana atípica
   dobre ou zere a produção; com menos de 5 dos 7 dias comparáveis, o
   fator fica 1 (pouco dado para afirmar tendência).
@@ -73,6 +73,14 @@ ESTATISTICA_MEDIANA = "mediana"
 ESTATISTICA_MEDIA_APARADA = "media_aparada"
 ESTATISTICAS = (ESTATISTICA_MEDIA, ESTATISTICA_MEDIANA, ESTATISTICA_MEDIA_APARADA)
 ESTATISTICA_PADRAO = ESTATISTICA_MEDIANA
+# Como juntar os últimos 7 dias na tendência. D31 (decidida em 2026-10-14):
+# mediana das razões diárias real ÷ base. No backtest, custa 0,2–0,4 ponto
+# de WAPE em dado limpo e tira quase todo o efeito de picos (viés de +6,6%
+# para +0,8% com 3% dos dias ×4). A soma (D19 original) fica para comparar.
+TENDENCIA_SOMA = "soma"
+TENDENCIA_MEDIANA = "mediana"
+TENDENCIAS = (TENDENCIA_SOMA, TENDENCIA_MEDIANA)
+TENDENCIA_PADRAO = TENDENCIA_MEDIANA
 
 Serie = Mapping[date, Decimal | None]
 
@@ -162,20 +170,53 @@ def base_dia_semana(
     return resumir(valores, estatistica), len(valores)
 
 
+def fator_tendencia(
+    pares: list[tuple[Decimal, Decimal]], metodo: str = TENDENCIA_PADRAO
+) -> tuple[Decimal, Decimal | None]:
+    """
+    Fator de tendência a partir de pares (real, referência) dos últimos dias
+    (referência = base do dia, ou o mesmo dia do ano anterior no sazonal).
+    Devolve (fator limitado a 0,7–1,3, fator bruto). Com menos de 5 pares
+    (D19), ou sem referência para dividir, o fator é 1 e o bruto None.
+
+    - mediana (padrão, D31): mediana das razões diárias real ÷ referência
+      (dias com referência zero ficam fora). Um pico vira só uma razão alta,
+      que a mediana ignora. Custo: uma mudança real que só aparece em 2 ou
+      3 dos 7 dias demora mais a entrar.
+    - soma (D19 original, para comparação): Σ real ÷ Σ referência. Um pico
+      entra inteiro na soma.
+    """
+    if len(pares) < MINIMO_DIAS_TENDENCIA:
+        return Decimal("1"), None
+    if metodo == TENDENCIA_SOMA:
+        soma_referencia = sum((b for _, b in pares), Decimal("0"))
+        if soma_referencia == 0:
+            return Decimal("1"), None
+        bruta = sum((r for r, _ in pares), Decimal("0")) / soma_referencia
+    elif metodo == TENDENCIA_MEDIANA:
+        razoes = [r / b for r, b in pares if b > 0]
+        if len(razoes) < MINIMO_DIAS_TENDENCIA:
+            return Decimal("1"), None
+        bruta = resumir(razoes, ESTATISTICA_MEDIANA)
+    else:
+        raise ValueError(f"Método de tendência desconhecido: {metodo}")
+    return min(max(bruta, TENDENCIA_MINIMA), TENDENCIA_MAXIMA), bruta
+
+
 def tendencia(
-    serie: Serie, data_referencia: date, estatistica: str = ESTATISTICA_PADRAO
+    serie: Serie,
+    data_referencia: date,
+    estatistica: str = ESTATISTICA_PADRAO,
+    metodo: str = TENDENCIA_PADRAO,
 ) -> tuple[Decimal, Decimal | None, int]:
     """
     Fator de tendência dos últimos `DIAS_TENDENCIA` dias até `data_referencia`.
     Devolve (fator limitado, fator bruto, dias comparados).
 
     Cada dia entra só se tem o real e a base dele (calculada com as semanas
-    anteriores a ele). Soma contra soma, e não média de razões: um dia de
-    venda baixa não vira uma razão enorme.
+    anteriores a ele). O jeito de juntar os dias está em `fator_tendencia`.
     """
-    soma_real = Decimal("0")
-    soma_base = Decimal("0")
-    dias = 0
+    pares = []
     for k in range(DIAS_TENDENCIA):
         dia = data_referencia - timedelta(days=k)
         real = serie.get(dia)
@@ -184,13 +225,9 @@ def tendencia(
         base, _ = base_dia_semana(serie, dia - timedelta(days=1), dia, estatistica)
         if base is None:
             continue
-        soma_real += real
-        soma_base += base
-        dias += 1
-    if dias < MINIMO_DIAS_TENDENCIA or soma_base == 0:
-        return Decimal("1"), None, dias
-    bruta = soma_real / soma_base
-    return min(max(bruta, TENDENCIA_MINIMA), TENDENCIA_MAXIMA), bruta, dias
+        pares.append((real, base))
+    fator, bruta = fator_tendencia(pares, metodo)
+    return fator, bruta, len(pares)
 
 
 def prever(
@@ -199,6 +236,7 @@ def prever(
     data_alvo: date,
     eventos: Sequence[EventoAplicavel] = (),
     estatistica: str = ESTATISTICA_PADRAO,
+    metodo_tendencia: str = TENDENCIA_PADRAO,
 ) -> ComponentesPrevisao:
     """
     Previsão de venda para `data_alvo`, usando só o que se sabe até
@@ -217,7 +255,7 @@ def prever(
         if dia <= data_referencia
     }
     base, semanas = base_dia_semana(conhecida, data_referencia, data_alvo, estatistica)
-    fator, bruta, dias = tendencia(conhecida, data_referencia, estatistica)
+    fator, bruta, dias = tendencia(conhecida, data_referencia, estatistica, metodo_tendencia)
     return ComponentesPrevisao(
         data_alvo=data_alvo,
         base=base,
@@ -246,6 +284,7 @@ def prever_sazonal(
     data_alvo: date,
     eventos: Sequence[EventoAplicavel] = (),
     estatistica: str = ESTATISTICA_PADRAO,
+    metodo_tendencia: str = TENDENCIA_PADRAO,
 ) -> ComponentesPrevisao | None:
     """
     Previsão de produto sazonal com temporada anterior (doc §4.1): a base é
@@ -276,29 +315,20 @@ def prever_sazonal(
         return None
     base = resumir(valores, estatistica)
 
-    soma_real = Decimal("0")
-    soma_anterior = Decimal("0")
-    dias = 0
+    pares = []
     for k in range(DIAS_TENDENCIA):
         dia = data_referencia - timedelta(days=k)
         real, anterior = conhecida.get(dia), conhecida.get(dia - ano)
-        if real is None or anterior is None:
-            continue
-        soma_real += real
-        soma_anterior += anterior
-        dias += 1
-    if dias < MINIMO_DIAS_TENDENCIA or soma_anterior == 0:
-        fator, bruta = Decimal("1"), None
-    else:
-        bruta = soma_real / soma_anterior
-        fator = min(max(bruta, TENDENCIA_MINIMA), TENDENCIA_MAXIMA)
+        if real is not None and anterior is not None:
+            pares.append((real, anterior))
+    fator, bruta = fator_tendencia(pares, metodo_tendencia)
     return ComponentesPrevisao(
         data_alvo=data_alvo,
         base=base,
         semanas_na_base=len(valores),
         tendencia=fator,
         tendencia_bruta=bruta,
-        dias_na_tendencia=dias,
+        dias_na_tendencia=len(pares),
         previsao=base * fator,
         metodo=METODO_SAZONAL,
     )

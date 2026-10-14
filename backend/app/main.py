@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from app.api import auth, auth_web, consultas, eventos, health, importacao, produtos, web, zeragem
+from app.api import auth, auth_web, consultas, eventos, health, importacao, previsoes, produtos, web, zeragem
 from app.core.erros_validacao import tratar_erro_de_validacao
 from app.core.scheduler import iniciar_agendador, parar_agendador
 from fastapi.middleware.cors import CORSMiddleware
@@ -69,6 +69,7 @@ app.include_router(importacao.router, tags=["Importação (SaaS web)"])
 app.include_router(consultas.router, tags=["Consultas (SaaS web)"])
 app.include_router(web.router, prefix="/web", tags=["Apoio às telas (SaaS web)"])
 app.include_router(eventos.router, tags=["Eventos (SaaS web)"])
+app.include_router(previsoes.router, tags=["Previsão (SaaS web)"])
 
 
 @app.get("/")

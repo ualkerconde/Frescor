@@ -56,6 +56,7 @@ from app.services.previsao_calculo import (
     DIAS_TENDENCIA,
     ESTATISTICA_PADRAO,
     SEMANAS_AO_REDOR_SAZONAL,
+    TENDENCIA_PADRAO,
     ComponentesPrevisao,
     EventoAplicavel,
     aplicar_eventos,
@@ -172,6 +173,7 @@ def prever_central(
     data_referencia: date,
     data_alvo: date,
     estatistica: str = ESTATISTICA_PADRAO,
+    metodo_tendencia: str = TENDENCIA_PADRAO,
 ) -> list[PrevisaoProduto]:
     """
     Previsão de `data_alvo` para cada produto de cada loja ativa da central,
@@ -179,6 +181,8 @@ def prever_central(
 
     `estatistica` escolhe a base: mediana (padrão, D25), média ou média
     aparada. As outras duas existem para o teste no passado (F6) comparar.
+    `metodo_tendencia`: mediana das razões diárias (padrão, D31) ou soma
+    (D19 original; para o backtest comparar).
     """
     if data_alvo <= data_referencia:
         raise ValueError("A data prevista tem de ser depois da data de referência.")
@@ -232,7 +236,7 @@ def prever_central(
                 for d, v in serie.items()
             }
             if info[produto_id].sazonal:
-                componentes = prever_sazonal(serie, data_referencia, data_alvo, evs, estatistica)
+                componentes = prever_sazonal(serie, data_referencia, data_alvo, evs, estatistica, metodo_tendencia)
                 if componentes is not None:
                     # Com temporada anterior, não há cold start.
                     parciais.append(_Parcial(loja_id, produto_id, componentes, comeco, Decimal("1"), evs))
@@ -243,7 +247,7 @@ def prever_central(
                 _Parcial(
                     loja_id=loja_id,
                     produto_id=produto_id,
-                    componentes=prever(serie, data_referencia, data_alvo, evs, estatistica),
+                    componentes=prever(serie, data_referencia, data_alvo, evs, estatistica, metodo_tendencia),
                     inicio_historico=comeco,
                     peso=peso_historico_proprio(comeco, data_referencia),
                     eventos=evs,

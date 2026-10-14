@@ -30,6 +30,9 @@ Casos:
   C18 previsão = base × tendência
   C19 a base padrão é a mediana (D25): um pico não move a base (com a
       média, moveria)
+  C20 D31: pico nos últimos 7 dias -> tendência pela mediana das razões
+      diárias (padrão) fica 1; pela soma iria a 1,3
+  C21 D31: alta real de 20% nos 7 dias -> as duas dão 1,2
 
 Uso: python scripts/test_previsao_calculo.py
 """
@@ -46,7 +49,7 @@ from app.services.previsao_calculo import prever  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 19
+TOTAL_CASOS = 21
 D = Decimal
 REF = date(2026, 10, 12)  # segunda
 ALVO = REF + timedelta(days=1)  # terça
@@ -116,16 +119,22 @@ def main():
         # C06: ruído determinístico.
         rnd = random.Random(42)
         s = serie(56, lambda d: D("100") * FATORES[d.weekday()] * D(str(round(rnd.uniform(0.8, 1.2), 3))))
-        piores = []
+        # Tendência pela mediana (padrão, D31) é um pouco mais sensível a ruído
+        # que a soma: o limite é 12% para ela e 10% para a soma (os dois números
+        # aparecem na saída; o custo foi medido no backtest e aceito na D31).
+        piores = {"mediana": [], "soma": []}
         for h in range(1, 8):
             alvo = REF + timedelta(days=h)
-            c = prever(s, REF, alvo)
             esperado = D("100") * FATORES[alvo.weekday()]
-            piores.append(abs(c.previsao - esperado) / esperado)
+            for m in piores:
+                c = prever(s, REF, alvo, metodo_tendencia=m)
+                piores[m].append(abs(c.previsao - esperado) / esperado)
         tend = prever(s, REF, ALVO).tendencia
-        pior = max(piores)
-        registrar("C06 ruido de 20% -> erro < 10%, tendencia ~1", pior < D("0.10") and D("0.9") <= tend <= D("1.1"),
-                  f"maior erro {pior:.1%} nos 7 dias, tendência {tend:.4f}")
+        pior, pior_soma = max(piores["mediana"]), max(piores["soma"])
+        registrar("C06 ruido de 20% -> erro pequeno, tendencia ~1",
+                  pior < D("0.12") and pior_soma < D("0.10") and D("0.9") <= tend <= D("1.1"),
+                  f"maior erro nos 7 dias: {pior:.1%} (padrão, mediana) / {pior_soma:.1%} (soma); "
+                  f"tendência {tend:.4f}")
 
         # C07 e C08: pouco histórico.
         c = prever(serie(14, lambda d: D("10")), REF, ALVO)
@@ -204,6 +213,19 @@ def main():
         padrao, media = prever(s, REF, ALVO).base, prever(s, REF, ALVO, estatistica="media").base
         registrar("C19 padrao = mediana (D25): pico nao move a base", padrao == D("10") and media == D("25"),
                   f"base padrão {padrao}; com a média seria {media}")
+
+        # C20/C21 (D31): tendência pela mediana das razões diárias (padrão) x soma.
+        pico_recente = REF - timedelta(days=2)
+        s = serie(56, lambda d: D("100") if d == pico_recente else D("10"))
+        soma, mediana = prever(s, REF, ALVO, metodo_tendencia="soma"), prever(s, REF, ALVO)
+        registrar("C20 pico nos ultimos 7 dias: soma infla, mediana (padrao) nao",
+                  soma.tendencia == D("1.3") and mediana.tendencia == D("1") and mediana.previsao == D("10"),
+                  f"soma: tendência {soma.tendencia} (bruta {soma.tendencia_bruta:.4f}), previsão {soma.previsao}; "
+                  f"mediana: tendência {mediana.tendencia}, previsão {mediana.previsao}")
+        s = serie(56, lambda d: D("12") if d > REF - timedelta(days=7) else D("10"))
+        soma, mediana = prever(s, REF, ALVO, metodo_tendencia="soma"), prever(s, REF, ALVO)
+        registrar("C21 alta real de 20%: as duas captam", soma.tendencia == D("1.2") and mediana.tendencia == D("1.2"),
+                  f"soma {soma.tendencia}, mediana {mediana.tendencia}")
 
     except Exception as e:
         registrar("ERRO INESPERADO", False, f"{type(e).__name__}: {e}")

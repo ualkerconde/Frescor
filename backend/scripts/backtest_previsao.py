@@ -18,6 +18,10 @@ Parte B, robustez a valores extremos (o motivo da D25): copia as séries
   promoção não cadastrada, erro de digitação) e mede só nos dias normais.
   Usa o núcleo puro (prever), sem cold start e sem gravar nada.
 
+D31 (em aberto): compara a tendência pela soma (padrão, D19) com a mediana
+  das razões diárias, com a base padrão, nos dados limpos (motor completo)
+  e com os picos da parte B (núcleo puro), por WAPE e viés.
+
 Critérios (saída 1 se falhar): a base padrão (mediana, D25) vence o
 ingênuo no WAPE da parte A,
 e o perfil semanal previsto fica a menos de 5 pontos percentuais do real
@@ -49,7 +53,7 @@ from app.models.loja import Loja  # noqa: E402
 from app.models.produto import Produto  # noqa: E402
 from app.models.usuario import Usuario  # noqa: E402
 from app.models.venda_diaria import VendaDiaria  # noqa: E402
-from app.services.previsao_calculo import ESTATISTICA_PADRAO, ESTATISTICAS, prever  # noqa: E402
+from app.services.previsao_calculo import ESTATISTICA_PADRAO, ESTATISTICAS, TENDENCIAS, prever  # noqa: E402
 from app.services.previsao_metricas import medir, previsao_ingenua  # noqa: E402
 from app.services.previsao_service import lojas_ativas_da_central, prever_central  # noqa: E402
 from app.services.serie_vendas_service import series_da_loja  # noqa: E402
@@ -221,6 +225,47 @@ def main():
             linhas.append((e, m_limpo, m_picos))
             print(f"  {e:<16} {m_picos.n:>6}  {pct(m_limpo.wape):>10}  {pct(m_picos.wape):>13} {sinal(m_picos.vies):>13}"
                   f"   {pct(ing_b.wape):>16}")
+
+        # ------------------------------------------------ D31
+        print(f"\n=============== D31 · tendência (base: {PADRAO}, padrão) ===============")
+        por_tendencia: dict[str, dict] = {m: {} for m in TENDENCIAS}
+        for m in TENDENCIAS:
+            for alvo in alvos:
+                for x in prever_central(db, negocio_id, central_id, alvo - UM_DIA, alvo, PADRAO, m):
+                    por_tendencia[m][(x.loja_id, x.produto_id, alvo)] = x.previsao
+        ks_a = [k for k in chaves if all(por_tendencia[m].get(k) is not None for m in TENDENCIAS)]
+        ks_a_sem_cold = [k for k in ks_a if peso[k] >= 1]
+        print(f"  {'tendência':<10} {'cenário':<30} {'pares':>6}  {'WAPE':>7} {'viés':>7}")
+        for m in TENDENCIAS:
+            for rotulo, ks in (("limpo, motor completo", ks_a), ("limpo, sem cold start", ks_a_sem_cold)):
+                mm = medir((real(k), por_tendencia[m][k]) for k in ks)
+                print(f"  {m:<10} {rotulo:<30} {mm.n:>6}  {pct(mm.wape)} {sinal(mm.vies)}")
+        for rotulo, ks, ing in (("ingênuo, limpo", ks_a, medir((real(k), ingenuo(k)) for k in ks_a)),):
+            print(f"  {'—':<10} {rotulo:<30} {ing.n:>6}  {pct(ing.wape)} {sinal(ing.vies)}")
+        print(f"\n  Por produto, limpo (WAPE): {'soma':>7} {'mediana':>8} {'ingênuo':>8}")
+        for pid in sorted({k[1] for k in ks_a}, key=lambda p: codigo_produto[p]):
+            ks = [k for k in ks_a if k[1] == pid]
+            ws = [medir((real(k), por_tendencia[m][k]) for k in ks).wape for m in TENDENCIAS]
+            wi = medir((real(k), ingenuo(k)) for k in ks).wape
+            marca = "  <- nenhuma vence o ingênuo" if all(w >= wi for w in ws) else ""
+            print(f"  {codigo_produto[pid]:<26} {pct(ws[0])} {pct(ws[1]):>8} {pct(wi):>8}{marca}")
+        tend_b: dict = {m: {} for m in TENDENCIAS}
+        tend_b_limpo: dict = {m: {} for m in TENDENCIAS}
+        for k in ks_b:
+            chave, alvo = k
+            for m in TENDENCIAS:
+                tend_b[m][k] = prever(contaminadas[chave], alvo - UM_DIA, alvo, estatistica=PADRAO,
+                                      metodo_tendencia=m).previsao
+                tend_b_limpo[m][k] = prever(reais[chave], alvo - UM_DIA, alvo, estatistica=PADRAO,
+                                            metodo_tendencia=m).previsao
+        ks_b31 = [k for k in ks_b if all(tend_b[m][k] is not None and tend_b_limpo[m][k] is not None for m in TENDENCIAS)]
+        for m in TENDENCIAS:
+            for rotulo, fonte in (("limpo, núcleo", tend_b_limpo[m]),
+                                  (f"picos {a.pico_taxa:.0%} ×{a.pico_fator}, núcleo", tend_b[m])):
+                mm = medir((reais[k[0]][k[1]], fonte[k]) for k in ks_b31)
+                print(f"  {m:<10} {rotulo:<30} {mm.n:>6}  {pct(mm.wape)} {sinal(mm.vies)}")
+        ing_b31 = medir((reais[k[0]][k[1]], previsao_ingenua(contaminadas[k[0]], k[1])) for k in ks_b31)
+        print(f"  {'—':<10} {'ingênuo, com picos':<30} {ing_b31.n:>6}  {pct(ing_b31.wape)} {sinal(ing_b31.vies)}")
 
         # ------------------------------------------------ critérios
         m_padrao = medir((real(k), previstos[PADRAO][k]) for k in chaves)

@@ -177,7 +177,7 @@ Combina dois horizontes, evitando tanto o ruído de curto prazo quanto a lentid�
 
 **Passo 1 — base sazonal por dia da semana:** média de venda daquele produto naquele dia da semana específico, olhando as últimas 6-8 semanas (ex: média dos últimos 6-8 sábados). **Implementado (D18 e D25, `docs/STATUS.md`): mediana dos últimos 6 sábados**, que não se deixa levar por um dia de pico; no teste no passado, empata com a média em dado limpo e é bem melhor com picos.
 
-**Passo 2 — fator de tendência recente:** razão entre venda real dos últimos 7 dias e o que a base sazonal previa para esses mesmos dias. Captura mudanças recentes (tendência de alta/baixa, efeito de promoção não cadastrada).
+**Passo 2 — fator de tendência recente:** razão entre venda real dos últimos 7 dias e o que a base sazonal previa para esses mesmos dias. Captura mudanças recentes (tendência de alta/baixa, efeito de promoção não cadastrada). **Implementado (D19 e D31, `docs/STATUS.md`): mediana das razões diárias real ÷ base dos últimos 7 dias**, limitada a 0,7–1,3 e com no mínimo 5 dias comparáveis (a fórmula abaixo, soma contra soma, era a versão inicial; um pico isolado entrava inteiro nela).
 
 ```
 fator_tendência = venda_real_últimos_7_dias / venda_esperada_últimos_7_dias (base sazonal)
