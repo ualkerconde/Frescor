@@ -19,7 +19,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
-| 6 — Frontend do SaaS (`frontend-saas/`) | Não iniciada | Pasta ainda não existe |
+| 6 — Frontend do SaaS (`frontend-saas/`) | **Em andamento** (plano aprovado em 2026-10-13) | Passos W1–W8 na seção "Frontend do SaaS — plano" abaixo. Cobre login, importação e consulta (as telas da Fase 2); as telas das Fases 4–5 vêm depois. |
 | 7 — Validação com dado real | Não iniciada | Depende de cliente piloto (D3) |
 | 8 — Refino V1.5 | Não iniciada | |
 
@@ -173,6 +173,24 @@ Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 - **Frontend do SaaS** (`frontend-saas/`): liberado para começar (decisão: depois do P6).
 
 
+
+### Frontend do SaaS — plano (aprovado em 2026-10-13)
+
+Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** para dados, Vitest + Testing Library para testes. Porta **3001** em http (desktop; sem câmera, sem HTTPS), proxy `/backend` → `127.0.0.1:8000` (sem CORS). Visual: skill de design **Frescor** a partir do W2 (`.claude/skills/frescor-design-system/SKILL.md`). Versões: as estáveis no momento do scaffold, registradas aqui com os números exatos (Node 22.20, npm 10.9 instalados).
+
+| Passo | O que | Verificação | Situação |
+|---|---|---|---|
+| W1 | Backend: `GET /web/me` (gestor, central, negócio), `GET /web/lojas` (lojas da central), `GET /web/produtos` (produtos do negócio, com busca), com `obter_gestor_central` | `TestClient`: 401/403, escopo, isolamento, busca; regressão completa | Em andamento |
+| W2 | Esqueleto `frontend-saas/`: Vite + React + TS, Tailwind, shadcn, tema da skill Frescor, proxy, Vitest | build, testes, checagem de tipos, health pelo proxy | — |
+| W3 | Cliente da API e sessão: token `porta: web`, refresh automático uma vez por 401, logout com motivo; sem `Content-Type` forçado em upload | testes com `fetch` simulado | — |
+| W4 | Tela de login (401, 403 com a mensagem da API, rotas protegidas) | testes; manual com `gestor@teste.com` e `admin@teste.com` | — |
+| W5 | Estrutura autenticada (cabeçalho com `/web/me`, navegação, sair) | testes; manual (recarregar mantém sessão; token inválido volta ao login) | — |
+| W6 | Importação de CSV (vendas/perdas, 5 MB no navegador, modelo de CSV para baixar, relatório 200/422/413, erros e avisos) | testes por tipo de resposta; manual contra o backend | — |
+| W7 | Consulta (vendas/perdas, período, loja, produto com busca, tabela paginada com total, filtros na URL, formatos pt-BR) | testes; manual contra o seed | — |
+| W8 | Acabamento: acessibilidade básica, build de produção, README do frontend, STATUS | build, testes, roteiro manual login → importar → consultar → sair | — |
+
+**Pendência do W2:** o arquivo `.claude/skills/frescor-design-system/SKILL.md` **não existe** no projeto nem nas skills do usuário (procurado em 2026-10-13). Precisa ser colocado antes do W2.
+
 ---
 
 ## 2. Divergências entre o documento de referência e o código
@@ -230,8 +248,13 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D11 | Como testar rotas por HTTP | A) `httpx` em `requirements-dev.txt` + `TestClient`; B) subir uvicorn nos scripts | A | **Decidida em 2026-10-13: A.** |
 | D12 | Importar vendas/perdas para uma loja **inativa** da central | A) recusar (erro na linha do CSV); B) aceitar | — | **Decidida em 2026-10-13: A (recusar).** Erro na linha; pela D9 (tudo ou nada) o arquivo inteiro não grava. Para carregar histórico de uma loja desativada, reativar a loja temporariamente, importar e desativar de novo. |
 | D13 | Regras de conteúdo do CSV: (a) fração em produto UN; (b) produto inativo; (c) produto não habilitado na loja; (d) data futura | — | — | **Decidida em 2026-10-13:** (a) **recusar** (erro na linha; `2,0` vale); (b) **aceitar**; (c) **aceitar com AVISO** (lista separada de avisos no relatório, sem erro e sem bloquear o arquivo; vale também para produto habilitado mas desabilitado na loja, `ativo = false`); (d) **recusar** (hoje é aceito). Junto: única `(negocio_id, codigo)` em `produtos` (migration 0016). |
-| D14 | **Escopo ampliado para outros perecíveis** (açougue, hortifruti; itens produzidos e não produzidos): como modelar | Ver "Escopo ampliado — impactos possíveis" na seção 2 | Decidir antes de planejar a Fase 4 (necessidade e produção), que é onde a maior parte do impacto aparece. As Fases 2 e 3 servem para qualquer perecível sem mudança, salvo os pontos marcados lá. | **Aberta (2026-10-13).** Nada implementado. |
-| D15 | Renomear para Frescor os nomes que ainda dizem "Bakery" | Títulos de `CLAUDE.md` e `backend/README.md` (baixo custo); nome do arquivo `docs/documento-referencia-saas-bakery.md` (exige atualizar os links); pasta do repositório; banco de dados `bakery` (exige mudar o `.env` de cada ambiente e, em produção, migrar/renomear o banco) | Títulos agora; arquivo e pasta quando for conveniente; o banco só se houver motivo além do nome. | **Aberta (2026-10-13).** |
+| D14 | **Escopo ampliado para outros perecíveis** (açougue, hortifruti; itens produzidos e não produzidos): como modelar | Ver "Escopo ampliado — impactos possíveis" na seção 2 | Decidir antes de planejar a Fase 4 (necessidade e produção), que é onde a maior parte do impacto aparece. As Fases 2 e 3 servem para qualquer perecível sem mudança, salvo os pontos marcados lá. | **Aberta (2026-10-13)** até o planejamento da Fase 4. Nada implementado. |
+| D15 | Renomear para Frescor os nomes que ainda dizem "Bakery" | Títulos de `CLAUDE.md` e `backend/README.md` (baixo custo); nome do arquivo `docs/documento-referencia-saas-bakery.md` (exige atualizar os links); pasta do repositório; banco de dados `bakery` (exige mudar o `.env` de cada ambiente e, em produção, migrar/renomear o banco) | Títulos agora; arquivo e pasta quando for conveniente; o banco só se houver motivo além do nome. | **Adiada (2026-10-13): resolver antes do deploy de produção.** |
+| DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
+| DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
+| DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
+| DF4 | Prefixo das rotas de apoio do SaaS | `/web/...` ou mover todo o SaaS para `/web/` | `/web/...` (rotas já prontas não mudam) | **Decidida (2026-10-13): `/web/`.** |
+| DF5 | Teste de ponta a ponta no navegador (Playwright) | agora ou depois | depois | **Decidida (2026-10-13): depois** (V1 com Vitest + roteiro manual). |
 
 ---
 
@@ -254,6 +277,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 - **2026-10-13** — **Fase 2 concluída** (P1–P8). Critério de aceite atendido: CSV importado por `POST /vendas/importar` e consultado em `GET /vendas`.
 - **2026-10-13** — **Nome do produto: Frescor** ("Bakery" era provisório). Registrado também no documento de referência. Renomear nomes técnicos: D15.
 - **2026-10-13** — **Escopo ampliado:** além da padaria, outros perecíveis, incluindo itens não produzidos e itens produzidos para açougue e hortifruti. Impactos possíveis listados na seção 2; decisão de modelagem em aberto (D14). Nada implementado.
+- **2026-10-13** — **Plano do frontend do SaaS aprovado** (W1–W8). DF1 TypeScript; DF2 localStorage (endurecimento com cookie `httpOnly` antes da produção); DF3 TanStack Query; DF4 rotas de apoio com prefixo `/web/`; DF5 Playwright depois. Visual pela skill Frescor a partir do W2.
+- **2026-10-13** — D15 (renomear nomes técnicos para Frescor) adiada para antes do deploy de produção. D14 (escopo ampliado) segue aberta até o planejamento da Fase 4.
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -265,4 +290,5 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 2. ~~Consequência de D1 = A: migration 0014, dependency `obter_gestor_central` e script de teste~~ (concluídas em 2026-10-13).
 3. ~~Atualizar `backend/README.md`~~ e ~~corrigir `seed_produtos.py`~~ (feitos em 2026-10-13).
 4. ~~Fase 2 (P1–P8)~~ — concluída em 2026-10-13.
-5. **Próximo:** planejar a Fase 3 (motor de previsão, doc §4.1–4.3 e §8) — já há 8 semanas de vendas no seed — e/ou iniciar o `frontend-saas/` (login do gestor, importação e consulta).
+5. **Em andamento:** frontend do SaaS (W1–W8, seção 1). Antes do W2: colocar a skill Frescor em `.claude/skills/frescor-design-system/SKILL.md`.
+6. Depois: planejar a Fase 3 (motor de previsão) — já há 8 semanas de vendas no seed.
