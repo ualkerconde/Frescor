@@ -178,18 +178,18 @@ Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 
 Objetivo (doc §4.1–4.3 e §8): `previsao_service` que, dado loja + produto + data, devolve uma previsão coerente nos 5 cenários do critério de aceite (histórico completo, produto novo, sazonal na 1ª temporada, sazonal com ano anterior, evento). Decisões aplicadas: D16–D24 (seção 3).
 
-**Método (começar simples):** base = média das vendas daquele dia da semana nas últimas 6 semanas (D18), sem dias de evento; tendência = real dos últimos 7 dias ÷ base desses 7 dias, limitada a 0,7–1,3 (D19); previsão = base × tendência, com ajuste de evento quando houver. Vendas sempre lidas pela regra da D16 (`registros_efetivos`), com os dias sem linha tratados pela D17. Sem arredondamento (D21). Cada previsão guarda os componentes (base, tendência, evento), para a tela explicar o número. **Produto não habilitado na loja (ou desabilitado) não recebe previsão.**
+**Método (começar simples):** base = média das vendas daquele dia da semana nas últimas 6 semanas (D18), sem dias de evento; tendência = real dos últimos 7 dias ÷ base desses 7 dias, limitada a 0,7–1,3 (D19); previsão = base × tendência, com ajuste de evento quando houver. Vendas sempre lidas pela regra da D16 (`registros_efetivos`), com os dias sem linha tratados pela D17. Sem arredondamento (D21). Cada previsão guarda os componentes (base, tendência, evento), para a tela explicar o número. **Produto não habilitado na loja (ou desabilitado), ou inativo no catálogo, não recebe previsão.**
 
 **Medição do erro:** teste no passado (para cada dia das últimas 4 semanas, prever só com os dados anteriores e comparar com o real). WAPE = Σ|real − previsto| ÷ Σ real; viés = Σ(previsto − real) ÷ Σ real (positivo = sobra, negativo = falta); comparação com o "ingênuo" (mesmo dia da semana passada), que o motor precisa vencer. Por produto, loja e dia da semana. Limitação: o seed é sintético — prova que o código funciona (ex.: reencontra os fatores de dia da semana do seed); a precisão real só com dado real (D3, Fase 7).
 
 | Passo | O que | Verificação | Situação |
 |---|---|---|---|
-| F1 | Série diária de vendas efetivas (D16) por loja + produto, com os dias sem linha tratados pela D17 | script: dias faltando, dia com api + manual, loja sem dados | Em andamento |
-| F2 | Núcleo de cálculo em funções puras (sem banco): base, tendência com limites, previsão e componentes (D18, D19, D21) | testes unitários: constante, padrão semanal, alta, queda, ruído, poucas semanas | — |
+| F1 | Série diária de vendas efetivas (D16) por loja + produto, com os dias sem linha tratados pela D17 | script: dias faltando, dia com api + manual, loja sem dados | **Concluído (2026-10-13).** `serie_vendas_service.py`; `test_serie_vendas.py` 21/21; 5 sabotagens pegas (sem D16, D17 sem filtrar a loja, habilitação inativa, sem filtro de negócio, produto inativo no catálogo). |
+| F2 | Núcleo de cálculo em funções puras (sem banco): base, tendência com limites, previsão e componentes (D18, D19, D21) | testes unitários: constante, padrão semanal, alta, queda, ruído, poucas semanas | **Concluído (2026-10-13).** `previsao_calculo.py` (`prever` usa só dados até a data de referência); `test_previsao_calculo.py` 18/18; 5 sabotagens pegas (faltante como zero, sem limite, mínimo de dias errado por um, janela de 7 semanas, arredondamento). Achado: valor extremo ainda pesa via tendência → D25. |
 | F3 | Eventos (fora da base; multiplicador/valor fixo; escopo de lojas e produtos) + API mínima de cadastro (D24) | testes de cenário | — |
 | F4 | Cold start (peso 0 → 100% em 6 semanas) + proxies (D20) | testes de produto novo e loja nova | — |
 | F5 | Ramo sazonal (ano anterior), **versão mínima**, só para o critério de aceite, com dados sintéticos | testes: 1ª temporada e com ano anterior | — |
-| F6 | `backtest_previsao.py`: WAPE, viés, comparação com o ingênuo, por produto e dia da semana | no seed: vence o ingênuo e reencontra o padrão semanal | — |
+| F6 | `backtest_previsao.py`: WAPE, viés, comparação com o ingênuo, por produto e dia da semana; compara as três versões da base da D25 (média, mediana, média aparada) | no seed: vence o ingênuo e reencontra o padrão semanal | — |
 | F7 | Migration `previsoes_diarias` (componentes, versão do método, quando gerou) + geração para a central, substituindo a anterior (D22) | upgrade → downgrade → upgrade; gerar 2× não duplica | — |
 | F8 | API: gerar, consultar previsão, consultar qualidade (WAPE e viés), com `obter_gestor_central` e escopo | TestClient: 401/403, escopo, isolamento | — |
 | F9 | Tela de previsão (código carregado só quando aberta), com resumo, qualidade, tabela e explicação por linha | testes + axe + roteiro no navegador | — |
@@ -367,6 +367,7 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D22 | Gravar previsões, horizonte e quando gerar | — | Gravar; 7 dias; sob demanda agora, job noturno depois de validado | **Decidida (2026-10-13): como recomendado.** |
 | D23 | Venda censurada (dia de ruptura: a venda mostra o que havia, não a demanda) | — | V1 ignora (limitação registrada); V2 usa a contagem do app (estoque zerado) | **Decidida (2026-10-13): V1 ignora.** |
 | D24 | Cadastro de eventos | API mínima na Fase 3 ou tudo na Fase 6 | API mínima no F3; tela junto com a de previsão ou logo depois | **Decidida (2026-10-13): API mínima no F3.** |
+| D25 | Base robusta a valores extremos | A) média (D18, atual); B) mediana; C) média aparada (corta os extremos) | Decidir com números: o teste no passado (F6) compara as três por WAPE, viés e contra o ingênuo | **Aberta (2026-10-13), decide no F6.** Motivo: no teste C17 do F2, um valor 100× maior 7 semanas atrás ficou fora da base, mas entrou na base de comparação da tendência e levou a previsão de 10 para 7; dentro das 6 semanas, levaria a base de 10 para 175. |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -402,6 +403,7 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 - **2026-10-13** — **D16 decidida:** com `api` e `manual` para a mesma loja + produto + data, vale a `api`; a `manual` fica como reserva. Critério num lugar só (`registros_efetivos.py`), usado pela consulta e, depois, pela Fase 3.
 - **2026-10-13** — Regra de frontend: telas novas entram com o código dividido por tela (JS de produção em 481 kB, perto do aviso de 500 kB do Vite).
 - **2026-10-13** — **Plano da Fase 3 aprovado** (F1–F10). D17–D24 decididas como recomendado, com ajustes: D20 usa o 1º nível da classificação como categoria e, sem ele, a média dos produtos da mesma unidade na loja; **produto não habilitado (ou desabilitado) na loja não recebe previsão**; F5 (sazonal) em versão mínima, só para o critério de aceite.
+- **2026-10-13** — F1 e F2 concluídos. Regra: **produto inativo no catálogo também não recebe previsão** (aplicada na série do F1). D25 (base robusta: média × mediana × média aparada) aberta, decide no F6.
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -414,4 +416,4 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 3. ~~Atualizar `backend/README.md`~~ e ~~corrigir `seed_produtos.py`~~ (feitos em 2026-10-13).
 4. ~~Fase 2 (P1–P8)~~ — concluída em 2026-10-13.
 5. ~~Frontend do SaaS (W1–W8)~~ — telas da Fase 2 concluídas em 2026-10-13.
-6. **Em andamento:** Fase 3 (motor de previsão), passos F1–F10 (seção 1).
+6. **Em andamento:** Fase 3 (motor de previsão). F1 e F2 concluídos; próximo F3 (eventos + API mínima, D24) e F4 (cold start, D20).
