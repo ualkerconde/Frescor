@@ -16,7 +16,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 |---|---|---|
 | 1 — Fundação de dados | **Concluída (2026-10-13)** | Migrations 0007–0014, models, seeds e testes verificados; app mobile testado no iPhone. |
 | 2 — Ingestão de vendas e perdas | **Concluída (2026-10-13)** | P1–P8 feitos; critério de aceite atendido no P6 (importar CSV e consultar). Pendências que ficam: ver "Fase 2 — o que fica" abaixo. |
-| 3 — Motor de previsão | Não iniciada | |
+| 3 — Motor de previsão | **Em andamento** (plano aprovado em 2026-10-13) | Passos F1–F10 na seção "Fase 3 — plano" abaixo. |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
 | 6 — Frontend do SaaS (`frontend-saas/`) | **Telas da Fase 2 concluídas** (W1–W8, 2026-10-13, conferidas no navegador) | Login, importação e consulta. As telas das Fases 3–5 (previsão, ordem de produção, romaneio) entram junto com cada fase, **com o código dividido por tela** (ver observação do W8). |
@@ -173,6 +173,29 @@ Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 - **Frontend do SaaS** (`frontend-saas/`): liberado para começar (decisão: depois do P6).
 
 
+
+### Fase 3 — plano (aprovado em 2026-10-13)
+
+Objetivo (doc §4.1–4.3 e §8): `previsao_service` que, dado loja + produto + data, devolve uma previsão coerente nos 5 cenários do critério de aceite (histórico completo, produto novo, sazonal na 1ª temporada, sazonal com ano anterior, evento). Decisões aplicadas: D16–D24 (seção 3).
+
+**Método (começar simples):** base = média das vendas daquele dia da semana nas últimas 6 semanas (D18), sem dias de evento; tendência = real dos últimos 7 dias ÷ base desses 7 dias, limitada a 0,7–1,3 (D19); previsão = base × tendência, com ajuste de evento quando houver. Vendas sempre lidas pela regra da D16 (`registros_efetivos`), com os dias sem linha tratados pela D17. Sem arredondamento (D21). Cada previsão guarda os componentes (base, tendência, evento), para a tela explicar o número. **Produto não habilitado na loja (ou desabilitado) não recebe previsão.**
+
+**Medição do erro:** teste no passado (para cada dia das últimas 4 semanas, prever só com os dados anteriores e comparar com o real). WAPE = Σ|real − previsto| ÷ Σ real; viés = Σ(previsto − real) ÷ Σ real (positivo = sobra, negativo = falta); comparação com o "ingênuo" (mesmo dia da semana passada), que o motor precisa vencer. Por produto, loja e dia da semana. Limitação: o seed é sintético — prova que o código funciona (ex.: reencontra os fatores de dia da semana do seed); a precisão real só com dado real (D3, Fase 7).
+
+| Passo | O que | Verificação | Situação |
+|---|---|---|---|
+| F1 | Série diária de vendas efetivas (D16) por loja + produto, com os dias sem linha tratados pela D17 | script: dias faltando, dia com api + manual, loja sem dados | Em andamento |
+| F2 | Núcleo de cálculo em funções puras (sem banco): base, tendência com limites, previsão e componentes (D18, D19, D21) | testes unitários: constante, padrão semanal, alta, queda, ruído, poucas semanas | — |
+| F3 | Eventos (fora da base; multiplicador/valor fixo; escopo de lojas e produtos) + API mínima de cadastro (D24) | testes de cenário | — |
+| F4 | Cold start (peso 0 → 100% em 6 semanas) + proxies (D20) | testes de produto novo e loja nova | — |
+| F5 | Ramo sazonal (ano anterior), **versão mínima**, só para o critério de aceite, com dados sintéticos | testes: 1ª temporada e com ano anterior | — |
+| F6 | `backtest_previsao.py`: WAPE, viés, comparação com o ingênuo, por produto e dia da semana | no seed: vence o ingênuo e reencontra o padrão semanal | — |
+| F7 | Migration `previsoes_diarias` (componentes, versão do método, quando gerou) + geração para a central, substituindo a anterior (D22) | upgrade → downgrade → upgrade; gerar 2× não duplica | — |
+| F8 | API: gerar, consultar previsão, consultar qualidade (WAPE e viés), com `obter_gestor_central` e escopo | TestClient: 401/403, escopo, isolamento | — |
+| F9 | Tela de previsão (código carregado só quando aberta), com resumo, qualidade, tabela e explicação por linha | testes + axe + roteiro no navegador | — |
+| F10 | README e STATUS; job noturno só depois de validado (D22) | — | — |
+
+**Tela de previsão (proposta aprovada):** data (padrão: amanhã), loja e produto; resumo "previsto" por unidade ao lado do "vendido no mesmo dia da semana passada"; card de qualidade ("Errou em média 11% do volume", "Tende a sobrar 3%", atenção quando não vence o ingênuo); tabela com previsão, média do dia da semana, tendência em %, etiquetas "Evento: …" e "Pouco histórico"; explicação em uma frase ao abrir a linha; ação principal "Gerar previsão" / "Atualizar previsão".
 
 ### Frontend do SaaS — plano (aprovado em 2026-10-13)
 
@@ -336,6 +359,14 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D14 | **Escopo ampliado para outros perecíveis** (açougue, hortifruti; itens produzidos e não produzidos): como modelar | Ver "Escopo ampliado — impactos possíveis" na seção 2 | Decidir antes de planejar a Fase 4 (necessidade e produção), que é onde a maior parte do impacto aparece. As Fases 2 e 3 servem para qualquer perecível sem mudança, salvo os pontos marcados lá. | **Aberta (2026-10-13)** até o planejamento da Fase 4. Nada implementado. |
 | D15 | Renomear para Frescor os nomes que ainda dizem "Bakery" | Títulos de `CLAUDE.md` e `backend/README.md` (baixo custo); nome do arquivo `docs/documento-referencia-saas-bakery.md` (exige atualizar os links); pasta do repositório; banco de dados `bakery` (exige mudar o `.env` de cada ambiente e, em produção, migrar/renomear o banco) | Títulos agora; arquivo e pasta quando for conveniente; o banco só se houver motivo além do nome. | **Adiada (2026-10-13): resolver antes do deploy de produção.** |
 | D16 | Quando o mesmo dia de loja + produto tiver venda (ou perda) `manual` **e** `api` (permitido pela D5, para comparar as duas na transição), qual vale nos totais e no motor de previsão? | A) a `api` prevalece; B) a `manual` prevalece; C) soma as duas (comportamento atual dos totais da consulta: conta em dobro) | A, quando a integração existir (o PDV é a fonte oficial; a manual serve para comparar e cobrir dias sem integração). | **Decidida em 2026-10-13: A (vale a `api`; a `manual` fica como reserva).** Critério num lugar só (`registros_efetivos.py`), aplicado na consulta (listagem e totais); a Fase 3 usa o mesmo. A origem `inferida` não é afetada. |
+| D17 | Dia sem linha de venda para um produto: zero ou faltante? | A) zero; B) faltante; C) zero se a loja tem alguma venda importada no dia, faltante se não tem nenhuma | C | **Decidida (2026-10-13): C.** Dia "faltante" fica fora da média e da tendência. |
+| D18 | Janela da base por dia da semana | 6 ou 8 semanas | 6 (reage mais rápido); o teste no passado compara | **Decidida (2026-10-13): 6 semanas.** |
+| D19 | Limites do fator de tendência e mínimo de dados | — | 0,7 a 1,3; com menos de 5 dos últimos 7 dias com dado, fator 1 | **Decidida (2026-10-13): como recomendado.** |
+| D20 | Proxies do cold start | — | produto novo = média dos produtos da mesma categoria e unidade na loja; loja nova = média das outras lojas da central para o produto | **Decidida (2026-10-13), com ajuste:** "categoria" = valor do **1º nível da classificação** do produto (não há campo `categoria`; a classificação é configurável por negócio). Se o produto não tiver o 1º nível, o proxy do produto novo usa a **média dos produtos da mesma unidade na loja**. Estimativa manual do gestor (campo novo) fica para depois. |
+| D21 | Arredondar a previsão? | — | Não: UN e KG com casas decimais; arredondar é decisão de produção (Fase 4) | **Decidida (2026-10-13): não arredondar.** |
+| D22 | Gravar previsões, horizonte e quando gerar | — | Gravar; 7 dias; sob demanda agora, job noturno depois de validado | **Decidida (2026-10-13): como recomendado.** |
+| D23 | Venda censurada (dia de ruptura: a venda mostra o que havia, não a demanda) | — | V1 ignora (limitação registrada); V2 usa a contagem do app (estoque zerado) | **Decidida (2026-10-13): V1 ignora.** |
+| D24 | Cadastro de eventos | API mínima na Fase 3 ou tudo na Fase 6 | API mínima no F3; tela junto com a de previsão ou logo depois | **Decidida (2026-10-13): API mínima no F3.** |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -370,6 +401,7 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 - **2026-10-13** — **Frontend do SaaS (W1–W8) concluído** e conferido no navegador pelo Ualker (login, importação, consulta com resumo do período).
 - **2026-10-13** — **D16 decidida:** com `api` e `manual` para a mesma loja + produto + data, vale a `api`; a `manual` fica como reserva. Critério num lugar só (`registros_efetivos.py`), usado pela consulta e, depois, pela Fase 3.
 - **2026-10-13** — Regra de frontend: telas novas entram com o código dividido por tela (JS de produção em 481 kB, perto do aviso de 500 kB do Vite).
+- **2026-10-13** — **Plano da Fase 3 aprovado** (F1–F10). D17–D24 decididas como recomendado, com ajustes: D20 usa o 1º nível da classificação como categoria e, sem ele, a média dos produtos da mesma unidade na loja; **produto não habilitado (ou desabilitado) na loja não recebe previsão**; F5 (sazonal) em versão mínima, só para o critério de aceite.
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -382,4 +414,4 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 3. ~~Atualizar `backend/README.md`~~ e ~~corrigir `seed_produtos.py`~~ (feitos em 2026-10-13).
 4. ~~Fase 2 (P1–P8)~~ — concluída em 2026-10-13.
 5. ~~Frontend do SaaS (W1–W8)~~ — telas da Fase 2 concluídas em 2026-10-13.
-6. **Próximo:** planejar a Fase 3 (motor de previsão) — já há 8 semanas de vendas no seed.
+6. **Em andamento:** Fase 3 (motor de previsão), passos F1–F10 (seção 1).
