@@ -13,7 +13,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | Fase | Situação | Observações |
 |---|---|---|
 | 1 — Fundação de dados | **Concluída (2026-10-13)** | Migrations 0007–0014, models, seeds e testes verificados; app mobile testado no iPhone. |
-| 2 — Ingestão de vendas e perdas | **Em andamento** (plano aprovado em 2026-10-13) | Passos P1–P8 na seção "Fase 2 — plano" abaixo. |
+| 2 — Ingestão de vendas e perdas | **Em andamento** (plano aprovado em 2026-10-13) | P1–P6 feitos; **critério de aceite atendido** no P6 (importar CSV e consultar). Faltam P7 (stub do sync) e P8 (seed de vendas + README). |
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
@@ -89,7 +89,7 @@ Objetivo (doc §8): ter dado de venda e perda fluindo antes da API do PDV. Crit�
 | P3 | Escopo do gestor: lojas da própria central (D8); `loja_id` como filtro validado contra o escopo (fora → 404) | Script: loja da central, de outra central do mesmo negócio, de outro negócio | **Concluído (2026-10-13)** — ver abaixo |
 | P4 | Serviço de importação CSV (`;`, vírgula decimal, `dd/mm/aaaa`, produto por `codigo`, loja por `codigo`), tudo ou nada (D9), substitui na reimportação (D5) | Script com CSVs sintéticos: válido, data inválida, produto desconhecido, loja fora do escopo, quantidade negativa, linha duplicada, reimportação | **Concluído (2026-10-13)** — ver abaixo |
 | P5 | `POST /vendas/importar` e `POST /perdas/importar` | `TestClient`: 401/403, importação válida, relatório de erros | **Concluído (2026-10-13)** — ver abaixo |
-| P6 | `GET /vendas` e `GET /perdas` (filtros, período máximo, paginação) | `TestClient`: filtros, escopo, isolamento entre negócios — fecha o critério de aceite | — |
+| P6 | `GET /vendas` e `GET /perdas` (filtros, período máximo, paginação) | `TestClient`: filtros, escopo, isolamento entre negócios — fecha o critério de aceite | **Concluído (2026-10-13)** — ver abaixo; **critério de aceite da Fase 2 atendido** |
 | P7 | Stub `sync_vendas_service` ("integração não configurada"), fora do agendador | Chamada direta; agendador não o registra | — |
 | P8 | `seed_vendas.py` (~8 semanas, 2 lojas) para a Fase 3; README e STATUS | Seed 2× sem duplicar; `GET /vendas` devolve o período | — |
 
@@ -140,6 +140,16 @@ Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 - Mutação: sem o limite de tamanho falha R10; respondendo sempre 200 falham R8, R9 e R11.
 - Servidor real (uvicorn): health 200; `POST /auth/web/login` do `gestor@teste.com` e `POST /vendas/importar` com arquivo com erro → 422 com o relatório; nenhuma venda/perda gravada nos dados do seed.
 - Regressão completa: `test_importacao_csv` 45, `test_vendas_perdas_modelo` 23, `test_escopo_gestor` 13, `test_auth_web` 38, `test_obter_gestor_central` 11, `test_constraint_usuario` 4 — todos passaram.
+
+**P6 — resultado (2026-10-13):**
+- `app/services/consulta_service.py` (novo): `consultar(...)` → (total, itens da página). Filtra por `negocio_id` **e** pelas lojas da central do gestor (D8), período, loja e produto opcionais. `validar_periodo`: `data_inicio > data_fim` ou período acima de **366 dias** (contando o primeiro e o último dia) → `PeriodoInvalido`. Ordenação estável por data, loja, produto, origem e id (a origem e o id desempatam venda `manual` e `api` do mesmo dia).
+- `app/api/consultas.py` (novo): `GET /vendas` e `GET /perdas` com `obter_gestor_central`. `loja_id` validado pelo `loja_no_escopo_ou_404` do P3 (404 idêntico para loja inexistente, de outra central ou de outro negócio). Período inválido → 422 com mensagem. Parâmetros: `data_inicio` e `data_fim` obrigatórios em **AAAA-MM-DD** (padrão de API; o `dd/mm/aaaa` é só do CSV), `loja_id`, `produto_id`, `limit` (1 a 1000, padrão 100), `offset` (padrão 0). Registrado em `main.py`.
+- `app/schemas/consulta.py` (novo): resposta `{total, limit, offset, itens}`; cada item com `data`, `loja {id, codigo}`, `produto {id, codigo, nome}`, `quantidade` (texto decimal, ex.: `"1.250"`, como o `estoque_atual_calculado` do app), `unidade` e `origem`.
+- Escolha registrada: `produto_id` de outro negócio devolve lista vazia (200), não 404 — o filtro de negócio já impede o vazamento.
+- `scripts/test_consulta_rotas.py` (novo): 33 verificações, 2 execuções, exit 0, banco limpo. Autenticação (sem token 401, token do app 401, sem `tem_acesso_web` 403, `/perdas` sem token 401); filtros (sem filtros só lojas da central, loja, produto, loja + produto, período inclusive, produto de outro negócio vazio); formato do item; origem `api` junto com a `manual` do mesmo dia; ordenação; paginação de 3 em 3 reconstrói a lista sem repetir nem pular, total constante, última página parcial; `limit` 1000 aceito, 1001 e 0 → 422; período invertido e de 367 dias → 422 com mensagem, 366 dias → 200, sem `data_inicio` e data em `dd/mm/aaaa` → 422; loja de outra central, de outro negócio e inexistente → 404 com respostas idênticas; isolamento (gestor de outra central e de outro negócio só veem as próprias lojas; loja de outro negócio → 404); `/perdas` só perdas.
+- **Critério de aceite da Fase 2, de ponta a ponta:** importar um CSV pela rota `POST /vendas/importar` (200, 2 inseridas) e consultá-lo em `GET /vendas?loja_id=&produto_id=&data_inicio=&data_fim=` (os 2 dias com as quantidades importadas, origem `manual`).
+- Sabotagem: sem o filtro de escopo no serviço, falham F1, O2, O3 e S1 (a loja de outra central aparece); sem o 404 no router, falham E1, E2, E3 e S3 (200 com lista vazia). Sem o filtro de negócio nada falha — esperado, o escopo de central já implica o negócio (defesa em profundidade, como no P3).
+- Regressão completa: `test_importacao_rotas` 14, `test_importacao_csv` 45, `test_vendas_perdas_modelo` 23, `test_escopo_gestor` 13, `test_auth_web` 38, `test_obter_gestor_central` 11, `test_constraint_usuario` 4.
 
 ---
 
