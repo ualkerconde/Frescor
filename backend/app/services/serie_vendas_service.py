@@ -133,6 +133,44 @@ def series_da_loja(
     return series
 
 
+def inicio_historico(db: Session, negocio_id: int, loja_id: int, ate: date) -> tuple[date | None, dict[int, date]]:
+    """
+    Onde começa o histórico próprio, para o cold start (F4): (primeiro dia
+    com venda importada na loja, primeiro dia com venda de cada produto
+    na loja), olhando só até `ate` (inclusive).
+
+    Conta qualquer linha de venda, inclusive quantidade zero: a linha
+    mostra que a loja já reportava o produto (D28). Antes desse dia, os
+    zeros da D17 não são histórico do produto (ele ainda não estava à
+    venda).
+    """
+    por_produto = {
+        produto_id: primeiro
+        for produto_id, primeiro in db.query(VendaDiaria.produto_id, func.min(VendaDiaria.data))
+        .filter(
+            VendaDiaria.negocio_id == negocio_id,
+            VendaDiaria.loja_id == loja_id,
+            VendaDiaria.data <= ate,
+        )
+        .group_by(VendaDiaria.produto_id)
+    }
+    return (min(por_produto.values()) if por_produto else None), por_produto
+
+
+def datas_habilitacao(db: Session, negocio_id: int, loja_id: int) -> dict[int, date]:
+    """
+    Dia em que cada produto foi habilitado na loja (`produtos_lojas.criado_em`).
+    Usado pela D28: para produto que nunca vendeu, o histórico próprio
+    começa na habilitação.
+    """
+    return {
+        produto_id: criado_em.date()
+        for produto_id, criado_em in db.query(ProdutoLoja.produto_id, ProdutoLoja.criado_em)
+        .join(Produto, Produto.id == ProdutoLoja.produto_id)
+        .filter(Produto.negocio_id == negocio_id, ProdutoLoja.loja_id == loja_id)
+    }
+
+
 def serie_diaria(
     db: Session, negocio_id: int, loja_id: int, produto_id: int, inicio: date, fim: date
 ) -> SerieDiaria | None:

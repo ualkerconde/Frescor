@@ -204,13 +204,15 @@ previsão = (peso_real × previsão_calculada_com_dado_próprio) + (peso_proxy �
 Nova entidade não detalhada na seção 3 mas necessária — **a ser adicionada**:
 
 ```
-evento: id, negocio_id, nome, data_inicio, data_fim,
-        escopo_loja (todas / lojas específicas),
+evento: id, negocio_id, central_producao_id, nome, data_inicio, data_fim,
+        escopo_loja (todas as lojas DA CENTRAL / lojas específicas),
         escopo_produto (todos / produtos específicos),
         tipo_ajuste (multiplicador ou valor fixo informado)
 ```
 
 Cadastrado pelo gestor com antecedência (antes do job noturno rodar). No cálculo diário, o motor primeiro checa se existe evento ativo para aquele produto/loja/data — se sim, substitui ou multiplica a previsão normal.
+
+Regras do ajuste (D26, `docs/STATUS.md`): o valor fixo é a previsão **diária** de cada loja + produto do escopo, substitui a previsão (mesmo sem histórico) e vence qualquer multiplicador; entre valores fixos no mesmo dia, vale o último cadastrado; multiplicadores no mesmo dia se multiplicam. O ajuste é aplicado depois do cold start (§4.2). O evento pertence a uma central (D27): "todas as lojas" = lojas da central do evento.
 
 **Regra crítica:** dias marcados como evento devem ser **excluídos do cálculo da média sazonal normal** dos meses seguintes, para não distorcer a baseline de dias normais.
 

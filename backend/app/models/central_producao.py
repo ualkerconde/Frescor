@@ -12,7 +12,7 @@ opera neste escopo, não no escopo de loja.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -20,6 +20,10 @@ from app.db.session import Base
 
 class CentralProducao(Base):
     __tablename__ = "centrais_producao"
+    __table_args__ = (
+        # Alvo da FK composta de eventos (central do mesmo negócio, D27).
+        UniqueConstraint("negocio_id", "id", name="uq_central_negocio_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

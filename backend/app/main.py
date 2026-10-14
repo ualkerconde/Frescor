@@ -17,8 +17,10 @@ desenvolvimento). Em produção, normalmente roda-se sem --reload.
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
-from app.api import auth, auth_web, consultas, health, importacao, produtos, web, zeragem
+from app.api import auth, auth_web, consultas, eventos, health, importacao, produtos, web, zeragem
+from app.core.erros_validacao import tratar_erro_de_validacao
 from app.core.scheduler import iniciar_agendador, parar_agendador
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -39,6 +41,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Erros de validação da entrada em português, num só lugar.
+app.add_exception_handler(RequestValidationError, tratar_erro_de_validacao)
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,6 +68,7 @@ app.include_router(zeragem.router, tags=["Zeragem"])
 app.include_router(importacao.router, tags=["Importação (SaaS web)"])
 app.include_router(consultas.router, tags=["Consultas (SaaS web)"])
 app.include_router(web.router, prefix="/web", tags=["Apoio às telas (SaaS web)"])
+app.include_router(eventos.router, tags=["Eventos (SaaS web)"])
 
 
 @app.get("/")
