@@ -181,9 +181,9 @@ Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** 
 | Passo | O que | Verificação | Situação |
 |---|---|---|---|
 | W1 | Backend: `GET /web/me` (gestor, central, negócio), `GET /web/lojas` (lojas da central), `GET /web/produtos` (produtos do negócio, com busca), com `obter_gestor_central` | `TestClient`: 401/403, escopo, isolamento, busca; regressão completa | **Concluído (2026-10-13)** — ver abaixo |
-| W2 | Esqueleto `frontend-saas/`: Vite + React + TS, Tailwind, shadcn, tema da skill Frescor, proxy, Vitest | build, testes, checagem de tipos, health pelo proxy | **Implementado e verificado (2026-10-13), sem commit** — ver abaixo |
-| W3 | Cliente da API e sessão: token `porta: web`, refresh automático uma vez por 401, logout com motivo; sem `Content-Type` forçado em upload | testes com `fetch` simulado | — |
-| W4 | Tela de login (401, 403 com a mensagem da API, rotas protegidas) | testes; manual com `gestor@teste.com` e `admin@teste.com` | — |
+| W2 | Esqueleto `frontend-saas/`: Vite + React + TS, Tailwind, shadcn, tema da skill Frescor, proxy, Vitest | build, testes, checagem de tipos, health pelo proxy | **Concluído (2026-10-13)** — ver abaixo |
+| W3 | Cliente da API e sessão: token `porta: web`, refresh automático uma vez por 401, logout com motivo; sem `Content-Type` forçado em upload | testes com `fetch` simulado | **Concluído (2026-10-13)** — ver abaixo |
+| W4 | Tela de login (401, 403 com a mensagem da API, rotas protegidas) | testes; manual com `gestor@teste.com` e `admin@teste.com` | **Concluído (2026-10-13)** — ver abaixo; conferido no navegador pelo Ualker |
 | W5 | Estrutura autenticada (cabeçalho com `/web/me`, navegação, sair) | testes; manual (recarregar mantém sessão; token inválido volta ao login) | — |
 | W6 | Importação de CSV (vendas/perdas, 5 MB no navegador, modelo de CSV para baixar, relatório 200/422/413, erros e avisos) | testes por tipo de resposta; manual contra o backend | — |
 | W7 | Consulta (vendas/perdas, período, loja, produto com busca, tabela paginada com total, filtros na URL, formatos pt-BR) | testes; manual contra o seed | — |
@@ -211,6 +211,22 @@ Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** 
 - **`npm audit`:** 7 vulnerabilidades "high" (`braces` → `micromatch` → `fast-glob` → CLI do shadcn; negação de serviço com padrão de glob aninhado). Só na ferramenta de linha de comando, **não entram no build** (conferido). O `shadcn` foi movido para `devDependencies` (só o build usa o `shadcn/tailwind.css`): `npm audit --omit=dev` → **0 vulnerabilidades**. O `npm audit fix --force` rebaixaria o shadcn para 1.0.0 (incompatível) — não aplicado. Reavaliar quando o shadcn atualizar o `fast-glob`.
 - **Verificações:** `npm run typecheck` ok; `npm run lint` (oxlint) sem erros, 3 avisos `only-export-components` em arquivos gerados pelo shadcn (afeta só o recarregamento em desenvolvimento); `npm run test` **37 testes** (fumaça; botão: cores, borda do secundário, carregando bloqueia o clique, 44px em todos os tamanhos; **tema x skill**: lê a tabela de cores direto do `SKILL.md` e exige os mesmos valores no CSS, 13 contrastes WCAG e ausência de modo escuro); `npm run build` ok (JS 219,8 kB, 68,7 kB gzip). Sabotagem do teste do tema: mudar `--fr-primary` em um dígito → o teste falha. Servidor de desenvolvimento na 3001: página em pt-BR 200, `GET /backend/api/health` pelo proxy 200, `POST /backend/auth/web/login` do gestor do seed 200.
 - O `README.md` do template (em inglês) segue lá; é reescrito no W8.
+
+**W3 — resultado (2026-10-13):**
+
+- `src/lib/api/sessao.ts`: tokens do SaaS no `localStorage` com chaves próprias (`frescor_web_access_token`, `frescor_web_refresh_token`), diferentes das do app; aviso de "sessão encerrada" com motivo para a tela.
+- `src/lib/api/cliente.ts`: `apiFetch`/`apiJson`/`apiUpload`/`entrar`. Base `/backend` (proxy) ou `VITE_API_URL`. 401 → **um** refresh em `/auth/web/refresh`, compartilhado entre chamadas simultâneas, e **uma** repetição; refresh recusado → fim de sessão ("Sua sessão expirou…" ou, se 403, o motivo da API, ex.: central inativa); 403 numa chamada autenticada → fim de sessão com o motivo; sem conexão → mensagem de conexão e a sessão continua; upload sem `Content-Type` forçado; `ErroApi` com mensagem em pt-BR (usa o `detail` do backend; 422 de validação do FastAPI e 5xx viram frases sem código técnico; o corpo inteiro fica disponível para o relatório de importação).
+- `src/lib/api/cliente.test.ts`: 17 testes com `fetch` simulado. Sabotagem: sem o refresh compartilhado → falha "um único refresh"; 403 sem encerrar a sessão → falha o caso de acesso revogado.
+
+**W4 — resultado (2026-10-13):**
+
+- Tela `src/paginas/Entrar.tsx` (rota `/entrar`) pela skill Frescor: logo (folha + "certo" e "Frescor" em Sora 700), "Central de produção", título "Entrar", e-mail e senha com label visível, **um único botão primário "Entrar"** (vira "Entrando…" e bloqueia clique duplo). Validação no navegador (campo vazio, e-mail sem domínio) com erro abaixo do campo, ícone, `aria-invalid`, `aria-describedby` e foco no primeiro campo com problema. Erro do servidor num alerta: 401 → "E-mail ou senha incorretos." + "Confira os dados e tente de novo."; 403 → mensagem da API (+ "a contagem é feita no app do celular" quando a API diz "restrito a gestores"); sem conexão/servidor → frase sem código. Sessão encerrada sozinha → aviso amarelo com o motivo. O e-mail é enviado sem espaços nas pontas.
+- Rotas (`react-router` 7.18.4): `/entrar`, `/` protegida (`RotaProtegida`, página provisória "Você entrou" + "Sair" até o W5), qualquer outra → `/`. `SessaoProvider` + `useSessao` (contexto em arquivo separado, para o fast refresh).
+- Componentes ajustados à skill: Input (44px, borda `--input-border`, foco 2px, borda de erro), Label (14px 600), Alert (variantes erro/aviso/sucesso/info com `*-bg`), Card (raio 10, borda `--line`, título Sora 18).
+- `src/paginas/Entrar.test.tsx` (14 testes) + `App.test.tsx` atualizado. Sabotagem: rota protegida aberta e botão sem estado de carregamento → 5 falhas.
+- **Achado:** o operador de loja do seed (`admin@teste.com`) recebe "Seu usuário não tem permissão para acessar o sistema web. Fale com o administrador." (o backend checa `tem_acesso_web` antes do perfil), não "restrito a gestores". A mensagem é correta; a orientação "use o app do celular" só aparece para um operador com `tem_acesso_web` ligado por engano. **Decidido pelo Ualker (2026-10-13): fica como está.**
+- Verificações: typecheck ok; lint sem erros (3 avisos `only-export-components` em arquivos do shadcn); **68 testes** (37 + 17 + 14); build ok (JS 305,9 kB, 100,6 kB gzip); `npm audit --omit=dev` 0. Pelo Vite (3001) contra o backend real: `/entrar` 200, login do gestor 200, senha errada 401 com "E-mail ou senha incorretos.", operador 403.
+- Conferência visual no navegador: feita pelo Ualker em 2026-10-13 (ok).
 
 
 **W1 — resultado (2026-10-13):**

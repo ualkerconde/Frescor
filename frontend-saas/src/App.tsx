@@ -1,12 +1,26 @@
 /*
- * Página provisória do esqueleto (W2). O W4 troca por login + rotas.
+ * Rotas do frontend do SaaS.
+ * /entrar: login do gestor. /: área autenticada (provisória até o W5).
  */
+import { Navigate, Route, Routes } from "react-router"
+import { Entrar } from "@/paginas/Entrar"
+import { PainelProvisorio } from "@/paginas/PainelProvisorio"
+import { RotaProtegida } from "@/lib/sessao/RotaProtegida"
+
 function App() {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <h1 className="text-[28px]">Frescor</h1>
-      <p className="mt-2 text-muted-foreground">Central de produção · painel do gestor (em construção)</p>
-    </main>
+    <Routes>
+      <Route path="/entrar" element={<Entrar />} />
+      <Route
+        path="/"
+        element={
+          <RotaProtegida>
+            <PainelProvisorio />
+          </RotaProtegida>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
 
