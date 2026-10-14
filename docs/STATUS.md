@@ -90,7 +90,7 @@ Objetivo (doc §8): ter dado de venda e perda fluindo antes da API do PDV. Crit�
 | P4 | Serviço de importação CSV (`;`, vírgula decimal, `dd/mm/aaaa`, produto por `codigo`, loja por `codigo`), tudo ou nada (D9), substitui na reimportação (D5) | Script com CSVs sintéticos: válido, data inválida, produto desconhecido, loja fora do escopo, quantidade negativa, linha duplicada, reimportação | **Concluído (2026-10-13)** — ver abaixo |
 | P5 | `POST /vendas/importar` e `POST /perdas/importar` | `TestClient`: 401/403, importação válida, relatório de erros | **Concluído (2026-10-13)** — ver abaixo |
 | P6 | `GET /vendas` e `GET /perdas` (filtros, período máximo, paginação) | `TestClient`: filtros, escopo, isolamento entre negócios — fecha o critério de aceite | **Concluído (2026-10-13)** — ver abaixo; **critério de aceite da Fase 2 atendido** |
-| P7 | Stub `sync_vendas_service` ("integração não configurada"), fora do agendador | Chamada direta; agendador não o registra | — |
+| P7 | Stub `sync_vendas_service` ("integração não configurada"), fora do agendador | Chamada direta; agendador não o registra | **Concluído (2026-10-13)** — ver abaixo |
 | P8 | `seed_vendas.py` (~8 semanas, 2 lojas) para a Fase 3; README e STATUS | Seed 2× sem duplicar; `GET /vendas` devolve o período | — |
 
 Frontend do SaaS (`frontend-saas/`): começa depois do P6.
@@ -150,6 +150,11 @@ Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 - **Critério de aceite da Fase 2, de ponta a ponta:** importar um CSV pela rota `POST /vendas/importar` (200, 2 inseridas) e consultá-lo em `GET /vendas?loja_id=&produto_id=&data_inicio=&data_fim=` (os 2 dias com as quantidades importadas, origem `manual`).
 - Sabotagem: sem o filtro de escopo no serviço, falham F1, O2, O3 e S1 (a loja de outra central aparece); sem o 404 no router, falham E1, E2, E3 e S3 (200 com lista vazia). Sem o filtro de negócio nada falha — esperado, o escopo de central já implica o negócio (defesa em profundidade, como no P3).
 - Regressão completa: `test_importacao_rotas` 14, `test_importacao_csv` 45, `test_vendas_perdas_modelo` 23, `test_escopo_gestor` 13, `test_auth_web` 38, `test_obter_gestor_central` 11, `test_constraint_usuario` 4.
+
+**P7 — resultado (2026-10-13):**
+- `app/services/sync_vendas_service.py` (novo, **stub**): `sincronizar_vendas(db, negocio_id, data) -> ResultadoSync` devolve `situacao = nao_configurada` com a mensagem "Integração com o PDV não configurada (decisão D3 em aberto)…", sem acessar o PDV nem gravar nada. A docstring fixa o contrato da implementação real: grava com origem `api`, substitui só a própria origem (D5), valida com as regras da importação (D6, D12, D13). `negocio_id` é parâmetro porque é job interno, executado negócio por negócio — nunca exposto como rota que receba o negócio do cliente.
+- **Fora do agendador:** `app/core/scheduler.py` não foi alterado; registrar o job só quando a integração existir.
+- `scripts/test_sync_vendas_stub.py` (novo): 5 casos, 2 execuções, exit 0 — chamada direta, nada gravado, agendador montado de verdade (com o `start()` neutralizado, nenhum job executa) só com o job `verificar_zeragem`, nenhum job aponta para o sync, nenhum módulo da aplicação importa o stub. A 1ª versão do S5 tinha um falso positivo (achava a menção ao nome numa docstring); corrigido para procurar só `import`. Sabotagem: com um import do stub no `scheduler.py`, o S5 falha (arquivo restaurado em seguida).
 
 ---
 
