@@ -26,3 +26,4 @@ from app.models.evento import Evento, EventoLoja, EventoProduto  # noqa: F401
 from app.models.evento import EscopoLoja, EscopoProduto, TipoAjuste  # noqa: F401
 from app.models.venda_diaria import VendaDiaria, OrigemVenda  # noqa: F401
 from app.models.perda_diaria import PerdaDiaria, OrigemPerda  # noqa: F401
+from app.models.previsao_diaria import PrevisaoDiaria, MetodoPrevisao, EstatisticaBase, OrigemProxy  # noqa: F401
