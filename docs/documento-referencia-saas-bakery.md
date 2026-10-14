@@ -175,7 +175,7 @@ Mesma via de integração de `venda_diaria` — provavelmente o mesmo sistema, e
 
 Combina dois horizontes, evitando tanto o ruído de curto prazo quanto a lentidão de reação de uma média longa parada:
 
-**Passo 1 — base sazonal por dia da semana:** média de venda daquele produto naquele dia da semana específico, olhando as últimas 6-8 semanas (ex: média dos últimos 6-8 sábados).
+**Passo 1 — base sazonal por dia da semana:** média de venda daquele produto naquele dia da semana específico, olhando as últimas 6-8 semanas (ex: média dos últimos 6-8 sábados). **Implementado (D18 e D25, `docs/STATUS.md`): mediana dos últimos 6 sábados**, que não se deixa levar por um dia de pico; no teste no passado, empata com a média em dado limpo e é bem melhor com picos.
 
 **Passo 2 — fator de tendência recente:** razão entre venda real dos últimos 7 dias e o que a base sazonal previa para esses mesmos dias. Captura mudanças recentes (tendência de alta/baixa, efeito de promoção não cadastrada).
 

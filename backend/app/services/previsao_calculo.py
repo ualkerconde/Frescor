@@ -5,9 +5,11 @@ os componentes que a explicam. Não lê banco nem relógio, para poder ser
 testado com séries montadas à mão e reusado no teste no passado (F6).
 
 Método (docs/STATUS.md, "Fase 3 — plano"):
-- Base (D18): média das vendas do mesmo dia da semana nas últimas 6
-  semanas conhecidas. Captura o padrão semanal (sábado vende mais que
-  segunda) sem precisar de fatores configurados.
+- Base (D18 e D25): mediana das vendas do mesmo dia da semana nas
+  últimas 6 semanas conhecidas. Captura o padrão semanal (sábado vende
+  mais que segunda) sem precisar de fatores configurados; a mediana não
+  se deixa levar por um dia de pico (promoção não cadastrada, erro de
+  digitação), ao contrário da média.
 - Tendência (D19): soma do real dos últimos 7 dias ÷ soma da base desses
   mesmos dias, limitada a 0,7–1,3. Corrige a base quando o movimento
   mudou nas últimas semanas. O limite impede que uma semana atípica
@@ -31,8 +33,10 @@ produto (ou a loja) tem menos de 6 semanas de histórico. A escolha do
 proxy precisa de outras lojas e produtos, por isso fica no
 `previsao_service`.
 
-Fora deste passo: produtos sazonais (F5). Sem nenhum dia na base, a
-previsão própria sai `None`.
+Sazonal (F5, doc §4.1): `prever_sazonal` usa o mesmo período do ano
+anterior; `vigente` diz se o produto está à venda num dia (D30).
+
+Sem nenhum dia na base, a previsão própria sai `None`.
 """
 
 from collections.abc import Mapping, Sequence
@@ -53,6 +57,22 @@ DIAS_HISTORICO_NECESSARIOS = 7 * JANELA_BASE_SEMANAS + DIAS_TENDENCIA - 1
 # Cold start (doc §4.2, D20): o peso do histórico próprio vai de 0% (1ª
 # semana) a 100% depois de 6 semanas completas.
 SEMANAS_COLD_START = 6
+# Sazonal (F5, doc §4.1): o "mesmo dia" do ano anterior fica 364 dias antes
+# (52 semanas: mesmo dia da semana); a base usa esse dia e 2 semanas antes
+# e depois dele.
+DIAS_ANO_SAZONAL = 364
+SEMANAS_AO_REDOR_SAZONAL = 2
+METODO_SEMANAL = "semanal"
+METODO_SAZONAL = "sazonal"
+# Estatística da base. D25 (decidida em 2026-10-14): MEDIANA. No teste no
+# passado (F6), as três empatam em dado limpo; com picos de venda, a média
+# piora até perder do ingênuo e a mediana segue a melhor (docs/STATUS.md).
+# As outras duas ficam disponíveis para o backtest comparar.
+ESTATISTICA_MEDIA = "media"
+ESTATISTICA_MEDIANA = "mediana"
+ESTATISTICA_MEDIA_APARADA = "media_aparada"
+ESTATISTICAS = (ESTATISTICA_MEDIA, ESTATISTICA_MEDIANA, ESTATISTICA_MEDIA_APARADA)
+ESTATISTICA_PADRAO = ESTATISTICA_MEDIANA
 
 Serie = Mapping[date, Decimal | None]
 
@@ -98,13 +118,36 @@ class ComponentesPrevisao:
     dias_na_tendencia: int
     # base × tendência; None quando não há base.
     previsao: Decimal | None
+    # "semanal" (últimas 6 semanas) ou "sazonal" (mesmo período do ano anterior).
+    metodo: str = METODO_SEMANAL
 
 
-def base_dia_semana(serie: Serie, data_referencia: date, data_alvo: date) -> tuple[Decimal | None, int]:
+def resumir(valores: list[Decimal], estatistica: str = ESTATISTICA_PADRAO) -> Decimal:
     """
-    Média dos últimos `JANELA_BASE_SEMANAS` dias com o mesmo dia da semana
-    de `data_alvo`, só até `data_referencia` (inclusive). Devolve (média,
-    quantos dias entraram).
+    Valor típico de uma lista (não vazia) de vendas, conforme a D25:
+    - mediana (padrão): valor do meio (média dos dois do meio, se par);
+    - media: média simples;
+    - media_aparada: com 4 valores ou mais, tira o maior e o menor e faz a
+      média do resto; com menos, média simples.
+    """
+    if estatistica == ESTATISTICA_MEDIANA:
+        ordenados = sorted(valores)
+        meio = len(ordenados) // 2
+        return ordenados[meio] if len(ordenados) % 2 else (ordenados[meio - 1] + ordenados[meio]) / 2
+    if estatistica == ESTATISTICA_MEDIA_APARADA and len(valores) >= 4:
+        valores = sorted(valores)[1:-1]
+    elif estatistica not in (ESTATISTICA_MEDIA, ESTATISTICA_MEDIA_APARADA):
+        raise ValueError(f"Estatística desconhecida: {estatistica}")
+    return sum(valores, Decimal("0")) / len(valores)
+
+
+def base_dia_semana(
+    serie: Serie, data_referencia: date, data_alvo: date, estatistica: str = ESTATISTICA_PADRAO
+) -> tuple[Decimal | None, int]:
+    """
+    Valor típico (mediana, por padrão; D25) dos últimos `JANELA_BASE_SEMANAS`
+    dias com o mesmo dia da semana de `data_alvo`, só até `data_referencia`
+    (inclusive). Devolve (valor, quantos dias entraram).
     """
     # Último dia com o mesmo dia da semana do alvo que já é conhecido.
     recuo = (data_alvo - data_referencia).days % 7
@@ -116,10 +159,12 @@ def base_dia_semana(serie: Serie, data_referencia: date, data_alvo: date) -> tup
     ]
     if not valores:
         return None, 0
-    return sum(valores, Decimal("0")) / len(valores), len(valores)
+    return resumir(valores, estatistica), len(valores)
 
 
-def tendencia(serie: Serie, data_referencia: date) -> tuple[Decimal, Decimal | None, int]:
+def tendencia(
+    serie: Serie, data_referencia: date, estatistica: str = ESTATISTICA_PADRAO
+) -> tuple[Decimal, Decimal | None, int]:
     """
     Fator de tendência dos últimos `DIAS_TENDENCIA` dias até `data_referencia`.
     Devolve (fator limitado, fator bruto, dias comparados).
@@ -136,7 +181,7 @@ def tendencia(serie: Serie, data_referencia: date) -> tuple[Decimal, Decimal | N
         real = serie.get(dia)
         if real is None:
             continue
-        base, _ = base_dia_semana(serie, dia - timedelta(days=1), dia)
+        base, _ = base_dia_semana(serie, dia - timedelta(days=1), dia, estatistica)
         if base is None:
             continue
         soma_real += real
@@ -149,7 +194,11 @@ def tendencia(serie: Serie, data_referencia: date) -> tuple[Decimal, Decimal | N
 
 
 def prever(
-    serie: Serie, data_referencia: date, data_alvo: date, eventos: Sequence[EventoAplicavel] = ()
+    serie: Serie,
+    data_referencia: date,
+    data_alvo: date,
+    eventos: Sequence[EventoAplicavel] = (),
+    estatistica: str = ESTATISTICA_PADRAO,
 ) -> ComponentesPrevisao:
     """
     Previsão de venda para `data_alvo`, usando só o que se sabe até
@@ -167,8 +216,8 @@ def prever(
         for dia, valor in serie.items()
         if dia <= data_referencia
     }
-    base, semanas = base_dia_semana(conhecida, data_referencia, data_alvo)
-    fator, bruta, dias = tendencia(conhecida, data_referencia)
+    base, semanas = base_dia_semana(conhecida, data_referencia, data_alvo, estatistica)
+    fator, bruta, dias = tendencia(conhecida, data_referencia, estatistica)
     return ComponentesPrevisao(
         data_alvo=data_alvo,
         base=base,
@@ -177,6 +226,81 @@ def prever(
         tendencia_bruta=bruta,
         dias_na_tendencia=dias,
         previsao=None if base is None else base * fator,
+    )
+
+
+def vigente(dia: date, inicio: date | None, fim: date | None, recorrente: bool) -> bool:
+    """
+    O produto está à venda em `dia`? Sem datas: sempre. Vigência recorrente
+    (sazonal) compara só dia e mês e pode virar o ano (ex.: 01/12 a 06/01).
+    """
+    if recorrente and inicio is not None and fim is not None:
+        md, ini, fi = (dia.month, dia.day), (inicio.month, inicio.day), (fim.month, fim.day)
+        return ini <= md <= fi if ini <= fi else (md >= ini or md <= fi)
+    return (inicio is None or dia >= inicio) and (fim is None or dia <= fim)
+
+
+def prever_sazonal(
+    serie: Serie,
+    data_referencia: date,
+    data_alvo: date,
+    eventos: Sequence[EventoAplicavel] = (),
+    estatistica: str = ESTATISTICA_PADRAO,
+) -> ComponentesPrevisao | None:
+    """
+    Previsão de produto sazonal com temporada anterior (doc §4.1): a base é
+    a média do mesmo dia da semana no mesmo período do ano anterior (o dia
+    de 364 dias antes, e 2 semanas antes e depois dele); a tendência compara
+    os últimos 7 dias com os mesmos 7 dias do ano anterior (limites e
+    mínimo da D19). None quando não há dado do ano anterior (1ª temporada:
+    o serviço segue pelo cold start).
+
+    A série deve vir com os dias fora da vigência como faltantes (venda zero
+    fora da temporada é ausência, não sazonalidade).
+    """
+    if data_alvo <= data_referencia:
+        raise ValueError("A data prevista tem de ser depois da data de referência.")
+    conhecida = {
+        dia: None if any(e.cobre(dia) for e in eventos) else valor
+        for dia, valor in serie.items()
+        if dia <= data_referencia
+    }
+    ano = timedelta(days=DIAS_ANO_SAZONAL)
+    ancora = data_alvo - ano
+    valores = [
+        v
+        for k in range(-SEMANAS_AO_REDOR_SAZONAL, SEMANAS_AO_REDOR_SAZONAL + 1)
+        if (v := conhecida.get(ancora + timedelta(weeks=k))) is not None
+    ]
+    if not valores:
+        return None
+    base = resumir(valores, estatistica)
+
+    soma_real = Decimal("0")
+    soma_anterior = Decimal("0")
+    dias = 0
+    for k in range(DIAS_TENDENCIA):
+        dia = data_referencia - timedelta(days=k)
+        real, anterior = conhecida.get(dia), conhecida.get(dia - ano)
+        if real is None or anterior is None:
+            continue
+        soma_real += real
+        soma_anterior += anterior
+        dias += 1
+    if dias < MINIMO_DIAS_TENDENCIA or soma_anterior == 0:
+        fator, bruta = Decimal("1"), None
+    else:
+        bruta = soma_real / soma_anterior
+        fator = min(max(bruta, TENDENCIA_MINIMA), TENDENCIA_MAXIMA)
+    return ComponentesPrevisao(
+        data_alvo=data_alvo,
+        base=base,
+        semanas_na_base=len(valores),
+        tendencia=fator,
+        tendencia_bruta=bruta,
+        dias_na_tendencia=dias,
+        previsao=base * fator,
+        metodo=METODO_SAZONAL,
     )
 
 

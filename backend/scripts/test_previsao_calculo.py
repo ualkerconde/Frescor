@@ -10,7 +10,8 @@ Casos:
   C01 série constante -> previsão = constante, tendência 1
   C02 padrão semanal (fatores do seed) -> cada dia da semana sai com o seu
       fator, nos 7 dias seguintes (horizonte da D22)
-  C03 alta moderada na última semana (+20%) -> tendência 1,2
+  C03 alta moderada na última semana (+20%) -> tendência 1,2 (base pela
+      mediana, D25)
   C04 queda forte (-50%) -> tendência limitada a 0,7 (bruta 0,5)
   C05 alta forte (+100%) -> tendência limitada a 1,3 (bruta 2,0)
   C06 ruído de ±20% em volta do padrão semanal -> erro pequeno, tendência ~1
@@ -27,6 +28,8 @@ Casos:
   C16 sem arredondamento: KG com 3 casas e média 10,5 em UN
   C17 só 6 semanas: a 7ª semana para trás não entra na base
   C18 previsão = base × tendência
+  C19 a base padrão é a mediana (D25): um pico não move a base (com a
+      média, moveria)
 
 Uso: python scripts/test_previsao_calculo.py
 """
@@ -43,7 +46,7 @@ from app.services.previsao_calculo import prever  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 18
+TOTAL_CASOS = 19
 D = Decimal
 REF = date(2026, 10, 12)  # segunda
 ALVO = REF + timedelta(days=1)  # terça
@@ -98,8 +101,9 @@ def main():
         # C03: 100 até a semana passada, 120 nos últimos 7 dias.
         s = serie(56, lambda d: D("120") if d > REF - timedelta(days=7) else D("100"))
         c = prever(s, REF, ALVO)
-        # base = (5×100 + 120)/6; previsão = base × 1,2 = 124
-        registrar("C03 alta de 20%", c.tendencia == D("1.2") and perto(c.previsao, D("124")), resumo(c))
+        # base = mediana de [120, 100×5] = 100 (D25); previsão = 100 × 1,2 = 120
+        registrar("C03 alta de 20%", c.base == D("100") and c.tendencia == D("1.2") and c.previsao == D("120"),
+                  resumo(c))
 
         # C04 e C05: limites.
         s = serie(56, lambda d: D("50") if d > REF - timedelta(days=7) else D("100"))
@@ -193,6 +197,13 @@ def main():
         s = serie(56, lambda d: D(str(rnd.randint(50, 150))))
         c = prever(s, REF, ALVO)
         registrar("C18 previsao = base x tendencia", c.previsao == c.base * c.tendencia, resumo(c))
+
+        # C19: um pico (100) na terça de 3 semanas atrás, num histórico de 10.
+        pico = ALVO - timedelta(weeks=3)
+        s = serie(56, lambda d: D("100") if d == pico else D("10"))
+        padrao, media = prever(s, REF, ALVO).base, prever(s, REF, ALVO, estatistica="media").base
+        registrar("C19 padrao = mediana (D25): pico nao move a base", padrao == D("10") and media == D("25"),
+                  f"base padrão {padrao}; com a média seria {media}")
 
     except Exception as e:
         registrar("ERRO INESPERADO", False, f"{type(e).__name__}: {e}")

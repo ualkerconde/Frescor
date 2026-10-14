@@ -128,8 +128,10 @@ def parte_pura():
     # E10: a terça de 2 semanas atrás vendeu 40 (evento passado).
     dia_ev = ALVO - timedelta(weeks=2)
     s_pico = serie(56, lambda d: D("40") if d == dia_ev else D("10"))
-    sem = prever(s_pico, REF, ALVO)
-    com = prever(s_pico, REF, ALVO, [ev(1, MULT, "1", inicio=dia_ev)])
+    # Com a mediana (padrão, D25), um pico isolado já não move a base; a
+    # média deixa visível que o dia de evento saiu da conta.
+    sem = prever(s_pico, REF, ALVO, estatistica="media")
+    com = prever(s_pico, REF, ALVO, [ev(1, MULT, "1", inicio=dia_ev)], estatistica="media")
     registrar("E10 dia de evento sai da base", com.base == D("10") and com.semanas_na_base == 5 and sem.base == D("15"),
               f"com evento base {com.base} ({com.semanas_na_base} sem); sem o evento base {sem.base}")
 
@@ -306,7 +308,8 @@ def parte_banco():
         db.query(EventoLoja).filter(EventoLoja.evento_id == ev5.id).delete(synchronize_session=False)
         db.query(Evento).filter(Evento.id == ev5.id).delete(synchronize_session=False)
         db.commit()
-        x = por_chave(prever_central(db, neg_a.id, c_a1.id, REF, ALVO))[(l1.id, p1.id)]
+        # Média de propósito: com a mediana (padrão), o pico isolado não moveria a base.
+        x = por_chave(prever_central(db, neg_a.id, c_a1.id, REF, ALVO, estatistica="media"))[(l1.id, p1.id)]
         registrar("S08 sem o ev5 o dia de 40 entra na base", x.componentes.base == D("15"),
                   f"base {x.componentes.base}")
 
