@@ -66,4 +66,6 @@ uvicorn app.main:app --reload      # docs em http://127.0.0.1:8000/docs
 - Rodar migrations e testes de verdade e reportar o resultado real; não afirmar que algo passou sem ter executado.
 - Antes de implementar uma fase, conferir as tarefas e o critério de aceite no documento de referência (seção 8).
 - Ao terminar: atualizar `docs/STATUS.md` (fase, pendências, log de decisões) e então commitar.
+- **Criar e editar arquivos só com as ferramentas de edição de arquivo** (Write/Edit). **Nunca usar heredoc** (`<<EOF`) nem `python -c`/`node -e` com o conteúdo embutido para escrever ou alterar arquivos: o escape de `\`, `\n` e aspas pelo shell já corrompeu arquivos 3 vezes (byte nulo gravado no código, quebra de linha real no meio de uma string, `\s` virando `s` numa regex). O shell fica para rodar comandos.
+- Front-end (`frontend-saas/` e mudanças no app mobile): seguir a skill `.claude/skills/frescor-design-system/SKILL.md`.
 - Preferência do dono do projeto (Ualker): respostas diretas, críticas e sinceras; separar hipótese de certeza; mostrar riscos, custos e alternativas; priorizar viabilidade e resultado concreto; não inventar capacidades nem resultados; ao ensinar, explicar de forma progressiva com exemplos práticos.

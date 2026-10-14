@@ -1,0 +1,175 @@
+/*
+ * Tema do Frescor (skill frescor-design-system, direção B).
+ *
+ * Tailwind 4: os tokens são mapeados aqui no CSS (@theme), não em
+ * tailwind.config. Só existe a paleta clara (a skill ainda não define modo
+ * escuro), por isso não há bloco .dark.
+ *
+ * Conflito de nomes resolvido: a skill e o shadcn usam --secondary,
+ * --accent e --muted com significados diferentes. Os tokens da skill ficam
+ * com o prefixo --fr- e os valores exatos da skill; as variáveis que os
+ * componentes do shadcn leem apontam para eles conforme o significado:
+ *
+ *   shadcn             skill                 uso no shadcn
+ *   --background       --fr-bg               fundo da página
+ *   --foreground       --fr-text             texto principal
+ *   --card/--popover   --fr-card             card, input, modal, menu
+ *   --primary          --fr-primary          ação principal
+ *   --secondary        --fr-surface          fundo do botão "secondary" do shadcn (não usado como secundário da skill)
+ *   --muted            --fr-surface          FUNDO discreto
+ *   --muted-foreground --fr-muted            TEXTO secundário
+ *   --accent           --fr-surface          fundo de hover de menus (o âmbar da skill é "highlight")
+ *   --destructive      --fr-error            perigo
+ *   --border           --fr-line             divisória decorativa
+ *   --input            --fr-input-border     borda de controle (3:1)
+ *   --ring             --fr-primary          anel de foco
+ *
+ * Cores da skill sem equivalente no shadcn viram utilitários do Tailwind:
+ *   surface, line, input-border, heading (= --secondary da skill),
+ *   highlight (= --accent da skill: SÓ como fundo, com texto foreground),
+ *   primary-hover, success(-bg), warning(-bg), error(-bg).
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Fontes servidas pelo próprio projeto (@fontsource), só os pesos da skill. */
+@import "@fontsource/sora/600.css";
+@import "@fontsource/sora/700.css";
+@import "@fontsource/source-sans-3/400.css";
+@import "@fontsource/source-sans-3/600.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* ---- tokens da skill (valores exatos) ---- */
+  --fr-primary: #0e6b5c;
+  --fr-primary-hover: #0a5549;
+  --fr-secondary: #1b2b3a;
+  --fr-accent: #e3a62f;
+  --fr-bg: #fafbfa;
+  --fr-surface: #eef3f1;
+  --fr-card: #ffffff;
+  --fr-text: #15212b;
+  --fr-muted: #56636d;
+  --fr-line: #d3deda;
+  --fr-input-border: #7d8a93;
+  --fr-success: #1f7a3e;
+  --fr-success-bg: #e8f4ec;
+  --fr-warning: #9a5b00;
+  --fr-warning-bg: #fdf3e1;
+  --fr-error: #b42318;
+  --fr-error-bg: #fdecea;
+  --fr-shadow-elevado: 0 1px 2px rgb(21 33 43 / 0.06), 0 4px 12px rgb(21 33 43 / 0.06);
+
+  /* ---- variáveis que os componentes do shadcn leem ---- */
+  --background: var(--fr-bg);
+  --foreground: var(--fr-text);
+  --card: var(--fr-card);
+  --card-foreground: var(--fr-text);
+  --popover: var(--fr-card);
+  --popover-foreground: var(--fr-text);
+  --primary: var(--fr-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--fr-surface);
+  --secondary-foreground: var(--fr-text);
+  --muted: var(--fr-surface);
+  --muted-foreground: var(--fr-muted);
+  --accent: var(--fr-surface);
+  --accent-foreground: var(--fr-text);
+  --destructive: var(--fr-error);
+  --border: var(--fr-line);
+  --input: var(--fr-input-border);
+  --ring: var(--fr-primary);
+  /* Raio da skill: 10px (botão, input, card). radius-sm = 6px (badge). */
+  --radius: 10px;
+}
+
+@theme inline {
+  --font-sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Cores da skill sem equivalente no shadcn. */
+  --color-primary-hover: var(--fr-primary-hover);
+  --color-heading: var(--fr-secondary);
+  --color-highlight: var(--fr-accent);
+  --color-surface: var(--fr-surface);
+  --color-line: var(--fr-line);
+  --color-input-border: var(--fr-input-border);
+  --color-success: var(--fr-success);
+  --color-success-bg: var(--fr-success-bg);
+  --color-warning: var(--fr-warning);
+  --color-warning-bg: var(--fr-warning-bg);
+  --color-error: var(--fr-error);
+  --color-error-bg: var(--fr-error-bg);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: var(--radius);
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+
+  --shadow-elevado: var(--fr-shadow-elevado);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-heading text-heading;
+    font-weight: 600;
+  }
+  /* Foco visível da skill: anel de 2px --primary com 2px de afastamento. */
+  :focus-visible {
+    outline: 2px solid var(--fr-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* Números sempre com algarismos de largura fixa (skill). */
+@utility numero {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Animações curtas e respeito a quem pede menos movimento (skill). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Conceito de logo da skill Frescor: folha --primary com nervura em "certo" --accent. Provisório. -->
+  <path d="M27 5C14 5 5 12 5 22c0 2 .5 3.5 1.2 5C8 26 10 25 12 25c10 0 15-9 15-20z" fill="#0E6B5C"/>
+  <path d="M10 18.5l4 4 8-9" fill="none" stroke="#E3A62F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
