@@ -6,6 +6,10 @@
 
 > **Nota de versão:** este é o documento de planejamento original (06/10/2026), mantido sem alterações no corpo. O estado atual do desenvolvimento, as divergências entre este texto e o código, as decisões em aberto e o log de decisões posteriores ficam em [`STATUS.md`](STATUS.md). **Em caso de conflito entre os dois, `STATUS.md` prevalece.**
 
+> **Atualizações posteriores ao planejamento (o corpo abaixo NÃO foi reescrito):**
+> - **2026-10-13 — Nome do produto: Frescor.** "Bakery" era provisório. Onde o texto diz "Projeto Bakery", leia Frescor.
+> - **2026-10-13 — Escopo ampliado para outros perecíveis.** Além da padaria, o sistema deve atender outros perecíveis, incluindo **itens não produzidos** (só distribuídos/revendidos) e **itens produzidos para açougue e hortifruti**. O texto abaixo foi escrito pensando em padaria; os pontos do modelo de dados e das fases que isso pode afetar estão listados em `STATUS.md` (decisão D14, ainda em aberto). Nada foi implementado ainda.
+
 ---
 
 ## 1. Contexto e objetivo de negócio

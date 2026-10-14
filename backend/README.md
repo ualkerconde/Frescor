@@ -29,16 +29,22 @@ backend/
 │   │   ├── 0011_produto_loja_ativo.py
 │   │   ├── 0012_calendario_producao.py
 │   │   ├── 0013_evento_e_associacoes.py
-│   │   └── 0014_usuario_tem_acesso_web.py
+│   │   ├── 0014_usuario_tem_acesso_web.py
+│   │   ├── 0015_vendas_e_perdas_diarias.py
+│   │   └── 0016_produto_codigo_unico.py
 │   ├── env.py
 │   └── script.py.mako
 ├── alembic.ini
 ├── app/
 │   ├── api/
-│   │   ├── auth.py            # /auth/login, /auth/refresh, /auth/logout
+│   │   ├── auth.py            # App: /auth/login, /auth/refresh, /auth/logout
+│   │   ├── auth_web.py        # SaaS: /auth/web/login, /auth/web/refresh
+│   │   ├── importacao.py      # SaaS: POST /vendas/importar, /perdas/importar (CSV)
+│   │   ├── consultas.py       # SaaS: GET /vendas, /perdas
+│   │   ├── escopo.py          # SaaS: loja fora do escopo do gestor -> 404
 │   │   ├── health.py          # /api/health
-│   │   ├── produtos.py        # /produtos, /estoque
-│   │   └── zeragem.py         # /zeragem/executar-agora
+│   │   ├── produtos.py        # App: /produtos, /estoque
+│   │   └── zeragem.py         # App: /zeragem/executar-agora
 │   ├── core/
 │   │   ├── config.py          # Leitura do .env
 │   │   ├── security.py        # Hash de senha + JWT
@@ -60,25 +66,34 @@ backend/
 │   │   ├── produto_classificacao.py   # Valor de cada produto em cada nível
 │   │   ├── central_producao.py        # Central de produção (cada loja pertence a uma)
 │   │   ├── calendario_producao.py     # Dias da semana em que cada produto é produzido
-│   │   └── evento.py                  # Eventos de demanda atípica + associações com lojas/produtos
+│   │   ├── evento.py                  # Eventos de demanda atípica + associações com lojas/produtos
+│   │   ├── venda_diaria.py            # Venda por loja + produto + dia + origem
+│   │   └── perda_diaria.py            # Perda por loja + produto + dia + origem
 │   ├── schemas/
 │   │   ├── auth.py
 │   │   ├── estoque.py
+│   │   ├── importacao.py
+│   │   ├── consulta.py
 │   │   └── zeragem.py
 │   ├── services/
 │   │   ├── estoque_service.py       # Lógica de contagem e cálculo UN/KG
 │   │   ├── classificacao_service.py # Monta a classificação de cada produto para o app
-│   │   └── zeragem_service.py       # Lógica de zeragem diária por loja
+│   │   ├── zeragem_service.py       # Lógica de zeragem diária por loja
+│   │   ├── escopo_service.py        # Lojas no escopo do gestor (só a central dele)
+│   │   ├── importacao_service.py    # Importação de CSV de vendas/perdas (regras D5-D13)
+│   │   ├── consulta_service.py      # Consulta de vendas/perdas (filtros, período, paginação)
+│   │   └── sync_vendas_service.py   # STUB da integração com o PDV (não configurada)
 │   └── main.py                 # Ponto de entrada da aplicação
 ├── scripts/
 │   ├── seed_dev.py                     # Negócio, central, 2 lojas, operadores e gestor de teste
 │   ├── seed_produtos.py                # Produtos de teste, habilitados em todas as lojas
-│   ├── test_constraint_usuario.py      # Testa ck_usuario_tipo_vs_loja_central
-│   ├── test_obter_gestor_central.py    # Testa a dependency de acesso ao SaaS
+│   ├── seed_vendas.py                  # ~8 semanas de vendas e perdas das 2 lojas
+│   ├── test_*.py                       # Scripts de teste (ver seção 3.3)
 │   └── _check_enums.py                 # Utilitário: lista os tipos enum do PostgreSQL
 ├── .env.example
 ├── .gitignore
-└── requirements.txt
+├── requirements.txt
+└── requirements-dev.txt               # Só desenvolvimento: httpx (TestClient dos testes de rota)
 ```
 
 ---
@@ -124,6 +139,12 @@ No VS Code, selecione o interpretador correto:
 pip install -r requirements.txt
 ```
 
+Para rodar os scripts de teste de rota (usam o `TestClient` do FastAPI):
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 > **Nota (Python 3.14 + bcrypt):** Se der erro relacionado ao bcrypt durante
 > o `pip install`, execute:
 >
@@ -167,11 +188,12 @@ Cole o valor gerado no campo `SECRET_KEY` do `.env`.
 alembic upgrade head
 ```
 
-Aplica as 14 migrações em sequência (0001 a 0014). Tabelas criadas:
+Aplica as 16 migrações em sequência (0001 a 0016). Tabelas criadas:
 `negocios`, `centrais_producao`, `lojas`, `usuarios`, `permissoes_web`,
 `produtos`, `produtos_lojas`, `estoque_atual`, `historico_contagens`,
 `niveis_classificacao`, `produto_classificacoes`, `calendario_producao`,
-`eventos`, `eventos_lojas`, `eventos_produtos`.
+`eventos`, `eventos_lojas`, `eventos_produtos`, `vendas_diarias`,
+`perdas_diarias`.
 
 | Migração | O que faz |
 | --- | --- |
@@ -184,6 +206,8 @@ Aplica as 14 migrações em sequência (0001 a 0014). Tabelas criadas:
 | 0012 | Cria `calendario_producao` |
 | 0013 | Cria `eventos`, `eventos_lojas` e `eventos_produtos` |
 | 0014 | `usuarios.tem_acesso_web` (acesso ao SaaS, separado de `tem_acesso_app`) |
+| 0015 | Cria `vendas_diarias` e `perdas_diarias` (única por loja + produto + data + origem; FKs compostas com `negocio_id`); `lojas.codigo` |
+| 0016 | Código de produto único no negócio (para antes de criar se houver códigos repetidos, listando cada um) |
 
 Toda migração tem `downgrade` funcional. Para conferir uma migração nova:
 `alembic upgrade head` → `alembic downgrade -1` → `alembic upgrade head`.
@@ -193,16 +217,17 @@ Toda migração tem `downgrade` funcional. Para conferir uma migração nova:
 ```bash
 python scripts/seed_dev.py
 python scripts/seed_produtos.py
+python scripts/seed_vendas.py
 ```
 
-Os dois scripts são idempotentes: podem rodar quantas vezes quiser, sem
-duplicar dados (procuram cada registro antes de criar).
+Os três scripts são idempotentes: podem rodar quantas vezes quiser, sem
+duplicar dados.
 
-Rode **nesta ordem** (o segundo usa as lojas criadas pelo primeiro). Cria:
+Rode **nesta ordem** (cada um usa o que o anterior criou). Cria:
 
 - **Negócio:** "Rede Padaria Teste"
 - **Central de produção:** reaproveita a do negócio, se já existir
-- **Lojas:** "Loja Centro" e "Loja Bairro" (horário de zeragem: 06:00)
+- **Lojas:** "Loja Centro" (código `001`) e "Loja Bairro" (código `002`), horário de zeragem 06:00
 - **Usuários** (senha `senha123`):
 
 | E-mail | Perfil | App mobile | SaaS web |
@@ -214,10 +239,13 @@ Rode **nesta ordem** (o segundo usa as lojas criadas pelo primeiro). Cria:
 - **11 produtos:** 6 em UN, 4 em KG com peso médio e 1 em KG sem peso médio (pesado na hora)
 - **Habilitação:** todos os produtos habilitados em todas as lojas do negócio
 - **Classificação** (Categoria/Subcategoria) e **calendário de produção** de exemplo
+- **Vendas e perdas** (`seed_vendas.py`): as 8 semanas que terminam ontem, para as 2 lojas e
+  todos os produtos habilitados, origem `manual`. Padrões: mais venda no fim de semana, Loja
+  Bairro ~65% da Loja Centro, perda maior em produto de validade curta (~9% para 1 dia, ~1,5%
+  para 5 dias), variação aleatória com semente fixa por loja + produto + dia (o valor de um dia
+  é sempre o mesmo). Rodar de novo substitui os mesmos valores, sem criar linhas.
 
-> O gestor ainda não consegue fazer login: `/auth/login` é a rota do app e
-> exige `tem_acesso_app`. As rotas de login do SaaS (`/auth/web/login`,
-> `/auth/web/refresh`) estão previstas para a Fase 2.
+O gestor entra no SaaS por `POST /auth/web/login`; no app (`/auth/login`) ele é recusado.
 
 ### 3.3 Scripts de teste
 
@@ -226,15 +254,25 @@ teste e apagam tudo ao final (também apagam resíduos de execuções
 anteriores que tenham quebrado no meio). Terminam com exit 0 se tudo
 passou e exit 1 se algum caso falhou.
 
-```bash
-# Check constraint entre tipo_usuario, loja_id e central_producao_id (4 casos)
-python scripts/test_constraint_usuario.py
+Os testes de rota usam o `TestClient` (requer `requirements-dev.txt`) e
+não iniciam o agendador de zeragem. Vários usam os usuários do seed
+(rode os seeds antes); o app é testado numa loja de teste própria, então
+as contagens das lojas do seed não são tocadas.
 
-# Dependency obter_gestor_central (10 casos). Requer o seed_dev.py.
-python scripts/test_obter_gestor_central.py
+```bash
+python scripts/test_constraint_usuario.py     # check constraint de tipo de usuário (4 casos)
+python scripts/test_obter_gestor_central.py   # dependency de acesso ao SaaS (11 casos)
+python scripts/test_auth_web.py               # login/refresh do SaaS + regressão completa do app (38)
+python scripts/test_vendas_perdas_modelo.py   # regras de banco de vendas/perdas e códigos (23)
+python scripts/test_escopo_gestor.py          # escopo do gestor: só a própria central (13)
+python scripts/test_importacao_csv.py         # serviço de importação de CSV (45)
+python scripts/test_importacao_rotas.py       # POST /vendas/importar e /perdas/importar (14)
+python scripts/test_consulta_rotas.py         # GET /vendas e /perdas + importar e consultar (33)
+python scripts/test_sync_vendas_stub.py       # stub da integração com o PDV (5)
 ```
 
-Saída esperada: uma linha `[OK]` por caso e, no fim, `TODOS OS CASOS PASSARAM`.
+Saída esperada: uma linha `[OK]` por caso e, no fim, `TODOS OS CASOS PASSARAM`
+(ou `N verificações; TODAS PASSARAM`).
 
 ---
 
@@ -317,6 +355,24 @@ valores é feita pelo software web (fora deste repositório).
 | --- | --- | --- |
 | `POST` | `/zeragem/executar-agora` | Dispara a zeragem manualmente para a loja do usuário autenticado. Use `?forcar=true` para ignorar a regra de "uma vez por dia". |
 
+### SaaS web — autenticação do gestor de central
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `POST` | `/auth/web/login` | Login do gestor (e-mail + senha). Exige `tem_acesso_web`, perfil `gestor_central` e central ativa do mesmo negócio. Tokens com a claim `porta: web`. 401 credenciais erradas; 403 sem permissão (com o motivo). |
+| `POST` | `/auth/web/refresh` | Renova o access token do SaaS; confere as permissões de novo no banco. |
+
+Os tokens do SaaS e do app não são intercambiáveis: cada porta recusa o token da outra (401).
+
+### SaaS web — vendas e perdas (exigem token do SaaS)
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `POST` | `/vendas/importar` | Upload multipart (campo `arquivo`) de CSV `data;codigo_loja;codigo_produto;quantidade`, `;`, vírgula decimal, `dd/mm/aaaa`, UTF-8 ou Windows-1252, até 5 MB. Tudo ou nada; reimportação substitui. 200 com relatório (inseridas, substituídas, avisos); 422 com o mesmo relatório e os erros por linha (nada gravado); 413 acima de 5 MB. |
+| `POST` | `/perdas/importar` | Igual, para perdas. |
+| `GET` | `/vendas` | `data_inicio` e `data_fim` obrigatórios (AAAA-MM-DD, até 366 dias); `loja_id`, `produto_id`; `limit` (1–1000, padrão 100), `offset`. Só lojas da central do gestor; loja fora do escopo → 404. Resposta `{total, limit, offset, itens}`, ordenada por data, loja, produto e origem. |
+| `GET` | `/perdas` | Igual, para perdas. |
+
 ---
 
 ## 7. Segurança — Isolamento Multiempresa
@@ -331,8 +387,12 @@ Duas dependencies, uma por porta de entrada:
 
 | Dependency | Usada por | Exige | Devolve |
 | --- | --- | --- | --- |
-| `obter_usuario_autenticado` | app mobile | usuário ativo + `tem_acesso_app` | `usuario_id`, `negocio_id`, `loja_id` |
-| `obter_gestor_central` | SaaS web | usuário ativo + `tem_acesso_web` + `gestor_central` + central do mesmo negócio e ativa | `usuario_id`, `negocio_id`, `central_producao_id` |
+| `obter_usuario_autenticado` | app mobile | token do app (sem a claim `porta`) + usuário ativo + `tem_acesso_app` + `operador_loja` | `usuario_id`, `negocio_id`, `loja_id` |
+| `obter_gestor_central` | SaaS web | token do SaaS (`porta: web`) + usuário ativo + `tem_acesso_web` + `gestor_central` + central do mesmo negócio e ativa | `usuario_id`, `negocio_id`, `central_producao_id` |
+
+No SaaS, o gestor só enxerga as lojas da **própria central** (`app/services/escopo_service.py`).
+Vendas e perdas também têm FKs compostas com `negocio_id`: o banco recusa uma linha que
+aponte para loja ou produto de outro negócio.
 
 Na `obter_gestor_central`: token ausente ou inválido → **401**; autenticado
 sem permissão → **403**. (Na dependency do app, token ausente responde 403,
@@ -401,10 +461,11 @@ alembic revision --autogenerate -m "descricao da mudanca"
 # Criar ou completar os dados de teste (idempotente, não apaga nada)
 python scripts/seed_dev.py
 python scripts/seed_produtos.py
+python scripts/seed_vendas.py
 
-# Testes
-python scripts/test_constraint_usuario.py
-python scripts/test_obter_gestor_central.py
+# Testes (lista completa na seção 3.3)
+python scripts/test_auth_web.py
+python scripts/test_consulta_rotas.py
 ```
 
 ### Banco (via psql)

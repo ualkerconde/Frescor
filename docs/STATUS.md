@@ -1,4 +1,6 @@
-# STATUS — Projeto Bakery (SaaS web + app)
+# STATUS — Frescor (SaaS web + app)
+
+> **Nome do produto: Frescor** (decidido em 2026-10-13; "Projeto Bakery" era provisório). Nomes técnicos que ainda usam "bakery" estão listados na seção 3 (D15).
 
 > **Fonte única da verdade sobre o andamento.** Atualizado em: 2026-10-13.
 > Precedência em caso de conflito: **este arquivo** > `documento-referencia-saas-bakery.md` > qualquer conversa externa (claude.ai, etc.).
@@ -13,7 +15,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | Fase | Situação | Observações |
 |---|---|---|
 | 1 — Fundação de dados | **Concluída (2026-10-13)** | Migrations 0007–0014, models, seeds e testes verificados; app mobile testado no iPhone. |
-| 2 — Ingestão de vendas e perdas | **Em andamento** (plano aprovado em 2026-10-13) | P1–P6 feitos; **critério de aceite atendido** no P6 (importar CSV e consultar). Faltam P7 (stub do sync) e P8 (seed de vendas + README). |
+| 2 — Ingestão de vendas e perdas | **Concluída (2026-10-13)** | P1–P8 feitos; critério de aceite atendido no P6 (importar CSV e consultar). Pendências que ficam: ver "Fase 2 — o que fica" abaixo. |
 | 3 — Motor de previsão | Não iniciada | |
 | 4 — Necessidade e produção | Não iniciada | |
 | 5 — Distribuição | Não iniciada | |
@@ -91,7 +93,7 @@ Objetivo (doc §8): ter dado de venda e perda fluindo antes da API do PDV. Crit�
 | P5 | `POST /vendas/importar` e `POST /perdas/importar` | `TestClient`: 401/403, importação válida, relatório de erros | **Concluído (2026-10-13)** — ver abaixo |
 | P6 | `GET /vendas` e `GET /perdas` (filtros, período máximo, paginação) | `TestClient`: filtros, escopo, isolamento entre negócios — fecha o critério de aceite | **Concluído (2026-10-13)** — ver abaixo; **critério de aceite da Fase 2 atendido** |
 | P7 | Stub `sync_vendas_service` ("integração não configurada"), fora do agendador | Chamada direta; agendador não o registra | **Concluído (2026-10-13)** — ver abaixo |
-| P8 | `seed_vendas.py` (~8 semanas, 2 lojas) para a Fase 3; README e STATUS | Seed 2× sem duplicar; `GET /vendas` devolve o período | — |
+| P8 | `seed_vendas.py` (~8 semanas, 2 lojas) para a Fase 3; README e STATUS | Seed 2× sem duplicar; `GET /vendas` devolve o período | **Concluído (2026-10-13)** — ver abaixo |
 
 Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 
@@ -156,6 +158,21 @@ Frontend do SaaS (`frontend-saas/`): começa depois do P6.
 - **Fora do agendador:** `app/core/scheduler.py` não foi alterado; registrar o job só quando a integração existir.
 - `scripts/test_sync_vendas_stub.py` (novo): 5 casos, 2 execuções, exit 0 — chamada direta, nada gravado, agendador montado de verdade (com o `start()` neutralizado, nenhum job executa) só com o job `verificar_zeragem`, nenhum job aponta para o sync, nenhum módulo da aplicação importa o stub. A 1ª versão do S5 tinha um falso positivo (achava a menção ao nome numa docstring); corrigido para procurar só `import`. Sabotagem: com um import do stub no `scheduler.py`, o S5 falha (arquivo restaurado em seguida).
 
+**P8 — resultado (2026-10-13):**
+- `scripts/seed_vendas.py` (novo): as 8 semanas que terminam ontem (56 dias) de vendas e perdas, para as lojas `001` e `002` e todos os produtos habilitados e ativos, origem `manual`, gravadas com `ON CONFLICT DO UPDATE` (D5). Padrões: fator por dia da semana (sábado 1,35, domingo 1,25, segunda/terça 0,85), Loja Bairro 0,65 da Loja Centro, volume base por produto na unidade dele (D6), perda pela validade (1 dia ~9%, 2 dias ~5%, 3 dias ~3%, 5 dias ~1,5%, sem validade ~4%), variação com semente fixa por loja + produto + dia. Produtos UN com arredondamento probabilístico.
+- **Defeito achado na verificação e corrigido:** na 1ª versão, a perda do Bolo de Chocolate (UN, ~6/dia, 3%) arredondava sempre para 0 — 0% de perda em 8 semanas. Com o arredondamento probabilístico: 2,2%, perda em 12 de 112 dias.
+- Verificado: 1.232 vendas + 1.232 perdas. A 1ª versão inseriu as linhas (e rodada de novo substituiu tudo, sem inserir); a versão final rodou 2 vezes, as duas com 0 inseridas, 1.232 substituídas e a **mesma soma de conferência** (vendas 19216.429, perdas 1378.396); nenhuma chave duplicada; nenhuma quantidade fracionária em produto UN. Pão Francês na Loja 001, média por dia da semana (kg): seg 25,9 · ter 25,0 · qua 25,5 · qui 28,9 · sex 32,2 · sáb 41,9 · dom 35,6. Perda/venda por validade: 1 dia 9,1% · 2 dias 5,2% · 3 dias 2,2% · 5 dias 1,5% · sem validade 3,9%. Pela rota, o `gestor@teste.com` consulta `GET /vendas` e `GET /perdas` do período: 1.232 linhas cada.
+- Período "reproduzível": os valores de cada dia são fixos; a **janela** de 8 semanas acompanha a data em que o seed roda (a Fase 3 precisa de dado recente).
+- `backend/README.md`: migrations 0015 e 0016, `requirements-dev.txt`, `seed_vendas.py`, códigos das lojas, login do gestor no SaaS, lista completa dos 9 scripts de teste, rotas do SaaS (auth web, importação, consulta) e as regras atualizadas das duas dependencies.
+
+### Fase 2 — o que fica (não bloqueia a Fase 3)
+
+- **D3** (cliente piloto e PDV) continua aberta: o `sync_vendas_service` é stub, e o formato do CSV (D7) é provisório.
+- **Deploy:** limite de tamanho de corpo no servidor da frente (ex.: nginx), porque o limite de 5 MB da rota não impede o recebimento; e, antes da migration 0016 em produção, conferir códigos de produto repetidos no banco do app.
+- **CORS** em `app/main.py` ainda lista origens `http://` por IP de rede (configuração anterior ao proxy do Vite); revisar quando houver deploy.
+- **Frontend do SaaS** (`frontend-saas/`): liberado para começar (decisão: depois do P6).
+
+
 ---
 
 ## 2. Divergências entre o documento de referência e o código
@@ -170,6 +187,29 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | Login do gestor (§3.1) | gestor com escopo de central; não fala em flag de acesso ao SaaS | Campo novo `usuarios.tem_acesso_web` (migration 0014, D1 = A), separado de `tem_acesso_app`. A dependency `obter_gestor_central` exige `tem_acesso_web` e `gestor_central` (passo 5, 2026-10-13); `obter_usuario_autenticado` e `/auth/login` continuam exigindo `tem_acesso_app` (rotas `/auth/web/*` ficam para a Fase 2) |
 | Vendas e perdas (§3.6, §3.7) | `venda_diaria`/`perda_diaria`, sem `negocio_id`; campos `quantidade_vendida`/`quantidade_perdida` | `vendas_diarias`/`perdas_diarias` (migration 0015), **com** `negocio_id` (D2); campo `quantidade` Numeric(12,3) na unidade do produto (D6), não negativa; `criado_em`/`atualizado_em`; chave única (loja, produto, data, origem) (D5) |
 | Escopo do gestor (§3.1) | "negócio/central inteiro" | **Só as lojas da própria central** (D8) |
+
+### Escopo ampliado — impactos possíveis (D14, 2026-10-13; análise, **não** decisão)
+
+Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens **não produzidos** e itens **produzidos para açougue e hortifruti**. O modelo e o roteiro atuais foram desenhados para padaria. Abaixo, o que pode ser afetado. São hipóteses e perguntas: nada foi implementado nem decidido.
+
+**Modelo de dados**
+1. **Seção/departamento do produto** (padaria, açougue, hortifruti...). Hoje não existe campo; a classificação multinível (`niveis_classificacao`) é configurável por negócio e pode não ter "seção". Pergunta: campo próprio em `produtos` ou uso do nível 1 da classificação? O motor e os filtros vão precisar saber a seção de forma confiável.
+2. **"Cada loja pertence a exatamente uma central"** (regra 3 do `CLAUDE.md`, `lojas.central_producao_id` obrigatório). Se açougue e padaria tiverem centrais diferentes, uma loja passa a ser atendida por **mais de uma** central (uma por seção). Isso muda `lojas`, o escopo do gestor (D8: gestor vê as lojas da sua central) e a agregação da ordem de produção. É o ponto de maior impacto.
+3. **Item não produzido** (`tem_producao_propria = false` já existe). Pergunta: ele passa pela central (estoque central → distribuição, como o doc §4.5 prevê) ou vai do fornecedor direto para a loja? No segundo caso, a necessidade calculada vira **sugestão de pedido de compra** por loja, que hoje está fora do escopo (doc §9).
+4. **Item produzido sem receita / com rendimento.** O doc deixa explosão de insumos fora do V1. Na padaria isso funciona porque a ordem é "quantas unidades produzir". No **açougue**, a produção costuma ser o inverso: uma matéria-prima (ex.: peça/carcaça) gera vários produtos (cortes, moída) com **rendimento** e perda técnica (aparas). Se isso entrar, precisa de modelo de rendimento/coprodutos. No **hortifruti** produzido (salada pronta, fruta cortada) a lógica é parecida com a padaria.
+5. **Validade.** `dias_validade` (inteiro, em dias) serve para padaria. Carne e hortifruti podem precisar de validade que depende do armazenamento (resfriado/congelado) e, em alguns casos, de **lote** com data própria (rastreabilidade). Hoje não há lote.
+6. **Unidade e peso variável.** Açougue e hortifruti vendem muito por peso (KG já existe). Itens pesados na balança da loja costumam ter **código de barras de peso variável** (EAN-13 com o peso/preço embutido, prefixo 2), que o leitor do app e a importação de CSV hoje não interpretam. Hortifruti também tem maço/bandeja (UN atende).
+7. **Perda por motivo.** Hoje `perdas_diarias` não tem motivo. Em açougue e hortifruti, separar vencimento, quebra/avaria e perda técnica (aparas, desidratação) muda a leitura do número.
+8. **Calendário.** `calendario_producao` vale para item produzido. Item não produzido precisa de calendário de **entrega/recebimento** (do fornecedor ou da central).
+
+**Fases seguintes**
+- **Fase 3 (previsão):** o algoritmo (base por dia da semana + tendência + eventos) serve para qualquer perecível. Hortifruti é mais sensível a safra e preço/promoção; o fator de tendência capta parte disso. Previsão por seção pode exigir parâmetros diferentes (ex.: janela de semanas).
+- **Fase 4 (necessidade e produção):** maior impacto — itens não produzidos (pedido ou transferência em vez de ordem de produção), rendimento no açougue, ordem de produção por central/seção.
+- **Fase 5 (distribuição):** romaneio por seção e cadeia de frio (resfriado/congelado). Logística segue fora do escopo (doc §9), mas a separação por temperatura pode aparecer no romaneio.
+- **Fase 6 (frontend):** filtros e telas por seção.
+- **App mobile:** contagem de açougue e hortifruti por peso já é possível (KG e peso informado); leitura de etiqueta de peso variável não.
+
+**O que já serve sem mudança:** importação e consulta de vendas/perdas (Fase 2), unidade UN/KG, `tem_producao_propria`, vigência sazonal (hortifruti sazonal), eventos.
 
 ---
 
@@ -190,6 +230,8 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | D11 | Como testar rotas por HTTP | A) `httpx` em `requirements-dev.txt` + `TestClient`; B) subir uvicorn nos scripts | A | **Decidida em 2026-10-13: A.** |
 | D12 | Importar vendas/perdas para uma loja **inativa** da central | A) recusar (erro na linha do CSV); B) aceitar | — | **Decidida em 2026-10-13: A (recusar).** Erro na linha; pela D9 (tudo ou nada) o arquivo inteiro não grava. Para carregar histórico de uma loja desativada, reativar a loja temporariamente, importar e desativar de novo. |
 | D13 | Regras de conteúdo do CSV: (a) fração em produto UN; (b) produto inativo; (c) produto não habilitado na loja; (d) data futura | — | — | **Decidida em 2026-10-13:** (a) **recusar** (erro na linha; `2,0` vale); (b) **aceitar**; (c) **aceitar com AVISO** (lista separada de avisos no relatório, sem erro e sem bloquear o arquivo; vale também para produto habilitado mas desabilitado na loja, `ativo = false`); (d) **recusar** (hoje é aceito). Junto: única `(negocio_id, codigo)` em `produtos` (migration 0016). |
+| D14 | **Escopo ampliado para outros perecíveis** (açougue, hortifruti; itens produzidos e não produzidos): como modelar | Ver "Escopo ampliado — impactos possíveis" na seção 2 | Decidir antes de planejar a Fase 4 (necessidade e produção), que é onde a maior parte do impacto aparece. As Fases 2 e 3 servem para qualquer perecível sem mudança, salvo os pontos marcados lá. | **Aberta (2026-10-13).** Nada implementado. |
+| D15 | Renomear para Frescor os nomes que ainda dizem "Bakery" | Títulos de `CLAUDE.md` e `backend/README.md` (baixo custo); nome do arquivo `docs/documento-referencia-saas-bakery.md` (exige atualizar os links); pasta do repositório; banco de dados `bakery` (exige mudar o `.env` de cada ambiente e, em produção, migrar/renomear o banco) | Títulos agora; arquivo e pasta quando for conveniente; o banco só se houver motivo além do nome. | **Aberta (2026-10-13).** |
 
 ---
 
@@ -209,6 +251,9 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 - **2026-10-13** — **D10:** tokens do SaaS levam a claim `porta: web`; a dependency do app recusa esses tokens e quem não é `operador_loja`. **D11:** `httpx` só em `requirements-dev.txt`, testes de rota com `TestClient`.
 - **2026-10-13** — **D12 decidida: A.** Importação para loja inativa é recusada com erro na linha (e, pela D9, o arquivo inteiro não grava). Histórico de loja desativada: reativar temporariamente, importar e desativar.
 - **2026-10-13** — **D13 decidida:** fração em produto UN e data futura são recusadas; produto inativo é aceito; produto não habilitado (ou desabilitado) na loja é aceito com aviso. Código de produto passa a ser único no negócio (migration 0016).
+- **2026-10-13** — **Fase 2 concluída** (P1–P8). Critério de aceite atendido: CSV importado por `POST /vendas/importar` e consultado em `GET /vendas`.
+- **2026-10-13** — **Nome do produto: Frescor** ("Bakery" era provisório). Registrado também no documento de referência. Renomear nomes técnicos: D15.
+- **2026-10-13** — **Escopo ampliado:** além da padaria, outros perecíveis, incluindo itens não produzidos e itens produzidos para açougue e hortifruti. Impactos possíveis listados na seção 2; decisão de modelagem em aberto (D14). Nada implementado.
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -219,4 +264,5 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 1. ~~Teste do app mobile (login + contagem + leitor)~~ — feito pelo Ualker em 2026-10-13. **Fase 1 concluída.**
 2. ~~Consequência de D1 = A: migration 0014, dependency `obter_gestor_central` e script de teste~~ (concluídas em 2026-10-13).
 3. ~~Atualizar `backend/README.md`~~ e ~~corrigir `seed_produtos.py`~~ (feitos em 2026-10-13).
-4. **Fase 2, P1:** rotas `/auth/web/login` e `/auth/web/refresh` + D10 (ver plano na seção 1). Depois P2–P8 na ordem.
+4. ~~Fase 2 (P1–P8)~~ — concluída em 2026-10-13.
+5. **Próximo:** planejar a Fase 3 (motor de previsão, doc §4.1–4.3 e §8) — já há 8 semanas de vendas no seed — e/ou iniciar o `frontend-saas/` (login do gestor, importação e consulta).
