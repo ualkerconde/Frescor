@@ -1,7 +1,7 @@
 # Frescor · painel da central (frontend do SaaS)
 
 Painel web do **gestor da central de produção**: entrar, importar vendas e
-perdas por CSV e consultar o que foi importado. Fala com o mesmo backend do
+perdas por CSV, consultar o que foi importado e ver a previsão de vendas. Fala com o mesmo backend do
 app mobile (`../backend`), pelas rotas do SaaS (token com `porta: web`).
 
 Estado do projeto, decisões e próximos passos: [`../docs/STATUS.md`](../docs/STATUS.md).
@@ -14,7 +14,9 @@ Visual e regras de interface: skill
 
 Pré-requisitos: Node 22 e o backend rodando em <http://127.0.0.1:8000>
 (ver `../backend/README.md`), com os seeds (`seed_dev.py`, `seed_produtos.py`
-e, para ter dados na consulta, `seed_vendas.py`).
+e, para ter dados na consulta e na previsão, `seed_vendas.py`). Para ver
+"Sem previsão" e "Pouco histórico" na tela de previsão, rode também
+`seed_demo_previsao.py` e entre com `gestor.demo@teste.com` / `senha123`.
 
 ```powershell
 cd frontend-saas
@@ -49,6 +51,7 @@ Para apontar para outra API, defina `VITE_API_URL` (ex.: num arquivo
 | `/entrar` | Login do gestor. Erros claros: "E-mail ou senha incorretos.", mensagem da API para quem não tem acesso, aviso quando a sessão expira. |
 | `/importar` | Importação de CSV de vendas ou perdas. Resumo grande no topo ("1.232 linhas importadas" ou "Nada foi gravado: 3 erros") e depois as tabelas de erros e avisos. Modelo de CSV para baixar. |
 | `/consultar` | Consulta por período (até 366 dias), loja e produto (busca sem acento). Resumo do período no topo (total vendido e de perda, por unidade), tabela paginada de 50 em 50. Filtros ficam na URL. |
+| `/previsao` | Previsão de vendas por dia (padrão: amanhã), loja e produto; filtros na URL. No topo, o resumo do dia (previsto por unidade contra o mesmo dia da semana passada; produtos sem previsão ou com pouco histórico citados pelo nome). Depois, a tabela: cada linha tem uma frase de como o número foi calculado ("Mediana das últimas 6 quartas × tendência +10%") e "Ver a conta" abre o passo a passo. Por fim, a qualidade (erro médio, sobra/falta, comparação com repetir a semana passada). Ação principal: "Gerar previsão" / "Atualizar previsão". **Carregada só quando aberta** (`React.lazy`). |
 
 Formato do CSV: `data;codigo_loja;codigo_produto;quantidade`, separador `;`,
 vírgula decimal, data `dd/mm/aaaa`, até 5 MB. Arquivos de exemplo em
@@ -71,8 +74,9 @@ src/
 │   ├── formato.ts              # Números, quantidades e datas em pt-BR
 │   ├── modeloCsv.ts            # Modelo de CSV para baixar
 │   └── query.ts                # Configuração do TanStack Query
-├── paginas/                    # Entrar, Importar, Consultar (+ componentes de cada uma)
-└── test/                       # Ajudantes de teste (App completo, API simulada)
+├── paginas/                    # Entrar, Importar, Consultar, Previsao (+ componentes de cada uma)
+│   └── previsao/               # Resumo, tabela, qualidade e explicacao.ts (frase de cada número)
+└── test/                       # Ajudantes de teste (App completo, API simulada, itens de previsão)
 ```
 
 ## 5. Decisões importantes
@@ -88,6 +92,15 @@ src/
 - **Fontes** Sora e Source Sans 3 servidas pelo próprio projeto (`@fontsource`).
 - **Uma ação principal por tela**; erros sem código técnico; quantidade
   sempre com a unidade.
+- **Código dividido por tela** a partir da Fase 3: telas novas entram com
+  `React.lazy` + `import()`. Conferir o tamanho no `npm run build`: o JS
+  principal está em ~483 kB (o Vite avisa acima de 500 kB). Bibliotecas usadas
+  só por uma tela (ex.: os avisos do `sonner`, na previsão) ficam montadas
+  nessa tela, para irem no pacote dela.
+- **Previsão na tela:** o número exibido é sempre o do backend (1 casa em UN,
+  2 em KG; o banco guarda 4). A explicação de cada linha só descreve os
+  componentes gravados, não refaz conta. A qualidade fica guardada 10 minutos
+  por loja + produto e não é recalculada ao trocar o dia.
 
 ## 6. Testes e acessibilidade
 

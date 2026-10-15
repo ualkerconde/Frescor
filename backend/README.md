@@ -32,7 +32,9 @@ backend/
 │   │   ├── 0014_usuario_tem_acesso_web.py
 │   │   ├── 0015_vendas_e_perdas_diarias.py
 │   │   ├── 0016_produto_codigo_unico.py
-│   │   └── 0017_extensao_unaccent.py
+│   │   ├── 0017_extensao_unaccent.py
+│   │   ├── 0018_evento_central_e_fks_negocio.py
+│   │   └── 0019_previsoes_diarias.py
 │   ├── env.py
 │   └── script.py.mako
 ├── alembic.ini
@@ -43,6 +45,9 @@ backend/
 │   │   ├── importacao.py      # SaaS: POST /vendas/importar, /perdas/importar (CSV)
 │   │   ├── consultas.py       # SaaS: GET /vendas, /perdas
 │   │   ├── escopo.py          # SaaS: loja fora do escopo do gestor -> 404
+│   │   ├── eventos.py         # SaaS: POST/GET/DELETE /eventos (cadastro mínimo, D24)
+│   │   ├── previsoes.py       # SaaS: POST /previsoes/gerar, GET /previsoes, GET /previsoes/qualidade
+│   │   ├── web.py             # SaaS: /web/me, /web/lojas, /web/produtos (apoio às telas)
 │   │   ├── health.py          # /api/health
 │   │   ├── produtos.py        # App: /produtos, /estoque
 │   │   └── zeragem.py         # App: /zeragem/executar-agora
@@ -51,6 +56,7 @@ backend/
 │   │   ├── security.py        # Hash de senha + JWT
 │   │   ├── dependencies.py    # Autenticação e isolamento multiempresa (CRÍTICO):
 │   │   │                      #   obter_usuario_autenticado (app) e obter_gestor_central (SaaS)
+│   │   ├── erros_validacao.py # Erros de validação da entrada em português (detail em texto)
 │   │   └── scheduler.py       # Agendador APScheduler (zeragem automática)
 │   ├── db/
 │   │   └── session.py         # Conexão com o banco
@@ -69,12 +75,16 @@ backend/
 │   │   ├── calendario_producao.py     # Dias da semana em que cada produto é produzido
 │   │   ├── evento.py                  # Eventos de demanda atípica + associações com lojas/produtos
 │   │   ├── venda_diaria.py            # Venda por loja + produto + dia + origem
-│   │   └── perda_diaria.py            # Perda por loja + produto + dia + origem
+│   │   ├── perda_diaria.py            # Perda por loja + produto + dia + origem
+│   │   └── previsao_diaria.py         # Previsão gravada por loja + produto + dia, com os componentes
 │   ├── schemas/
 │   │   ├── auth.py
 │   │   ├── estoque.py
 │   │   ├── importacao.py
 │   │   ├── consulta.py
+│   │   ├── evento.py
+│   │   ├── previsao.py
+│   │   ├── web.py
 │   │   └── zeragem.py
 │   ├── services/
 │   │   ├── estoque_service.py       # Lógica de contagem e cálculo UN/KG
@@ -83,12 +93,23 @@ backend/
 │   │   ├── escopo_service.py        # Lojas no escopo do gestor (só a central dele)
 │   │   ├── importacao_service.py    # Importação de CSV de vendas/perdas (regras D5-D13)
 │   │   ├── consulta_service.py      # Consulta de vendas/perdas (filtros, período, paginação)
-│   │   └── sync_vendas_service.py   # STUB da integração com o PDV (não configurada)
+│   │   ├── registros_efetivos.py    # D16: com api e manual no mesmo dia, vale o api (único lugar)
+│   │   ├── catalogo_service.py      # Lojas e produtos para as telas do SaaS
+│   │   ├── sync_vendas_service.py   # STUB da integração com o PDV (não configurada)
+│   │   ├── serie_vendas_service.py  # Série diária de vendas por loja + produto (D16, D17, D28)
+│   │   ├── previsao_calculo.py      # Núcleo do cálculo, funções puras (base, tendência, sazonal, cold start, eventos)
+│   │   ├── previsao_service.py      # Motor por central: junta série, cálculo, proxies e eventos
+│   │   ├── previsao_gravacao.py     # Gera e grava 7 dias (substitui a geração anterior); VERSAO_METODO
+│   │   ├── previsao_consulta_service.py # Consulta das previsões gravadas e qualidade (teste no passado)
+│   │   ├── previsao_metricas.py     # WAPE, viés e o "ingênuo" (mesmo dia da semana passada)
+│   │   └── eventos_service.py       # Eventos da central (escopo D27) e carga para o motor
 │   └── main.py                 # Ponto de entrada da aplicação
 ├── scripts/
 │   ├── seed_dev.py                     # Negócio, central, 2 lojas, operadores e gestor de teste
 │   ├── seed_produtos.py                # Produtos de teste, habilitados em todas as lojas
 │   ├── seed_vendas.py                  # ~8 semanas de vendas e perdas das 2 lojas
+│   ├── seed_demo_previsao.py           # Negócio separado para ver "Sem previsão" e "Pouco histórico"
+│   ├── backtest_previsao.py            # Teste no passado do motor (WAPE, viés, contra o ingênuo)
 │   ├── test_*.py                       # Scripts de teste (ver seção 3.3)
 │   └── _check_enums.py                 # Utilitário: lista os tipos enum do PostgreSQL
 ├── .env.example
@@ -189,12 +210,12 @@ Cole o valor gerado no campo `SECRET_KEY` do `.env`.
 alembic upgrade head
 ```
 
-Aplica as 17 migrações em sequência (0001 a 0017). Tabelas criadas:
+Aplica as 19 migrações em sequência (0001 a 0019). Tabelas criadas:
 `negocios`, `centrais_producao`, `lojas`, `usuarios`, `permissoes_web`,
 `produtos`, `produtos_lojas`, `estoque_atual`, `historico_contagens`,
 `niveis_classificacao`, `produto_classificacoes`, `calendario_producao`,
 `eventos`, `eventos_lojas`, `eventos_produtos`, `vendas_diarias`,
-`perdas_diarias`.
+`perdas_diarias`, `previsoes_diarias`.
 
 | Migração | O que faz |
 | --- | --- |
@@ -210,6 +231,8 @@ Aplica as 17 migrações em sequência (0001 a 0017). Tabelas criadas:
 | 0015 | Cria `vendas_diarias` e `perdas_diarias` (única por loja + produto + data + origem; FKs compostas com `negocio_id`); `lojas.codigo` |
 | 0016 | Código de produto único no negócio (para antes de criar se houver códigos repetidos, listando cada um) |
 | 0017 | Extensão `unaccent` do PostgreSQL: a busca de produtos ignora acentos ("pao" acha "Pão"). Precisa estar disponível no PostgreSQL de produção |
+| 0018 | `eventos.central_producao_id` ("todas as lojas" = lojas da central do evento, D27) e `negocio_id` nas associações de eventos, com FKs compostas por negócio |
+| 0019 | Cria `previsoes_diarias`: uma linha por loja + produto + dia, com o número, a previsão sem evento e a própria, os componentes (base, tendência, peso, proxy), os eventos aplicados, a versão do método e quem/quando gerou; FKs compostas por negócio |
 
 Toda migração tem `downgrade` funcional. Para conferir uma migração nova:
 `alembic upgrade head` → `alembic downgrade -1` → `alembic upgrade head`.
@@ -249,6 +272,16 @@ Rode **nesta ordem** (cada um usa o que o anterior criou). Cria:
 
 O gestor entra no SaaS por `POST /auth/web/login`; no app (`/auth/login`) ele é recusado.
 
+**Demonstração da tela de previsão** (opcional): `python scripts/seed_demo_previsao.py`
+cria um negócio **separado**, "Rede Demo Previsão", com o gestor
+`gestor.demo@teste.com` / `senha123` e a loja `D01`. Lá aparecem os dois estados
+que o seed principal não tem: **DEMO-03** com "Pouco histórico" (só 2 semanas de
+venda) e **DEMO-04** com "Sem previsão" (sem venda e sem produto da mesma
+unidade na loja para comparar). É separado porque os testes contam o seed
+principal (11 produtos, lojas 001/002). Idempotente; a cada execução a janela
+acompanha a data de hoje. Depois, entre na tela de previsão com o gestor demo e
+clique em "Gerar previsão".
+
 ### 3.3 Scripts de teste
 
 Rodam contra o banco configurado no `.env`, criam os próprios dados de
@@ -272,10 +305,32 @@ python scripts/test_importacao_rotas.py       # POST /vendas/importar e /perdas/
 python scripts/test_consulta_rotas.py         # GET /vendas e /perdas, totais + importar e consultar (40)
 python scripts/test_sync_vendas_stub.py       # stub da integração com o PDV (5)
 python scripts/test_web_apoio.py              # /web/me, /web/lojas, /web/produtos (25)
+
+# Fase 3 — motor de previsão
+python scripts/test_serie_vendas.py           # série diária de vendas (D16, D17) (21)
+python scripts/test_previsao_calculo.py       # núcleo do cálculo, sem banco: base, tendência (21)
+python scripts/test_previsao_eventos.py       # eventos fora da base e ajuste do dia (24)
+python scripts/test_eventos_rotas.py          # POST/GET/DELETE /eventos, escopo e erros em português (44)
+python scripts/test_previsao_cold_start.py    # produto novo e loja nova, proxies (15)
+python scripts/test_previsao_sazonal.py       # ramo sazonal e vigência (14)
+python scripts/test_previsao_metricas.py      # WAPE, viés e ingênuo (6)
+python scripts/test_previsoes_gravadas.py     # gravação de 7 dias, substituição, trava (15)
+python scripts/test_previsoes_rotas.py        # API de previsão: gerar, consultar, qualidade (26)
+python scripts/test_aceite_fase3.py           # critério de aceite da Fase 3: os 5 cenários (6)
 ```
 
 Saída esperada: uma linha `[OK]` por caso e, no fim, `TODOS OS CASOS PASSARAM`
 (ou `N verificações; TODAS PASSARAM`).
+
+Teste no passado do motor, com o seed (não é teste de unidade; leva alguns segundos):
+
+```bash
+python scripts/backtest_previsao.py   # WAPE e viés por produto e dia da semana, contra o ingênuo
+```
+
+Termina com dois critérios `[OK]` (vence o ingênuo; reencontra o perfil
+semanal do seed) e um `[aviso]` com os produtos que não vencem o ingênuo
+(hoje INT-001, INT-002 e INT-006 — provável ruído do seed, ver D31 no STATUS).
 
 ---
 
@@ -388,6 +443,40 @@ Quando o mesmo loja + produto + data tem registro `api` (PDV) e `manual` (CSV), 
 | `GET` | `/web/lojas` | Lojas da central do gestor, ativas e inativas (campo `ativo`). |
 | `GET` | `/web/produtos?busca=&limit=&offset=` | Produtos do negócio (ativos e inativos), busca por código ou nome sem diferenciar maiúsculas nem acentos; `%` e `_` são texto; `limit` até 200. |
 
+### SaaS web — eventos (exigem token do SaaS)
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `POST` | `/eventos` | Cria (201) um evento da central do gestor: `nome`, `data_inicio`, `data_fim` (até 366 dias), `tipo_ajuste` (`multiplicador` ou `valor_fixo`), `valor_ajuste`, `escopo_loja` (`todas` = lojas da central, ou `especificas` com `loja_ids`), `produto_ids` (vazio = todos). Erro de validação → 422 com mensagem em português. |
+| `GET` | `/eventos?data_inicio=&data_fim=` | Eventos que valem para a central (datas opcionais: só os que tocam o período). |
+| `DELETE` | `/eventos/{id}` | Apaga (204). Fora do escopo ou inexistente → 404; evento que vale também para outra central → 403. |
+
+Editar = apagar e criar de novo (API mínima, D24). Regras do ajuste: D26 no STATUS.
+
+### SaaS web — previsão (exigem token do SaaS)
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `POST` | `/previsoes/gerar` | Corpo opcional `{"data_referencia": "AAAA-MM-DD"}` (padrão: ontem; hoje ou futuro → 422). Calcula e grava os 7 dias seguintes da central, substituindo a geração anterior (tudo ou nada). Resposta: período, `gravadas`, `sem_previsao`, `substituidas`, `versao_metodo`. |
+| `GET` | `/previsoes?data=&loja_id=&produto_id=` | Previsões gravadas de um dia (padrão: amanhã), com os componentes (base, tendência, peso do histórico, proxy, eventos), `pouco_historico`, a venda do mesmo dia da semana passada e `totais` por unidade. Lista vazia = ainda não gerou para esse dia. `previsao` nula = sem previsão (sem histórico e sem referência). Loja fora do escopo → 404. |
+| `GET` | `/previsoes/qualidade?data_inicio=&data_fim=&loja_id=&produto_id=` | Teste no passado sob demanda (até 28 dias; padrão: as 4 semanas até ontem): WAPE e viés do motor e do ingênuo, **por unidade** (frações com 4 casas: `0.1165` = 11,65%). Calculado na hora (~1 s no seed): antes de cliente real, precisa de cache ou job noturno. |
+
+Valores decimais chegam como texto (ex.: `"44.1234"`).
+
+### Motor de previsão (Fase 3)
+
+Para cada loja + produto + dia (detalhes e números nas decisões D16–D31 do `docs/STATUS.md`):
+
+1. **Série de vendas** efetiva (D16: vale o `api` sobre o `manual`); dia sem linha é zero se a loja vendeu algo naquele dia, senão faltante (D17). Só produto ativo, habilitado e vigente; loja ativa.
+2. **Base** = mediana do mesmo dia da semana nas últimas 6 semanas (D18, D25). Dias de evento ficam fora.
+3. **Tendência** = mediana das razões real ÷ base dos últimos 7 dias, limitada a 0,7–1,3; com menos de 5 dias, fator 1 (D19, D31).
+4. **Sazonal** (`ciclo_previsao = sazonal`) com temporada anterior: base do mesmo período do ano anterior e tendência contra ele; na 1ª temporada, segue o semanal com cold start (F5, versão mínima).
+5. **Cold start**: com menos de 6 semanas de histórico, mistura a própria com um proxy (outras lojas, mesma categoria ou mesma unidade) com peso crescente (D20, D28, D29). Sem nenhuma referência: sem previsão.
+6. **Evento** do dia: multiplicador ou valor fixo (D26).
+7. Sem arredondar (D21); gravada com 4 casas.
+
+Qualquer mudança no cálculo exige atualizar `VERSAO_METODO` em `app/services/previsao_gravacao.py` no mesmo commit (hoje `2026.10-v2`); a versão vai gravada em cada previsão.
+
 ---
 
 ## 7. Segurança — Isolamento Multiempresa
@@ -477,10 +566,12 @@ alembic revision --autogenerate -m "descricao da mudanca"
 python scripts/seed_dev.py
 python scripts/seed_produtos.py
 python scripts/seed_vendas.py
+python scripts/seed_demo_previsao.py   # opcional: demonstração da tela de previsão
 
 # Testes (lista completa na seção 3.3)
 python scripts/test_auth_web.py
 python scripts/test_consulta_rotas.py
+python scripts/test_aceite_fase3.py
 ```
 
 ### Banco (via psql)
