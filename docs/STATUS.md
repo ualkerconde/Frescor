@@ -17,7 +17,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | 1 — Fundação de dados | **Concluída (2026-10-13)** | Migrations 0007–0014, models, seeds e testes verificados; app mobile testado no iPhone. |
 | 2 — Ingestão de vendas e perdas | **Concluída (2026-10-13)** | P1–P8 feitos; critério de aceite atendido no P6 (importar CSV e consultar). Pendências que ficam: ver "Fase 2 — o que fica" abaixo. |
 | 3 — Motor de previsão | **Concluída (2026-10-15)** | F1–F10 feitos; critério de aceite atendido nos 5 cenários (`test_aceite_fase3.py`); tela de previsão e estados "Sem previsão"/"Pouco histórico" conferidos no navegador pelo Ualker. Pendências para antes da produção: seção 5, item 9. |
-| 4 — Necessidade e produção | Não iniciada | |
+| 4 — Necessidade e produção | **Em andamento** — plano aprovado em 2026-10-15 | N1–N10, decisões D32–D43; ver "Fase 4 — plano" abaixo |
 | 5 — Distribuição | Não iniciada | |
 | 6 — Frontend do SaaS (`frontend-saas/`) | **Telas da Fase 2 concluídas** (W1–W8, 2026-10-13, conferidas no navegador) | Login, importação e consulta. As telas das Fases 3–5 (previsão, ordem de produção, romaneio) entram junto com cada fase, **com o código dividido por tela** (ver observação do W8). |
 | 7 — Validação com dado real | Não iniciada | Depende de cliente piloto (D3) |
@@ -218,6 +218,53 @@ Objetivo (doc §4.1–4.3 e §8): `previsao_service` que, dado loja + produto + 
 - **Regressão completa (2026-10-14):** backend — **20 scripts, 414 verificações, todos exit 0** (aceite F3 6, auth_web 38, constraint 4, consulta_rotas 44, escopo 13, eventos_rotas 44, importacao_csv 45, importacao_rotas 14, obter_gestor_central 11, previsao_calculo 21, cold_start 15, previsao_eventos 24, metricas 6, sazonal 14, previsoes_gravadas 15, previsoes_rotas 26, serie_vendas 21, sync_stub 5, vendas_perdas_modelo 23, web_apoio 25); `backtest_previsao.py` exit 0 (motor 9,6% contra 10,2% do ingênuo; perfil semanal a 0,60 p.p.; aviso de INT-001/002/006, como no F8); alembic em 0019 (head). Frontend — typecheck ok, lint sem erros (3 avisos antigos do shadcn), 150 testes, build ok (JS principal 483,1 kB, previsão 56,2 kB), `npm audit --omit=dev` 0. O seed demo (negócio separado) não alterou nenhum teste.
 - Fica para depois da Fase 3 (já listado na seção 5, item 9): job noturno e cache da qualidade, validação com dado real (D3), limitações do sazonal mínimo (seção 1).
 
+### Fase 4 — plano (aprovado em 2026-10-15)
+
+Objetivo (doc §4.4, §4.5 e §8): primeira decisão de negócio automatizada. Critério de aceite: gerar a ordem do dia numa central de teste com 2+ lojas produz uma ordem com itens agregados corretamente, respeitando produtos inativos e fora de vigência. Decisões aplicadas: D14, D32–D43 (seção 3).
+
+**Lacuna do sistema que o método assume:** não há registro de entrega na loja. O estoque da conta é a última contagem (`estoque_atual.estoque_atual_calculado`, hora em `atualizado_em`) mais o que está em trânsito pelas ordens aprovadas (D43).
+
+**Método da necessidade** (por loja + produto, ordem com data de produção D):
+
+```text
+chegada              = D + prazo de entrega da central (D32; padrão 0)
+cobertura            = dias da chegada até a véspera da próxima chegada (calendário do produto),
+                       limitada a dias_validade (D36, aviso "ajuste o calendário")
+mínimo               = Σ previsão gravada (previsoes_diarias) de cada dia da cobertura
+alvo                 = mínimo × (1 + margem)                     (D34: margem do produto;
+                       sem margem 10%; produto com pouco histórico 20%)
+estoque contado      = contagem feita desde o fechamento de D−1; mais antiga = 0 com aviso (D33);
+                       0 também se o produto vence antes da chegada (D35)
+em trânsito          = quantidade final das ordens aprovadas para a loja ainda sem recebimento
+                       confirmado (D43)
+necessidade          = max(0, alvo − estoque contado − em trânsito), arredondada (D37:
+                       UN para cima por loja; KG para cima em 0,1 kg)
+```
+
+- Perda (D35): **não** é somada à necessidade. Entra pela validade (estoque que vence antes da chegada conta 0) e como indicador na linha (perda ÷ venda das últimas 4 semanas, com aviso quando alta). Autoajuste de margem pela perda: Fase 8.
+- Produto sem previsão: necessidade vazia, aviso "informe a quantidade" (o gestor digita). Sem calendário: sem necessidade, aviso "sem calendário" (D42). Inativo, desabilitado na loja, fora da vigência e loja inativa: sem previsão, portanto fora (regras da Fase 3).
+- Previsão desatualizada (gravada com referência anterior a ontem): "Gerar ordem" atualiza a previsão junto (D41).
+- **Produzido × distribuído (D14, D39):** necessidade igual para os dois. Só os produzidos viram item da ordem de produção; os distribuídos ficam gravados num bloco "A distribuir" (insumo do romaneio, Fase 5), com o calendário como dias de envio. Estoque da própria central: fora do escopo.
+- **Escolha do plano (revisável):** a ordem do dia de uma central guarda as linhas por loja + produto dos dois tipos; a aprovação vale para as duas; "em trânsito" conta as linhas aprovadas dos dois tipos.
+- **Em trânsito na Fase 4 (D43):** sem confirmação de recebimento, a linha aprovada conta como entregue **no fim do dia de entrega**; a partir daí está dentro da contagem e deixa de ser trânsito. A tela avisa "recebimento não confirmado". Confirmação de recebimento pela loja (com entrega parcial): Fase 5.
+- Versão do método da necessidade gravada na ordem (texto fixo, mesma regra do `VERSAO_METODO` da previsão).
+- Divergência aprovada: rotas sem `central_id` na URL (o doc §8 propõe `?central_id=`); a central vem do token (regra de ouro 1). Registrada na seção 2.
+
+| Passo | O que | Verificação | Situação |
+|---|---|---|---|
+| N1 | Migration 0020: `centrais_producao.secao` (enum, padrão `padaria`) e `prazo_entrega_dias` (padrão 0, D32); `produtos.tipo_abastecimento` (enum `produzido`/`distribuido`, preenchido a partir de `tem_producao_propria`, que sai, D40); `calendario_producao.negocio_id` com FK composta | upgrade → downgrade → upgrade com dados preservados; teste de modelo com sabotagem; regressão do app | — |
+| N2 | Seeds: tipo de abastecimento, calendário variado (diário, seg/qua/sex, validade menor que a cobertura), margem; contagens de estoque num cenário próprio | 2 execuções sem duplicar; regressão que conta o seed | — |
+| N3 | Cálculo puro: cobertura, estoque contado (validade, contagem recente), em trânsito, alvo, necessidade, arredondamento, avisos | testes unitários + sabotagem | — |
+| N4 | `necessidade_service` com banco: previsões gravadas, estoque, calendário, linhas aprovadas em trânsito, escopo | escopo, isolamento, inativo/desabilitado/fora de vigência, loja inativa, distribuído, trânsito | — |
+| N5 | Migration 0021: ordens, itens por produto e linhas por loja (sugerido, final, componentes incluindo em trânsito, quem/quando, situação de recebimento para a Fase 5) | ciclo de migration; chaves únicas; FKs compostas | — |
+| N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte | — |
+| N7 | API: `POST /producao/ordens/gerar`, `GET /producao/ordens?data=`, `GET /producao/ordens/{id}`, `PATCH` da linha da loja, `POST /producao/ordens/{id}/aprovar` | TestClient: 401/403, escopo/404, isolamento | — |
+| N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | — |
+| N9 | Tela `/producao` (carregada só quando aberta) | testes, axe, roteiro no navegador | — |
+| N10 | READMEs, STATUS, regressão completa | backend e frontend | — |
+
+**Tela de revisão e aprovação (proposta aprovada):** topo com data de produção (padrão: a próxima), situação (Rascunho / Aprovada), resumo por unidade e "Confira estes" (pelo nome: sem previsão, sem contagem recente, cobertura maior que a validade, estoque acima do máximo, recebimento não confirmado). Tabela de produção por produto (sugerido, final, cobertura, etiquetas); abrir a linha mostra as lojas (previsão somada, estoque e quando foi contado, em trânsito, sugerido, final editável) e "Ver a conta". Bloco "A distribuir" separado. Ação principal "Gerar ordem" (sem ordem) / "Aprovar ordem" (rascunho); "Recalcular" secundária; diálogo de confirmação antes de aprovar, listando o que tem aviso. Ordem aprovada só leitura ("Aprovada por X em …").
+
 **Tela de previsão (proposta aprovada):** data (padrão: amanhã), loja e produto; resumo "previsto" por unidade ao lado do "vendido no mesmo dia da semana passada"; card de qualidade ("Errou em média 11% do volume", "Tende a sobrar 3%", atenção quando não vence o ingênuo); tabela com previsão, média do dia da semana, tendência em %, etiquetas "Evento: …" e "Pouco histórico"; explicação em uma frase ao abrir a linha; ação principal "Gerar previsão" / "Atualizar previsão".
 
 ### Frontend do SaaS — plano (aprovado em 2026-10-13)
@@ -336,7 +383,9 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | Login do gestor (§3.1) | gestor com escopo de central; não fala em flag de acesso ao SaaS | Campo novo `usuarios.tem_acesso_web` (migration 0014, D1 = A), separado de `tem_acesso_app`. A dependency `obter_gestor_central` exige `tem_acesso_web` e `gestor_central` (passo 5, 2026-10-13); `obter_usuario_autenticado` e `/auth/login` continuam exigindo `tem_acesso_app` (rotas `/auth/web/*` ficam para a Fase 2) |
 | Vendas e perdas (§3.6, §3.7) | `venda_diaria`/`perda_diaria`, sem `negocio_id`; campos `quantidade_vendida`/`quantidade_perdida` | `vendas_diarias`/`perdas_diarias` (migration 0015), **com** `negocio_id` (D2); campo `quantidade` Numeric(12,3) na unidade do produto (D6), não negativa; `criado_em`/`atualizado_em`; chave única (loja, produto, data, origem) (D5) |
 | Escopo do gestor (§3.1) | "negócio/central inteiro" | **Só as lojas da própria central** (D8) |
-| Central e produto (§3.2, §3.3) — D14 | central sem seção; produto com `tem_producao_propria` (bool); §4.5: item sem produção "sai direto do estoque central" | **Decidido (D14, 2026-10-15), ainda não implementado:** central ganha **seção** (uma por central); produto tem **tipo de abastecimento** `produzido` / `distribuído` (hoje representado por `tem_producao_propria`; a forma no banco é decidida no plano da Fase 4). Uma central por loja continua |
+| Central e produto (§3.2, §3.3) — D14 | central sem seção; produto com `tem_producao_propria` (bool); §4.5: item sem produção "sai direto do estoque central" | **Decidido (D14, 2026-10-15), ainda não implementado:** central ganha **seção** (uma por central); produto tem **tipo de abastecimento** `produzido` / `distribuído` (hoje representado por `tem_producao_propria`; no banco vira o enum `tipo_abastecimento`, D40). Uma central por loja continua |
+| Rotas da ordem de produção (§8, Fase 4) | `GET /producao/ordens?central_id=&data=` | **Sem `central_id` na URL** (aprovado em 2026-10-15): a central vem do usuário autenticado (regra de ouro 1) |
+| Necessidade (§4.4) | `Σ previsão + estoque_segurança − estoque_atual_calculado` | `alvo − estoque contado − em trânsito` (D34, D43), com cobertura limitada à validade (D36) e estoque que vence antes da chegada contando 0 (D35) |
 
 ### Escopo ampliado — impactos possíveis (D14, 2026-10-13; análise feita antes da decisão)
 
@@ -409,6 +458,20 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D29 | Complementos do F3/F4 | — | — | **Decididos (2026-10-13):** produto com categoria mas sem par na categoria usa a média da mesma unidade na loja; loja inativa não recebe previsão; evento pela API dura no máximo 366 dias. |
 | D30 | Produto fora da vigência no dia previsto | — | — | **Decidida (2026-10-14):** não recebe previsão, para qualquer produto (semanal ou sazonal; vigência fixa ou recorrente). Consequência aplicada no F5 (confirmada pelo Ualker em 2026-10-14): dias fora da vigência não são histórico; produto que nunca vendeu e tem lançamento (`data_inicio_vigencia`) depois da habilitação começa o histórico no lançamento, não na habilitação. |
 | D31 | Tendência robusta a picos | A) soma contra soma (D19, atual); B) mediana dos últimos 7 dias contra a base; outras | Testar no backtest depois do F7, com o mesmo cenário de picos da D25 | **Decidida (2026-10-14): B, mediana das razões diárias real ÷ base** (padrão `TENDENCIA_PADRAO`; `VERSAO_METODO` passou a `2026.10-v2`). Motivo: com a mediana na base, os picos dos últimos 7 dias ainda inflavam a tendência (viés +6,6% com 3% ×4). Backtest no seed, base mediana (WAPE / viés). **Limpo, motor completo:** soma 9,2% / +0,3%, mediana 9,6% / +0,5%, ingênuo 10,2% / +0,4%; sem cold start: 9,1% / +0,1% contra 9,3% / +0,0%. **Com picos (núcleo):** 3% ×4: soma 13,9% / +6,6%, mediana **9,9% / +0,8%**; 5% ×4: 16,2% / +9,8% contra **9,9% / +1,1%**; 3% ×10: 13,9% / +6,6% contra **9,9% / +0,8%**; 10% ×3: 20,8% / +15,9% contra **12,1% / +3,9%** (ingênuo 18,2–34,3%). Rodado de novo com o padrão novo: motor 9,6% contra 10,2% do ingênuo; perfil semanal a 0,60 p.p. do real. Custo aceito: em dado limpo, +0,2 a 0,4 ponto de WAPE (no teste C06, com ruído de ±20%, o pior dia vai de 8,6% para 10,7%), e uma mudança real que aparece só em 2–3 dos 7 dias demora mais a entrar. **Alternativa registrada, não testada:** soma com a razão de cada dia limitada (ex.: no máximo 2×) antes de somar; rever se o dado real mostrar atraso em captar mudanças. **Produtos que não vencem o ingênuo no seed:** INT-006 (Coxinha; 9,0% contra 8,1%; com a soma, 8,6%), INT-001 (9,9% contra 9,3%) e INT-002 (6 un/dia; 10,3% contra 9,5%). **Provável ruído do seed** (venda sintética = padrão fixo + ruído aleatório, em que o "mesmo dia da semana passada" às vezes acerta por sorte); conferir com dado real (D3). |
+| D32 | Momento da contagem e prazo de entrega | — | — | **Decidida (2026-10-15):** a loja conta no fechamento de D−1; a central produz no dia D e entrega em D, ao longo do dia. Prazo de entrega = configuração **por central**, em dias, padrão 0 (rede grande pode usar 1); entra na migration do N1. |
+| D33 | Até quando uma contagem vale | — | — | **Decidida (2026-10-15):** só a contagem feita desde o fechamento de D−1; mais antiga conta 0, com aviso. **Ver D44** (não existe horário de fechamento no banco). |
+| D34 | Alvo e margem | — | — | **Decidida (2026-10-15):** alvo = mínimo × (1 + margem). Margem do produto; sem margem, **10%**; produto com pouco histórico (cold start), **20%**. Calibrar na Fase 7. |
+| D35 | Perda no método | — | — | **Decidida (2026-10-15):** perda não é somada; entra pela validade (estoque que vence antes da chegada conta 0) e como indicador (perda ÷ venda das últimas 4 semanas). |
+| D36 | Cobertura maior que a validade | — | — | **Decidida (2026-10-15):** cobertura limitada à validade, com aviso "ajuste o calendário". |
+| D37 | Arredondamento da necessidade (deixado pela D21) | — | — | **Decidida (2026-10-15):** UN para cima, por loja; KG para cima em 0,1 kg. |
+| D38 | Fluxo da ordem | — | — | **Decidida (2026-10-15), como recomendado:** Rascunho → Aprovada; edição por loja, total calculado; só o rascunho é regerado; reabrir aprovada fica para a Fase 5. |
+| D39 | Produto distribuído na Fase 4 | — | — | **Decidida (2026-10-15), como recomendado:** necessidade calculada e gravada, bloco "A distribuir", sem ordem de produção; calendário = dias de envio. |
+| D40 | Forma no banco do tipo de abastecimento e da seção | — | — | **Decidida (2026-10-15), como recomendado:** enum `tipo_abastecimento` no produto, no lugar de `tem_producao_propria`; seção como enum na central. |
+| D41 | Previsão desatualizada ao gerar a ordem | — | — | **Decidida (2026-10-15), como recomendado:** "Gerar ordem" atualiza a previsão junto, se a gravada for de referência anterior a ontem. |
+| D42 | Produto sem calendário | — | — | **Decidida (2026-10-15), como recomendado:** sem necessidade, com aviso "sem calendário"; não supor diário. |
+| D43 | Estoque em trânsito | — | — | **Decidida (2026-10-15):** necessidade = alvo − estoque contado − em trânsito. Em trânsito = quantidade das ordens aprovadas para a loja ainda sem recebimento confirmado. Na Fase 4, sem a confirmação, a ordem conta como entregue no fim do dia de entrega e a tela avisa "recebimento não confirmado". Confirmação de recebimento pela loja (com entrega parcial): Fase 5, junto com o romaneio. |
+| D44 | O que é "desde o fechamento de D−1" (D33) no banco | A) campo novo `lojas.horario_fechamento`; B) aproximar por "contagem com data de D−1 ou depois"; C) usar o `horario_zeragem` da loja como referência | Sem recomendação fechada: depende da rotina real das lojas. **Achado técnico junto:** `estoque_atual.atualizado_em` é gravado em **UTC** (`datetime.utcnow`), enquanto a zeragem usa a hora local (`datetime.now()`); comparar com um horário de loja exige converter o fuso. | **Aberta (2026-10-15).** Precisa ser decidida antes do N3. Se for A, o campo entra numa migration da Fase 4 (não entrou na 0020). |
+| D45 | Com prazo de entrega ≥ 1 dia (D32), a venda dos dias entre a contagem e a chegada | A) descontar a previsão desses dias: estoque na chegada = max(0, contado + em trânsito − Σ previsão até a chegada); B) não descontar (fórmula da D43 como está) | A: sem isso, com prazo 1 o estoque contado em D−1 é contado de novo para cobrir dias a partir de D+1, embora seja vendido no dia D (falta). Com prazo 0 (padrão) as duas dão o mesmo número. | **Aberta (2026-10-15).** Precisa ser decidida antes do N3. |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -458,6 +521,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-15** — **D14 decidida:** cada central atende uma seção só (seção registrada na central); produto tem tipo de abastecimento `produzido` ou `distribuído`, os dois com previsão; loja atendida por mais de uma central fica como trabalho futuro (o que mudaria: seção 2, "D14 — trabalho futuro"); primeiro cliente só padaria. Nada implementado. Próximo: planejar a Fase 4.
 
+- **2026-10-15** — **Plano da Fase 4 aprovado** (N1–N10, seção 1). D32–D43 decididas (D43 nova: estoque em trânsito pelas ordens aprovadas; confirmação de recebimento na Fase 5). Divergência aprovada: rotas da ordem sem `central_id` na URL. Abertas para antes do N3: **D44** (não há horário de fechamento da loja no banco; `estoque_atual.atualizado_em` está em UTC) e **D45** (venda entre a contagem e a chegada com prazo ≥ 1).
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---
@@ -489,7 +554,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    - **Verificação de antes:** `npm run typecheck`, `npm run lint`, `npx vitest run` (116 testes hoje) e `npm run build` (conferir que a tela nova vai num chunk separado).
 8. ~~F10 (READMEs, critério de aceite da Fase 3 nos 5 cenários)~~ — concluído em 2026-10-15.
    ~~Decidir a D14~~ — decidida em 2026-10-15 (seção 3).
-   **Próximo: planejar a Fase 4** (necessidade e produção), já com o tipo de abastecimento do produto (D14).
+   ~~Planejar a Fase 4~~ — plano aprovado em 2026-10-15 (seção 1, "Fase 4 — plano").
+   **Próximo: N1 (migration 0020) e N2 (seeds)**; depois decidir D44 e D45 antes do N3.
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.
