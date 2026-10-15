@@ -8,7 +8,8 @@
 
 > **Atualizações posteriores ao planejamento (o corpo abaixo NÃO foi reescrito):**
 > - **2026-10-13 — Nome do produto: Frescor.** "Bakery" era provisório. Onde o texto diz "Projeto Bakery", leia Frescor.
-> - **2026-10-13 — Escopo ampliado para outros perecíveis.** Além da padaria, o sistema deve atender outros perecíveis, incluindo **itens não produzidos** (só distribuídos/revendidos) e **itens produzidos para açougue e hortifruti**. O texto abaixo foi escrito pensando em padaria; os pontos do modelo de dados e das fases que isso pode afetar estão listados em `STATUS.md` (decisão D14, ainda em aberto). Nada foi implementado ainda.
+> - **2026-10-13 — Escopo ampliado para outros perecíveis.** Além da padaria, o sistema deve atender outros perecíveis, incluindo **itens não produzidos** (só distribuídos/revendidos) e **itens produzidos para açougue e hortifruti**. O texto abaixo foi escrito pensando em padaria; os pontos do modelo de dados e das fases que isso pode afetar estão listados em `STATUS.md` (decisão D14). Nada foi implementado ainda.
+> - **2026-10-15 — D14 decidida** (detalhes em `STATUS.md`): cada central de produção atende **uma seção só** (padaria, açougue, hortifruti são centrais separadas, com a mesma lógica), registrada na central; o produto tem **tipo de abastecimento** `produzido` (ordem de produção → distribuição) ou `distribuído` (a central só distribui), os dois com previsão — substitui a ideia de `tem_producao_propria` e o "sai direto do estoque central" da §4.5; **cada loja continua com uma central** (loja atendida por várias centrais é trabalho futuro); primeiro cliente só padaria.
 
 ---
 
