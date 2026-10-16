@@ -260,10 +260,10 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 | N3 | Cálculo puro: cobertura, estoque contado (validade, contagem recente, D44), em trânsito, projeção até a chegada (D45), alvo, necessidade, arredondamento, avisos; + migration 0021 (`lojas.horario_fechamento`, D44) | testes unitários (prazo 0 e 1) + sabotagem; ciclo da migration | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N3 — resultado" abaixo. |
 | N4 | `necessidade_service` com banco: previsões gravadas, estoque, calendário, linhas aprovadas em trânsito, escopo | escopo, isolamento, inativo/desabilitado/fora de vigência, loja inativa, distribuído, trânsito | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N4 — resultado" abaixo. |
 | N5 | Migration 0022: ordens, itens por produto e linhas por loja (sugerido, final, componentes incluindo em trânsito, quem/quando, situação de recebimento para a Fase 5) | ciclo de migration; chaves únicas; FKs compostas | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N5 — resultado" abaixo. |
-| N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar; liga o `ProvedorTransito` às linhas aprovadas (D52) | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte; **teste que falha se o trânsito vier vazio havendo ordem aprovada para a loja (D52)**; **o serviço só apaga/regera ordem em rascunho: ordem aprovada não pode ser apagada nem regerada (apagaria o trânsito), com teste e sabotagem**; loja da central conferida no serviço (D57) | — |
+| N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar; liga o `ProvedorTransito` às linhas aprovadas (D52) | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte; **teste que falha se o trânsito vier vazio havendo ordem aprovada para a loja (D52)**; **o serviço só apaga/regera ordem em rascunho: ordem aprovada não pode ser apagada nem regerada (apagaria o trânsito), com teste e sabotagem**; loja da central conferida no serviço (D57) | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N6 — resultado" abaixo. |
 | N7 | API: `POST /producao/ordens/gerar`, `GET /producao/ordens?data=`, `GET /producao/ordens/{id}`, `PATCH` da linha da loja, `POST /producao/ordens/{id}/aprovar` | TestClient: 401/403, escopo/404, isolamento | — |
 | N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | — |
-| N9 | Tela `/producao` (carregada só quando aberta) | testes, axe, roteiro no navegador | — |
+| N9 | Tela `/producao` (carregada só quando aberta); **regerar um rascunho que tenha edições pede confirmação dizendo quantas linhas editadas serão perdidas (D58)**; limiar do indicador de perda (D53) | testes, axe, roteiro no navegador | — |
 | N10 | READMEs, STATUS, regressão completa | backend e frontend | — |
 
 **N1 — resultado (2026-10-15):**
@@ -325,6 +325,25 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
   2. Situação só `rascunho` e `aprovada` por enquanto; os estados da Fase 5 (em produção, concluída, expedida) entram com `ALTER TYPE ... ADD VALUE` quando a Fase 5 for planejada.
   3. Edição guarda só a **última** (quem, quando, motivo); a Fase 7 compara sugerido × final. Histórico completo de edições, se for preciso, numa tabela própria depois.
   4. "A loja é da central da ordem" é regra do **serviço** (N6), não do banco: o vínculo loja-central pode mudar com o tempo e o banco não deve congelá-lo.
+
+**N6 — resultado (2026-10-15):**
+- `app/services/producao_service.py` (novo):
+  - `gerar_ordem(db, negocio_id, central_producao_id, data_producao, usuario_id, hoje, atualizar_previsao=gerar_previsoes)`: data de hoje até 6 dias à frente; recusa (antes de mexer em qualquer coisa) se a ordem programada do dia já está **aprovada**; atualiza a previsão se desatualizada (D41); calcula a necessidade **com o provedor de trânsito ligado** (D52); sob a trava da central, apaga o rascunho anterior (cascata) e grava ordem + itens (por produto, tipo e unidade do momento) + linhas (por loja: sugerida, **final = sugerida**, componentes em JSON com pouco histórico e indicador de perda, avisos). Tudo ou nada.
+  - `editar_linha`: só rascunho; final ≥ 0, inteiro em UN, até 3 casas; grava quem, quando e motivo (D56). Linha de outra central ou negócio → não encontrada.
+  - `aprovar_ordem`: só rascunho; exige final em todas as linhas (produto sem previsão/sem calendário bloqueia até o gestor informar); confere que cada loja ainda é ativa na central (D57); grava quem e quando.
+  - `apagar_ordem`: só rascunho. **Ordem aprovada não é apagada nem regerada** (é o trânsito das próximas).
+  - `provedor_transito_ordens` (D43/D52): linhas de ordens **aprovadas**, sem `recebido_em`, com entrega a partir de D, das lojas pedidas (de qualquer central do negócio). Aviso `recebimento_nao_confirmado` na linha quando há entrega aprovada sem confirmação nos 7 dias antes de D (está presumida na contagem).
+  - `totais_por_produto` (D54): soma das finais por produto.
+  - `VERSAO_METODO_NECESSIDADE = "2026.10-n1"` em `necessidade_calculo.py`, gravada em cada ordem; regra no `CLAUDE.md` (mudou a necessidade, muda a versão no mesmo commit).
+- `scripts/test_producao_service.py` (novo): **18 casos, 2 execuções, exit 0**, banco limpo. Números à mão (P1 44, P2 30,0 e 34,5, P3 6, totais 88 / 64,5 / 12 / 0); regerar o rascunho perde os ajustes; aprovação bloqueada sem quantidade e com loja que saiu da central; ordem aprovada travada para editar, regerar e apagar (fica intacta); **T1 (D52)**: ordem de segunda aprovada (12 un, entrega terça, prazo 1) entra como trânsito na de terça: 15 contados + 12 − 20 vendidos = 7 na chegada → **15** (sem o trânsito seria 22); provedor ignora rascunho, linha recebida, entrega antes de D e outro negócio; previsão desatualizada atualizada só na central que precisa (D41); datas fora do permitido; central de outro negócio.
+- **8 sabotagens, todas pegas:** SB1 gerar regera a aprovada → A3 e T3 (a aprovada some e a ordem seguinte perde a entrega de segunda); SB2 apagar a aprovada → A3, T3; **SB3 gerar sem o provedor de trânsito → T1 (D52: o provedor tinha 12, a ordem gravou trânsito 0)**; SB4 provedor conta linha já recebida → T2; SB5 aprovar sem exigir quantidade → A1; SB6 aprovar sem conferir a loja → L1; SB7 editar sem filtro de central → E3; SB8 editar ordem aprovada → A3.
+- Regressão: 26 scripts do backend, todos exit 0.
+- **Escolhas do N6, confirmadas pelo Ualker em 2026-10-15 (D58–D62):**
+  1. Na geração, **final = sugerida**; o gestor só edita o que muda. Regerar o rascunho perde os ajustes (o rascunho é refeito do zero).
+  2. **Aprovar exige quantidade final em todas as linhas**: linha sem sugestão (sem previsão, sem calendário) bloqueia até o gestor informar (0 é aceito).
+  3. Aviso "recebimento não confirmado" só para entregas aprovadas **nos 7 dias antes de D** (na Fase 4 nada é confirmado; sem limite, toda linha teria o aviso para sempre).
+  4. Ordem gerada para **hoje até 6 dias à frente** (o horizonte da previsão é de 7 dias). Produto com cobertura longa gerado na véspera pode ficar com o último dia fora do horizonte (aviso "sem previsão").
+  5. O trânsito conta ordens aprovadas **de qualquer central** do negócio para a loja (se a loja mudou de central, o que já foi mandado continua a caminho).
 
 **Tela de revisão e aprovação (proposta aprovada):** topo com data de produção (padrão: a próxima), situação (Rascunho / Aprovada), resumo por unidade e "Confira estes" (pelo nome: sem previsão, sem contagem recente, cobertura maior que a validade, estoque acima do máximo, recebimento não confirmado). Tabela de produção por produto (sugerido, final, cobertura, etiquetas); abrir a linha mostra as lojas (previsão somada, estoque e quando foi contado, em trânsito, sugerido, final editável) e "Ver a conta". Bloco "A distribuir" separado. Ação principal "Gerar ordem" (sem ordem) / "Aprovar ordem" (rascunho); "Recalcular" secundária; diálogo de confirmação antes de aprovar, listando o que tem aviso. Ordem aprovada só leitura ("Aprovada por X em …").
 
@@ -547,6 +566,11 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D55 | Situações da ordem | — | — | **Decidida (2026-10-15):** só `rascunho` e `aprovada` até a Fase 5; os estados da Fase 5 entram com `ALTER TYPE ... ADD VALUE` quando ela for planejada. |
 | D56 | Histórico de edições da linha | — | — | **Decidida (2026-10-15):** só a última edição (quem, quando, motivo). Histórico completo: trabalho futuro (seção 5, item 10). |
 | D57 | "A loja pertence à central da ordem" | — | — | **Decidida (2026-10-15):** conferido no serviço (N6), não no banco. |
+| D58 | Quantidade final na geração da ordem | — | — | **Decidida (2026-10-15):** começa igual à sugerida; o gestor edita só o que muda. Regerar o rascunho perde os ajustes (a tela pede confirmação, N9). |
+| D59 | Aprovar com linha sem quantidade | — | — | **Decidida (2026-10-15):** aprovar exige quantidade final em todas as linhas; 0 é aceito. |
+| D60 | Janela do aviso "recebimento não confirmado" (D43) | — | — | **Decidida (2026-10-15):** só entregas aprovadas sem confirmação nos 7 dias antes de D. |
+| D61 | Datas em que a ordem pode ser gerada | — | — | **Decidida (2026-10-15):** de hoje até D+6 (horizonte da previsão, D22). |
+| D62 | Trânsito de ordens de outra central | — | — | **Decidida (2026-10-15):** conta ordens aprovadas de qualquer central do negócio para a loja (o que já foi mandado continua a caminho se a loja mudou de central). |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -606,6 +630,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-15** — **N5 aprovado** (migration 0022, ordens/itens/linhas). **D54–D57 decididas:** quantidade do item = soma das linhas; só rascunho e aprovada até a Fase 5; só a última edição (histórico completo como trabalho futuro); loja da central conferida no serviço. Acrescentado ao N6: só ordem em rascunho pode ser apagada/regerada; aprovada não (apagaria o trânsito), com teste e sabotagem.
 
+- **2026-10-15** — **N6 aprovado** (`producao_service`, trânsito ligado, D52 testada). **D58–D62 decididas:** final começa igual à sugerida; aprovar exige quantidade em todas as linhas (0 aceito); aviso de recebimento limitado a 7 dias antes de D; geração de hoje até D+6; trânsito de qualquer central do negócio para a loja. Acrescentado ao N9: regerar rascunho com edições pede confirmação com o número de linhas editadas que serão perdidas.
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---
@@ -642,7 +668,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    ~~N3~~ — aprovado e commitado em 2026-10-15 (D46–D49 decididas).
    ~~N4~~ — aprovado e commitado em 2026-10-15 (D50–D53 decididas).
    ~~N5~~ — aprovado e commitado em 2026-10-15 (D54–D57 decididas).
-   **Próximo: N6** (`producao_service`: gerar, editar, aprovar; liga o provedor de trânsito, D52).
+   ~~N6~~ — aprovado e commitado em 2026-10-15 (D58–D62 decididas).
+   **Próximo: N7** (API da ordem de produção).
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.

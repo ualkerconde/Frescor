@@ -60,6 +60,7 @@ uvicorn app.main:app --reload      # docs em http://127.0.0.1:8000/docs
 - Colunas novas em tabelas existentes: `server_default` ou `nullable=True`, para não quebrar o app em produção.
 - Nomes de tabela no plural em português (`centrais_producao`, `produtos_lojas`).
 - Motor de previsão: qualquer mudança no cálculo (`previsao_calculo.py`, `previsao_service.py`, série de vendas, eventos, cold start, sazonal, estatística da base) exige atualizar `VERSAO_METODO` em `app/services/previsao_gravacao.py` **no mesmo commit**. A versão vai gravada em cada previsão e é o que permite saber qual regra gerou cada número.
+- Necessidade (Fase 4): qualquer mudança no cálculo (`necessidade_calculo.py` ou nos filtros do `necessidade_service.py`) exige atualizar `VERSAO_METODO_NECESSIDADE` em `app/services/necessidade_calculo.py` **no mesmo commit**. Ela vai gravada em cada ordem de produção.
 - Mudança que toque no app mobile (tabelas `estoque_atual`, `historico_contagens`, endpoints de `/produtos`, `/estoque`, `/zeragem`, `/auth`) exige conferir a compatibilidade com ele.
 
 ## Como trabalhar

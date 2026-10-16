@@ -53,6 +53,12 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import ROUND_CEILING, Decimal
 from zoneinfo import ZoneInfo
 
+# Identifica o método que gerou a necessidade; vai gravado em cada ordem.
+# Mudou uma regra da necessidade (cobertura, contagem, margem, projeção,
+# arredondamento, filtros do necessidade_service), muda a versão.
+# n1 (2026-10-15): D32-D53.
+VERSAO_METODO_NECESSIDADE = "2026.10-n1"
+
 # Margem (D34): sem margem no produto, 10%; produto com pouco histórico
 # (cold start), pelo menos 20% (doc §4.2: em lançamento, falta é pior que
 # sobra). Calibrar na Fase 7.
