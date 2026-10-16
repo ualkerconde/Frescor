@@ -261,7 +261,7 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 | N4 | `necessidade_service` com banco: previsões gravadas, estoque, calendário, linhas aprovadas em trânsito, escopo | escopo, isolamento, inativo/desabilitado/fora de vigência, loja inativa, distribuído, trânsito | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N4 — resultado" abaixo. |
 | N5 | Migration 0022: ordens, itens por produto e linhas por loja (sugerido, final, componentes incluindo em trânsito, quem/quando, situação de recebimento para a Fase 5) | ciclo de migration; chaves únicas; FKs compostas | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N5 — resultado" abaixo. |
 | N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar; liga o `ProvedorTransito` às linhas aprovadas (D52) | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte; **teste que falha se o trânsito vier vazio havendo ordem aprovada para a loja (D52)**; **o serviço só apaga/regera ordem em rascunho: ordem aprovada não pode ser apagada nem regerada (apagaria o trânsito), com teste e sabotagem**; loja da central conferida no serviço (D57) | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N6 — resultado" abaixo. |
-| N7 | API: `POST /producao/ordens/gerar`, `GET /producao/ordens?data=`, `GET /producao/ordens/{id}`, `PATCH` da linha da loja, `POST /producao/ordens/{id}/aprovar` | TestClient: 401/403, escopo/404, isolamento | — |
+| N7 | API: `POST /producao/ordens/gerar`, `GET /producao/ordens?data=`, `GET /producao/ordens/{id}`, `PATCH` da linha da loja, `POST /producao/ordens/{id}/aprovar` | TestClient: 401/403, escopo/404, isolamento | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N7 — resultado" abaixo. |
 | N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | — |
 | N9 | Tela `/producao` (carregada só quando aberta); **regerar um rascunho que tenha edições pede confirmação dizendo quantas linhas editadas serão perdidas (D58)**; limiar do indicador de perda (D53) | testes, axe, roteiro no navegador | — |
 | N10 | READMEs, STATUS, regressão completa | backend e frontend | — |
@@ -344,6 +344,25 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
   3. Aviso "recebimento não confirmado" só para entregas aprovadas **nos 7 dias antes de D** (na Fase 4 nada é confirmado; sem limite, toda linha teria o aviso para sempre).
   4. Ordem gerada para **hoje até 6 dias à frente** (o horizonte da previsão é de 7 dias). Produto com cobertura longa gerado na véspera pode ficar com o último dia fora do horizonte (aviso "sem previsão").
   5. O trânsito conta ordens aprovadas **de qualquer central** do negócio para a loja (se a loja mudou de central, o que já foi mandado continua a caminho).
+
+**N7 — resultado (2026-10-15):**
+- `app/api/producao.py` (novo, registrado em `main.py`, tag "Ordem de produção (SaaS web)"), todas com `obter_gestor_central` e **sem `central_id`** (vem do token):
+  - `POST /producao/ordens/gerar` (corpo opcional `{"data_producao"}`, padrão amanhã) → `{ordem_id, data_producao, data_entrega, itens, linhas, sem_quantidade, substituiu_rascunho, previsao_atualizada}`.
+  - `GET /producao/ordens?data=` (padrão amanhã) → `{data_producao, ordens[]}` em resumo: situação, versão do método, referência da previsão, quem/quando gerou e aprovou (nome), `linhas`, **`linhas_editadas`** (para a confirmação de regerar do N9, D58), `linhas_sem_quantidade`, totais por unidade (sugerido e final).
+  - `GET /producao/ordens/{id}` → o resumo + `itens[]` (produto, tipo, unidade, total sugerido e final, D54) com `linhas[]` (loja, sugerida, final, editada, quando, motivo, avisos, componentes da conta).
+  - `PATCH /producao/ordens/{id}/linhas/{linha_id}` (`{quantidade_final, motivo?}`) → a linha; a linha tem de ser da ordem da URL.
+  - `POST /producao/ordens/{id}/aprovar` → o resumo; `DELETE /producao/ordens/{id}` → 204.
+  - Erros: **404** ordem/linha inexistente ou de outra central/negócio (mesma resposta); **409** ordem aprovada (editar, regerar, apagar); **422** regra ferida (data fora do permitido, quantidade inválida, linha sem quantidade ao aprovar, loja fora da central), sempre em português.
+- `app/services/producao_consulta_service.py` (novo): `listar_ordens` e `obter_ordem` (leitura para a API). `app/schemas/producao.py` (novo). `editar_linha` ganhou o filtro opcional `ordem_id`.
+- Mensagens ao gestor sem ids internos (achado na 1ª execução: "ids [393, 395]"): aprovar sem quantidade diz quantas linhas faltam; loja fora da central diz o nome da loja.
+- `scripts/test_producao_rotas.py` (novo): **19 casos, 2 execuções, exit 0** (o P3 virou caso explícito a pedido do Ualker: 409 ao editar, regerar e apagar a ordem aprovada, com o código de cada ação; o P4 confere que ela fica intacta), banco limpo; datas a partir do dia real (a API usa a data do servidor). Autenticação nas 6 rotas (401 sem token e com token do app; 403 sem acesso web), gerar (padrão amanhã), datas inválidas, lista e detalhe com os números (P1 44 + 44 = 88; mínimo 40; P4 sem calendário), 404 igual para outra central, outro negócio e inexistente, edição (editadas 1, total final 94), edições inválidas, linha por URL de outra ordem, regerar, aprovar sem quantidade (422) e com (aprovado_por = nome), ordem aprovada → 409 nas 3 ações e intacta, apagar rascunho (outra central 404, própria 204), OpenAPI sem `central_id`.
+- **5 sabotagens, todas pegas:** SB1 409 não mapeado (vira 500) → na 1ª versão o teste quebrava como "erro inesperado" (lia o corpo de texto como JSON); **refeita depois do caso explícito: falha o P3 com nome ("editar 500; regerar 500; apagar 500")**; SB2 detalhe sem filtro de central → C3 (gestor de outra central vê a ordem); **SB3 PATCH sem conferir a ordem da URL → E3 (a edição era gravada mesmo respondendo 404)**; SB4 lista sem filtro de central → C4; SB5 `linhas_editadas` sempre 0 → E1.
+- Servidor real (uvicorn, porta 8011, só leitura): login do `gestor.producao@teste.com` e `GET /producao/ordens` → 200 (amanhã, nenhuma ordem); sem token → 401.
+- Regressão: 27 scripts do backend, todos exit 0.
+- **Escolhas do N7, confirmadas pelo Ualker em 2026-10-15 (D63–D65):**
+  1. `GET /producao/ordens?data=` devolve **todas** as ordens do dia da central (a programada e, na Fase 8, as emergenciais), em resumo; o detalhe vem em `GET /{id}`.
+  2. `PATCH` devolve só a linha editada; `aprovar` devolve o resumo; `DELETE` responde 204 sem corpo.
+  3. Status: 404 (fora do escopo, mesma resposta), 409 (ordem aprovada), 422 (regra ferida).
 
 **Tela de revisão e aprovação (proposta aprovada):** topo com data de produção (padrão: a próxima), situação (Rascunho / Aprovada), resumo por unidade e "Confira estes" (pelo nome: sem previsão, sem contagem recente, cobertura maior que a validade, estoque acima do máximo, recebimento não confirmado). Tabela de produção por produto (sugerido, final, cobertura, etiquetas); abrir a linha mostra as lojas (previsão somada, estoque e quando foi contado, em trânsito, sugerido, final editável) e "Ver a conta". Bloco "A distribuir" separado. Ação principal "Gerar ordem" (sem ordem) / "Aprovar ordem" (rascunho); "Recalcular" secundária; diálogo de confirmação antes de aprovar, listando o que tem aviso. Ordem aprovada só leitura ("Aprovada por X em …").
 
@@ -571,6 +590,9 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D60 | Janela do aviso "recebimento não confirmado" (D43) | — | — | **Decidida (2026-10-15):** só entregas aprovadas sem confirmação nos 7 dias antes de D. |
 | D61 | Datas em que a ordem pode ser gerada | — | — | **Decidida (2026-10-15):** de hoje até D+6 (horizonte da previsão, D22). |
 | D62 | Trânsito de ordens de outra central | — | — | **Decidida (2026-10-15):** conta ordens aprovadas de qualquer central do negócio para a loja (o que já foi mandado continua a caminho se a loja mudou de central). |
+| D63 | Lista de ordens do dia na API | — | — | **Decidida (2026-10-15):** `GET /producao/ordens?data=` devolve todas as ordens do dia da central (programada e, na Fase 8, emergenciais), em resumo; o detalhe vem em `GET /producao/ordens/{id}`. |
+| D64 | O que cada ação da API devolve | — | — | **Decidida (2026-10-15):** `PATCH` da linha devolve a linha; `aprovar` devolve o resumo da ordem; `DELETE` responde 204 sem corpo. |
+| D65 | Códigos de erro da API da ordem | — | — | **Decidida (2026-10-15):** 404 fora do escopo (mesma resposta para outra central, outro negócio e inexistente); 409 ordem aprovada; 422 regra ferida, em português. |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -632,6 +654,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-15** — **N6 aprovado** (`producao_service`, trânsito ligado, D52 testada). **D58–D62 decididas:** final começa igual à sugerida; aprovar exige quantidade em todas as linhas (0 aceito); aviso de recebimento limitado a 7 dias antes de D; geração de hoje até D+6; trânsito de qualquer central do negócio para a loja. Acrescentado ao N9: regerar rascunho com edições pede confirmação com o número de linhas editadas que serão perdidas.
 
+- **2026-10-15** — **N7 aprovado** (API da ordem de produção). **D63–D65 decididas:** lista do dia em resumo com todas as ordens da central; retornos de cada ação; 404/409/422. Antes do commit, a pedido do Ualker: caso explícito de 409 nas três ações sobre ordem aprovada (P3) e SB1 refeita para falhar nesse caso com nome.
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---
@@ -669,7 +693,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    ~~N4~~ — aprovado e commitado em 2026-10-15 (D50–D53 decididas).
    ~~N5~~ — aprovado e commitado em 2026-10-15 (D54–D57 decididas).
    ~~N6~~ — aprovado e commitado em 2026-10-15 (D58–D62 decididas).
-   **Próximo: N7** (API da ordem de produção).
+   ~~N7~~ — aprovado e commitado em 2026-10-15 (D63–D65 decididas).
+   **Próximo: N8** (`test_aceite_fase4.py`, critério de aceite da Fase 4).
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.

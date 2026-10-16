@@ -273,9 +273,10 @@ def editar_linha(
     usuario_id: int,
     motivo: str | None = None,
     agora: datetime | None = None,
+    ordem_id: int | None = None,
 ) -> OrdemProducaoLinha:
-    """Muda a quantidade final de uma loja (só em rascunho)."""
-    encontrado = (
+    """Muda a quantidade final de uma loja (só em rascunho). Com `ordem_id`, a linha tem de ser dessa ordem."""
+    consulta = (
         db.query(OrdemProducaoLinha, OrdemProducaoItem, OrdemProducao)
         .join(OrdemProducaoItem, OrdemProducaoItem.id == OrdemProducaoLinha.item_id)
         .join(OrdemProducao, OrdemProducao.id == OrdemProducaoItem.ordem_id)
@@ -285,8 +286,10 @@ def editar_linha(
             OrdemProducao.negocio_id == negocio_id,
             OrdemProducao.central_producao_id == central_producao_id,
         )
-        .one_or_none()
     )
+    if ordem_id is not None:
+        consulta = consulta.filter(OrdemProducao.id == ordem_id)
+    encontrado = consulta.one_or_none()
     if encontrado is None:
         raise OrdemNaoEncontrada("Linha da ordem não encontrada.")
     linha, item, ordem = encontrado
@@ -328,7 +331,8 @@ def aprovar_ordem(
         sem_quantidade = [linha.id for linha in linhas if linha.quantidade_final is None]
         if sem_quantidade:
             raise OrdemInvalida(
-                f"Informe a quantidade de {len(sem_quantidade)} linha(s) antes de aprovar (ids {sem_quantidade})."
+                f"Informe a quantidade de {len(sem_quantidade)} linha(s) antes de aprovar "
+                "(produtos sem previsão ou sem calendário)."
             )
         lojas_da_central = {
             loja_id for (loja_id,) in db.query(Loja.id).filter(
@@ -337,8 +341,9 @@ def aprovar_ordem(
         }
         fora = sorted({linha.loja_id for linha in linhas} - lojas_da_central)
         if fora:
+            nomes = [nome for (nome,) in db.query(Loja.nome).filter(Loja.negocio_id == negocio_id, Loja.id.in_(fora))]
             raise OrdemInvalida(
-                f"Há loja(s) que não são mais ativas nesta central (ids {fora}). Gere a ordem de novo."
+                f"Loja(s) que não são mais ativas nesta central: {', '.join(sorted(nomes))}. Gere a ordem de novo."
             )
         ordem.status = StatusOrdemProducao.APROVADA
         ordem.aprovado_em = agora or datetime.utcnow()
