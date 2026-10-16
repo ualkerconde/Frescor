@@ -11,11 +11,11 @@ Isso é importante por dois motivos:
 """
 
 from app.models.negocio import Negocio  # noqa: F401
-from app.models.central_producao import CentralProducao  # noqa: F401
+from app.models.central_producao import CentralProducao, SecaoCentral  # noqa: F401
 from app.models.loja import Loja  # noqa: F401
 from app.models.usuario import Usuario, StatusUsuario, TipoUsuario  # noqa: F401
 from app.models.permissao_web import PermissaoWeb  # noqa: F401
-from app.models.produto import Produto, UnidadeMedida, CicloPrevisao  # noqa: F401
+from app.models.produto import Produto, UnidadeMedida, CicloPrevisao, TipoAbastecimento  # noqa: F401
 from app.models.produto_loja import ProdutoLoja  # noqa: F401
 from app.models.nivel_classificacao import NivelClassificacao  # noqa: F401
 from app.models.produto_classificacao import ProdutoClassificacao  # noqa: F401

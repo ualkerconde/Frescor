@@ -24,6 +24,15 @@ class CicloPrevisao(str, enum.Enum):
     SAZONAL = "sazonal"
 
 
+class TipoAbastecimento(str, enum.Enum):
+    """Como o produto chega à loja (D14, D40; migration 0020)."""
+
+    # Passa pela ordem de produção da central e depois pela distribuição.
+    PRODUZIDO = "produzido"
+    # Não é produzido: a central só distribui. Também usa a previsão.
+    DISTRIBUIDO = "distribuido"
+
+
 class Produto(Base):
     __tablename__ = "produtos"
     # Alvo das FKs compostas de vendas_diarias/perdas_diarias (migration
@@ -68,8 +77,15 @@ class Produto(Base):
 
     # --- Campos de produção / ciclo de vida ---
 
-    # True para produtos fabricados na central; False para itens só distribuídos.
-    tem_producao_propria: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Produzido (ordem de produção -> distribuição) ou distribuído (a central
+    # só distribui). Substituiu `tem_producao_propria` na migration 0020.
+    # Padrão "produzido": produto sem tipo aparece na ordem, onde o gestor vê.
+    tipo_abastecimento: Mapped[TipoAbastecimento] = mapped_column(
+        Enum(TipoAbastecimento, values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        default=TipoAbastecimento.PRODUZIDO,
+        server_default=TipoAbastecimento.PRODUZIDO.value,
+        nullable=False,
+    )
 
     # Prazo de validade em dias após a fabricação (opcional).
     dias_validade = mapped_column(Integer, nullable=True)
