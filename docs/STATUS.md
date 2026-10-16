@@ -259,8 +259,8 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 | N2 | Seeds: tipo de abastecimento, calendário variado (diário, seg/qua/sex, validade menor que a cobertura), margem; contagens de estoque num cenário próprio | 2 execuções sem duplicar; regressão que conta o seed | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N2 — resultado" abaixo. |
 | N3 | Cálculo puro: cobertura, estoque contado (validade, contagem recente, D44), em trânsito, projeção até a chegada (D45), alvo, necessidade, arredondamento, avisos; + migration 0021 (`lojas.horario_fechamento`, D44) | testes unitários (prazo 0 e 1) + sabotagem; ciclo da migration | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N3 — resultado" abaixo. |
 | N4 | `necessidade_service` com banco: previsões gravadas, estoque, calendário, linhas aprovadas em trânsito, escopo | escopo, isolamento, inativo/desabilitado/fora de vigência, loja inativa, distribuído, trânsito | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N4 — resultado" abaixo. |
-| N5 | Migration 0022: ordens, itens por produto e linhas por loja (sugerido, final, componentes incluindo em trânsito, quem/quando, situação de recebimento para a Fase 5) | ciclo de migration; chaves únicas; FKs compostas | — |
-| N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar; liga o `ProvedorTransito` às linhas aprovadas (D52) | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte; **teste que falha se o trânsito vier vazio havendo ordem aprovada para a loja (D52)** | — |
+| N5 | Migration 0022: ordens, itens por produto e linhas por loja (sugerido, final, componentes incluindo em trânsito, quem/quando, situação de recebimento para a Fase 5) | ciclo de migration; chaves únicas; FKs compostas | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N5 — resultado" abaixo. |
+| N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar; liga o `ProvedorTransito` às linhas aprovadas (D52) | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte; **teste que falha se o trânsito vier vazio havendo ordem aprovada para a loja (D52)**; **o serviço só apaga/regera ordem em rascunho: ordem aprovada não pode ser apagada nem regerada (apagaria o trânsito), com teste e sabotagem**; loja da central conferida no serviço (D57) | — |
 | N7 | API: `POST /producao/ordens/gerar`, `GET /producao/ordens?data=`, `GET /producao/ordens/{id}`, `PATCH` da linha da loja, `POST /producao/ordens/{id}/aprovar` | TestClient: 401/403, escopo/404, isolamento | — |
 | N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | — |
 | N9 | Tela `/producao` (carregada só quando aberta) | testes, axe, roteiro no navegador | — |
@@ -308,6 +308,23 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
   2. Produto **sem calendário** entra na lista (com o aviso, D42) se estiver vigente em D; produto com calendário entra só no dia de produção dele.
   3. **Trânsito** chega por um provedor injetável (as tabelas de ordem nascem no N5); o N6 liga o provedor às linhas aprovadas.
   4. **Indicador de perda:** perda ÷ venda efetivas das 4 semanas até D−1 (D16), sem limiar de aviso; o limiar ("perda alta") fica para a tela (N9).
+
+**N5 — resultado (2026-10-15):**
+- Migration `0022_ordens_producao` e 3 models (um arquivo por tabela, registrados em `app/models/__init__.py`):
+  - `ordens_producao` (`OrdemProducao`): central, `data_producao`, `data_entrega` (gravada na geração), `tipo` (enum `tipoordemproducao`: programada, emergencial), `status` (enum `statusordemproducao`: rascunho, aprovada; D38), `versao_metodo`, `referencia_previsao`, quem/quando gerou e aprovou. **Uma programada por central e data** (índice único parcial `uq_ordem_programada_central_data`); `ck_ordem_aprovacao_coerente` (aprovada exige quem e quando; rascunho não tem nenhum); entrega ≥ produção; FK composta com a central do negócio.
+  - `ordens_producao_itens` (`OrdemProducaoItem`): um por produto na ordem, com o tipo de abastecimento e a unidade **do momento da geração** (D39); `quantidade_produzida` para a Fase 5. **A quantidade planejada não é gravada** (é a soma das linhas, para não divergir).
+  - `ordens_producao_linhas` (`OrdemProducaoLinha`): uma por loja no item; `quantidade_sugerida` (NULL = não havia como calcular), `quantidade_final` (NULL = não informada), `componentes` e `avisos` em JSON, edição (quem, quando, motivo opcional; só a última), recebimento (`quantidade_recebida`, `recebido_em`; Fase 5). Linha de ordem aprovada com `recebido_em` NULL = trânsito (D43, provedor do N6).
+  - FKs compostas por negócio em todas; apagar a ordem apaga itens e linhas (CASCADE), que é como o rascunho será regerado. Quantidades `Numeric(12, 3)`, não negativas.
+- Ciclo 0021 → 0022 → 0021 → 0022 ok; o downgrade remove as 3 tabelas e os 2 enums novos e mantém os compartilhados (`tipoabastecimento`, `unidademedida`).
+- **Defeito achado e corrigido antes de rodar o teste:** a 1ª versão dos models tinha `relationship` entre ordem, item e linha; com duas FKs entre as mesmas tabelas (a simples e a composta), o SQLAlchemy não sabia qual usar e **a configuração do ORM quebrava para a aplicação inteira** (qualquer consulta, não só as ordens). Relationships removidas (como nos outros models com FK composta); o N6 consulta pelos ids.
+- `scripts/test_ordens_modelo.py` (novo): **22 casos, exit 0** em todas as execuções finais, banco limpo (padrões do banco, uma programada por dia, emergenciais livres, coerência da aprovação, datas, enums, unicidades, FKs compostas incluindo item de outro negócio apontando ordem alheia, não negativos, JSON, cascata sem tocar outras ordens).
+- Sabotagens: índice único parcial removido → O2; regra da aprovação removida → O4, O5; **cascata removida → na 1ª tentativa não foi pega** (tirei a cascata só da FK composta; a FK simples continuava apagando o item, então o comportamento não mudava: não era defeito); refeita sem cascata nas duas FKs → C1 (DELETE barrado); model sem `values_callable` → 7 casos.
+- Regressão: 25 scripts do backend, todos exit 0 (confirma também que o ORM configura com os models novos); alembic em 0022 (head).
+- **Escolhas do N5, confirmadas pelo Ualker em 2026-10-15 (D54–D57):**
+  1. Quantidade planejada do item **não gravada**: é a soma das linhas por loja.
+  2. Situação só `rascunho` e `aprovada` por enquanto; os estados da Fase 5 (em produção, concluída, expedida) entram com `ALTER TYPE ... ADD VALUE` quando a Fase 5 for planejada.
+  3. Edição guarda só a **última** (quem, quando, motivo); a Fase 7 compara sugerido × final. Histórico completo de edições, se for preciso, numa tabela própria depois.
+  4. "A loja é da central da ordem" é regra do **serviço** (N6), não do banco: o vínculo loja-central pode mudar com o tempo e o banco não deve congelá-lo.
 
 **Tela de revisão e aprovação (proposta aprovada):** topo com data de produção (padrão: a próxima), situação (Rascunho / Aprovada), resumo por unidade e "Confira estes" (pelo nome: sem previsão, sem contagem recente, cobertura maior que a validade, estoque acima do máximo, recebimento não confirmado). Tabela de produção por produto (sugerido, final, cobertura, etiquetas); abrir a linha mostra as lojas (previsão somada, estoque e quando foi contado, em trânsito, sugerido, final editável) e "Ver a conta". Bloco "A distribuir" separado. Ação principal "Gerar ordem" (sem ordem) / "Aprovar ordem" (rascunho); "Recalcular" secundária; diálogo de confirmação antes de aprovar, listando o que tem aviso. Ordem aprovada só leitura ("Aprovada por X em …").
 
@@ -526,6 +543,10 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D51 | Produto sem calendário na lista da necessidade | — | — | **Decidida (2026-10-15):** aparece com o aviso "sem calendário" (D42) se estiver vigente em D; produto com calendário aparece só no dia de produção dele. |
 | D52 | Como o trânsito chega ao `necessidade_service` | — | — | **Decidida (2026-10-15):** por um provedor injetável (`ProvedorTransito`), ligado às linhas das ordens aprovadas no N6. **Exigência para o N6:** um teste que **falhe se o trânsito vier vazio havendo ordem aprovada para a loja** (garante que o provedor foi de fato ligado; sem ele, o padrão "sem trânsito" passaria em silêncio). |
 | D53 | Limiar de aviso do indicador de perda (D35) | — | — | **Decidida (2026-10-15):** o serviço só informa a taxa (perda ÷ venda, 4 semanas até D−1, D16); o limiar de "perda alta" é decidido no N9 (tela). |
+| D54 | Quantidade planejada do item da ordem | — | — | **Decidida (2026-10-15):** não é gravada; é a soma das linhas por loja (não divergem). |
+| D55 | Situações da ordem | — | — | **Decidida (2026-10-15):** só `rascunho` e `aprovada` até a Fase 5; os estados da Fase 5 entram com `ALTER TYPE ... ADD VALUE` quando ela for planejada. |
+| D56 | Histórico de edições da linha | — | — | **Decidida (2026-10-15):** só a última edição (quem, quando, motivo). Histórico completo: trabalho futuro (seção 5, item 10). |
+| D57 | "A loja pertence à central da ordem" | — | — | **Decidida (2026-10-15):** conferido no serviço (N6), não no banco. |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -583,6 +604,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-15** — **N4 aprovado** (`necessidade_service`). **D50–D53 decididas:** dia fora da vigência conta venda 0; produto sem calendário aparece com aviso se vigente em D; trânsito por provedor injetável, ligado no N6, com teste obrigatório que falhe se o trânsito vier vazio havendo ordem aprovada para a loja; limiar do indicador de perda decidido no N9.
 
+- **2026-10-15** — **N5 aprovado** (migration 0022, ordens/itens/linhas). **D54–D57 decididas:** quantidade do item = soma das linhas; só rascunho e aprovada até a Fase 5; só a última edição (histórico completo como trabalho futuro); loja da central conferida no serviço. Acrescentado ao N6: só ordem em rascunho pode ser apagada/regerada; aprovada não (apagaria o trânsito), com teste e sabotagem.
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---
@@ -618,7 +641,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    ~~N1 (migration 0020) e N2 (seeds)~~ — aprovados e commitados em 2026-10-15. ~~D44 e D45~~ — decididas.
    ~~N3~~ — aprovado e commitado em 2026-10-15 (D46–D49 decididas).
    ~~N4~~ — aprovado e commitado em 2026-10-15 (D50–D53 decididas).
-   **Próximo: N5** (migration 0022: ordens, itens, linhas por loja).
+   ~~N5~~ — aprovado e commitado em 2026-10-15 (D54–D57 decididas).
+   **Próximo: N6** (`producao_service`: gerar, editar, aprovar; liga o provedor de trânsito, D52).
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.
@@ -626,4 +650,5 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    - D15: trocar nomes técnicos ("bakery") antes do deploy de produção.
 10. **Trabalho futuro da necessidade (Fase 5/7)** — limitações aceitas no N3:
    - **D47 — idade do estoque contado:** sem lote nem recebimento, o estoque contado é tratado como o mais novo possível. Com a confirmação de recebimento (Fase 5), usar a data real da última entrega; com lote, a fabricação real. Conferir na Fase 7 se a premissa otimista gera falta.
+   - **D56 — histórico de edições da linha da ordem:** hoje só a última edição fica gravada. Se a Fase 7 precisar ver cada ajuste do gestor, criar uma tabela própria de histórico.
    - **D49 — lote que vence no meio da cobertura:** conta inteiro mesmo que não dê tempo de vendê-lo antes de vencer. Refino possível: limitar o que cada lote cobre à previsão dos dias em que ele ainda vale. Medir na Fase 7 (perda × ruptura) antes de mudar.
