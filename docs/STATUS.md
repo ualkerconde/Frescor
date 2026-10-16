@@ -262,7 +262,7 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 | N5 | Migration 0022: ordens, itens por produto e linhas por loja (sugerido, final, componentes incluindo em trânsito, quem/quando, situação de recebimento para a Fase 5) | ciclo de migration; chaves únicas; FKs compostas | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N5 — resultado" abaixo. |
 | N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar; liga o `ProvedorTransito` às linhas aprovadas (D52) | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte; **teste que falha se o trânsito vier vazio havendo ordem aprovada para a loja (D52)**; **o serviço só apaga/regera ordem em rascunho: ordem aprovada não pode ser apagada nem regerada (apagaria o trânsito), com teste e sabotagem**; loja da central conferida no serviço (D57) | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N6 — resultado" abaixo. |
 | N7 | API: `POST /producao/ordens/gerar`, `GET /producao/ordens?data=`, `GET /producao/ordens/{id}`, `PATCH` da linha da loja, `POST /producao/ordens/{id}/aprovar` | TestClient: 401/403, escopo/404, isolamento | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N7 — resultado" abaixo. |
-| N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | — |
+| N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | **Concluído (2026-10-15)**, aprovado pelo Ualker. Critério de aceite atendido. Ver "N8 — resultado" abaixo. |
 | N9 | Tela `/producao` (carregada só quando aberta); **regerar um rascunho que tenha edições pede confirmação dizendo quantas linhas editadas serão perdidas (D58)**; limiar do indicador de perda (D53) | testes, axe, roteiro no navegador | — |
 | N10 | READMEs, STATUS, regressão completa | backend e frontend | — |
 
@@ -363,6 +363,14 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
   1. `GET /producao/ordens?data=` devolve **todas** as ordens do dia da central (a programada e, na Fase 8, as emergenciais), em resumo; o detalhe vem em `GET /{id}`.
   2. `PATCH` devolve só a linha editada; `aprovar` devolve o resumo; `DELETE` responde 204 sem corpo.
   3. Status: 404 (fora do escopo, mesma resposta), 409 (ordem aprovada), 422 (regra ferida).
+
+**N8 — resultado (2026-10-15): critério de aceite da Fase 4 (doc §8) atendido.**
+- `scripts/test_aceite_fase4.py` (novo), **de ponta a ponta pela rota real** `POST /producao/ordens/gerar` (padrão amanhã, data do servidor): vendas → previsão (sem previsão gravada, o motor da Fase 3 roda sozinho, D41) → necessidade → ordem → aprovação. Negócio isolado, apagado no fim. Vendas **constantes por 8 semanas** para a conta à mão ser exata (mediana = o valor, tendência 1, sem cold start; margem padrão 10%).
+- Central A com L1 e L2 ativas, L3 inativa; central B com LB. Conta à mão: Pão 40 × 1,1 = 44 e 20 × 1,1 = 22 (total 66); Bolo (cobertura D e D+1, validade 3) (10 + 10) × 1,1 − 5 contados = 17 e 13,2 → 14 (total 31); Manteiga **distribuída** 8,8 → 9 e 4,4 → 5 (total 14); Sonho 16,5 → 17 só na L1 (desabilitado na L2). Fora da ordem: produto inativo, fora da vigência em D, D fora do calendário, L3 inativa, LB de outra central.
+- **7 casos, 2 execuções, exit 0:** F1 gerar (previsão atualizada pelo motor; 4 itens, 7 linhas, nenhuma sem quantidade); F2 o motor gravou exatamente 40; F3 as 7 linhas iguais à conta; F4 itens agregados 66 / 31 / 14 / 17, Manteiga como distribuída; F5 nada do que deve ficar de fora; F6 a conta gravada do Bolo na L1 (2 dias, mínimo 20, estoque 5); F7 aprovar e, depois, gerar de novo → 409.
+- **7 sabotagens, todas pegas:** S1 produto inativo entra → F1, F3, F4, F5, F7; S2 sem o filtro de vigência → F1, F3, F4, F5; S3 sem o filtro do dia de produção → a rota responde 500 (o cálculo da cobertura recusa o dia; falha segura) → F1–F4, F6, F7; S4 habilitação desativada ignorada → F1, F3 (linha a mais PD/L2), F7; S5 total do item sem somar as lojas → F4 (66 virou 22); S6 margem padrão 0% → F3, F4; S7 sem atualizar a previsão (D41) → F1–F4 (todas as linhas sem quantidade).
+- Ajustes no próprio teste durante as sabotagens: a mensagem do F3 dizia "as 7 linhas batem" mesmo com linha a mais (agora mostra a contagem e as sobras); o F6 quebrava com componente vazio (agora falha com nome).
+- Regressão: 28 scripts do backend, todos exit 0.
 
 **Tela de revisão e aprovação (proposta aprovada):** topo com data de produção (padrão: a próxima), situação (Rascunho / Aprovada), resumo por unidade e "Confira estes" (pelo nome: sem previsão, sem contagem recente, cobertura maior que a validade, estoque acima do máximo, recebimento não confirmado). Tabela de produção por produto (sugerido, final, cobertura, etiquetas); abrir a linha mostra as lojas (previsão somada, estoque e quando foi contado, em trânsito, sugerido, final editável) e "Ver a conta". Bloco "A distribuir" separado. Ação principal "Gerar ordem" (sem ordem) / "Aprovar ordem" (rascunho); "Recalcular" secundária; diálogo de confirmação antes de aprovar, listando o que tem aviso. Ordem aprovada só leitura ("Aprovada por X em …").
 
@@ -656,6 +664,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-15** — **N7 aprovado** (API da ordem de produção). **D63–D65 decididas:** lista do dia em resumo com todas as ordens da central; retornos de cada ação; 404/409/422. Antes do commit, a pedido do Ualker: caso explícito de 409 nas três ações sobre ordem aprovada (P3) e SB1 refeita para falhar nesse caso com nome.
 
+- **2026-10-15** — **N8 aprovado: critério de aceite da Fase 4 atendido** (`test_aceite_fase4.py`, de ponta a ponta pela rota real, 7 casos, 7 sabotagens pegas).
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---
@@ -694,7 +704,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    ~~N5~~ — aprovado e commitado em 2026-10-15 (D54–D57 decididas).
    ~~N6~~ — aprovado e commitado em 2026-10-15 (D58–D62 decididas).
    ~~N7~~ — aprovado e commitado em 2026-10-15 (D63–D65 decididas).
-   **Próximo: N8** (`test_aceite_fase4.py`, critério de aceite da Fase 4).
+   ~~N8~~ — aprovado e commitado em 2026-10-15 (critério de aceite da Fase 4 atendido).
+   **Próximo: N9** (tela `/producao` no `frontend-saas`, com a confirmação de regerar rascunho editado, D58, e o limiar do indicador de perda, D53).
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.
