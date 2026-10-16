@@ -258,9 +258,9 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 | N1 | Migration 0020: `centrais_producao.secao` (enum, padrão `padaria`) e `prazo_entrega_dias` (padrão 0, D32); `produtos.tipo_abastecimento` (enum `produzido`/`distribuido`, preenchido a partir de `tem_producao_propria`, que sai, D40); `calendario_producao.negocio_id` com FK composta | upgrade → downgrade → upgrade com dados preservados; teste de modelo com sabotagem; regressão do app | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N1 — resultado" abaixo. |
 | N2 | Seeds: tipo de abastecimento, calendário variado (diário, seg/qua/sex, validade menor que a cobertura), margem; contagens de estoque num cenário próprio | 2 execuções sem duplicar; regressão que conta o seed | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N2 — resultado" abaixo. |
 | N3 | Cálculo puro: cobertura, estoque contado (validade, contagem recente, D44), em trânsito, projeção até a chegada (D45), alvo, necessidade, arredondamento, avisos; + migration 0021 (`lojas.horario_fechamento`, D44) | testes unitários (prazo 0 e 1) + sabotagem; ciclo da migration | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N3 — resultado" abaixo. |
-| N4 | `necessidade_service` com banco: previsões gravadas, estoque, calendário, linhas aprovadas em trânsito, escopo | escopo, isolamento, inativo/desabilitado/fora de vigência, loja inativa, distribuído, trânsito | — |
+| N4 | `necessidade_service` com banco: previsões gravadas, estoque, calendário, linhas aprovadas em trânsito, escopo | escopo, isolamento, inativo/desabilitado/fora de vigência, loja inativa, distribuído, trânsito | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N4 — resultado" abaixo. |
 | N5 | Migration 0022: ordens, itens por produto e linhas por loja (sugerido, final, componentes incluindo em trânsito, quem/quando, situação de recebimento para a Fase 5) | ciclo de migration; chaves únicas; FKs compostas | — |
-| N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte | — |
+| N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar; liga o `ProvedorTransito` às linhas aprovadas (D52) | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte; **teste que falha se o trânsito vier vazio havendo ordem aprovada para a loja (D52)** | — |
 | N7 | API: `POST /producao/ordens/gerar`, `GET /producao/ordens?data=`, `GET /producao/ordens/{id}`, `PATCH` da linha da loja, `POST /producao/ordens/{id}/aprovar` | TestClient: 401/403, escopo/404, isolamento | — |
 | N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | — |
 | N9 | Tela `/producao` (carregada só quando aberta) | testes, axe, roteiro no navegador | — |
@@ -296,6 +296,18 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
   3. **Margem com pouco histórico e margem própria:** vale a maior entre a do produto (ou os 10% padrão) e 20%. Ex.: produto com 5% e pouco histórico → 20%; com 30% → 30%.
   4. **Limitação:** um lote que ainda vale na chegada conta inteiro, mesmo que vença no meio da cobertura antes de ser todo vendido.
 - Fica para o N5/N6: a versão do método da necessidade gravada na ordem (e a regra no `CLAUDE.md`, como o `VERSAO_METODO` da previsão).
+
+**N4 — resultado (2026-10-15):**
+- `app/services/necessidade_service.py` (novo): `calcular_necessidades(db, negocio_id, central_producao_id, data_producao, hoje, provedor_transito=None)` → `NecessidadesCentral` (prazo, uma `ItemNecessidade` por loja + produto com loja, produto, unidade, tipo de abastecimento, pouco histórico, indicador de perda e o `ResultadoNecessidade` do N3; data de referência mais antiga das previsões usadas e `previsao_desatualizada`, D41). Lê em poucas consultas, todas filtradas pelo negócio e pelas lojas ativas da central: previsões **gravadas** (nunca recalcula), calendário, produtos, habilitações, `estoque_atual`, horário de fechamento da loja, vendas/perdas das 4 semanas (D16). Central de outro negócio → `CentralNaoEncontrada`.
+- `scripts/test_necessidade_service.py` (novo): **13 casos, 2 execuções, exit 0**, banco limpo. Negócio isolado com 3 centrais, 5 lojas e 11 produtos (um caso de entrada por produto), conta à mão em cada número; inclui o horário de fechamento da loja (E4: contagem às 16:30 vale numa loja que fecha às 18:00; com 21:00 não valeria, 30,0 contra 34,5), prazo 1 com trânsito pelo provedor (E11: 31,5) e isolamento.
+- **8 sabotagens, todas pegas:** S1 loja inativa entra → E1; S2 habilitação desativada ignorada → E1; S3 horário de fechamento da loja ignorado → E4; S4 dia fora da vigência como "sem previsão" → E7; S5 pouco histórico ignorado → E9; S6 indicador de perda sem a D16 → E10 (7,3% contra 11%); S7 trânsito do provedor descartado → E11; S8 central buscada sem o filtro de negócio → E13.
+- **Fumaça na "Rede Demo Produção"** (previsão gerada pelo serviço da Fase 3, referência 14/10; necessidade de quinta 15/10): 10 linhas (2 lojas × 5 produtos que produzem na quinta), cada caso do seed com o comportamento esperado (pão de validade 1: sobra contada não conta; PRD-04/P02 contagem antiga → aviso; PRD-03/P02 nunca contado; PRD-07 sem calendário; PRD-06 pouco histórico com margem 20%; PRD-02 e PRD-05 fora porque não são do dia). Isso regravou as previsões do negócio demo (como faz o botão da tela).
+- Regressão: 24 scripts do backend, todos exit 0.
+- **Escolhas do N4, confirmadas pelo Ualker em 2026-10-15 (D50–D53):**
+  1. Dia da cobertura **fora da vigência** do produto conta venda 0 ("não vende"), não "sem previsão". Produto fora da vigência em todos os dias da cobertura não entra.
+  2. Produto **sem calendário** entra na lista (com o aviso, D42) se estiver vigente em D; produto com calendário entra só no dia de produção dele.
+  3. **Trânsito** chega por um provedor injetável (as tabelas de ordem nascem no N5); o N6 liga o provedor às linhas aprovadas.
+  4. **Indicador de perda:** perda ÷ venda efetivas das 4 semanas até D−1 (D16), sem limiar de aviso; o limiar ("perda alta") fica para a tela (N9).
 
 **Tela de revisão e aprovação (proposta aprovada):** topo com data de produção (padrão: a próxima), situação (Rascunho / Aprovada), resumo por unidade e "Confira estes" (pelo nome: sem previsão, sem contagem recente, cobertura maior que a validade, estoque acima do máximo, recebimento não confirmado). Tabela de produção por produto (sugerido, final, cobertura, etiquetas); abrir a linha mostra as lojas (previsão somada, estoque e quando foi contado, em trânsito, sugerido, final editável) e "Ver a conta". Bloco "A distribuir" separado. Ação principal "Gerar ordem" (sem ordem) / "Aprovar ordem" (rascunho); "Recalcular" secundária; diálogo de confirmação antes de aprovar, listando o que tem aviso. Ordem aprovada só leitura ("Aprovada por X em …").
 
@@ -510,6 +522,10 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D47 | Idade do estoque contado (não há lote) | — | — | **Decidida (2026-10-15):** o mais novo possível (entregue no dia da contagem, fabricado `prazo` dias antes), até existir lote/recebimento (Fase 5). **Limitação** (otimista: algo mais velho pode contar como válido) na seção 5, item 10. |
 | D48 | Margem com pouco histórico quando o produto tem margem própria | — | — | **Decidida (2026-10-15):** a maior entre a margem do produto (ou os 10% padrão) e 20%. |
 | D49 | Lote que vale na chegada mas vence no meio da cobertura | — | — | **Decidida (2026-10-15):** conta inteiro, como **limitação conhecida** (seção 5, item 10). |
+| D50 | Dia da cobertura fora da vigência do produto | — | — | **Decidida (2026-10-15):** conta venda 0 ("não vende"), não "sem previsão". Produto fora da vigência em todos os dias da cobertura não entra na necessidade. |
+| D51 | Produto sem calendário na lista da necessidade | — | — | **Decidida (2026-10-15):** aparece com o aviso "sem calendário" (D42) se estiver vigente em D; produto com calendário aparece só no dia de produção dele. |
+| D52 | Como o trânsito chega ao `necessidade_service` | — | — | **Decidida (2026-10-15):** por um provedor injetável (`ProvedorTransito`), ligado às linhas das ordens aprovadas no N6. **Exigência para o N6:** um teste que **falhe se o trânsito vier vazio havendo ordem aprovada para a loja** (garante que o provedor foi de fato ligado; sem ele, o padrão "sem trânsito" passaria em silêncio). |
+| D53 | Limiar de aviso do indicador de perda (D35) | — | — | **Decidida (2026-10-15):** o serviço só informa a taxa (perda ÷ venda, 4 semanas até D−1, D16); o limiar de "perda alta" é decidido no N9 (tela). |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -565,6 +581,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-15** — **N3 aprovado** (cálculo puro da necessidade, migration 0021), inclusive o trânsito dentro da projeção na D45 (o resumo da mensagem estava errado; vale a versão recomendada). **D46–D49 decididas:** validade contada da fabricação; estoque contado como o mais novo possível até haver lote/recebimento; margem com pouco histórico = maior entre a do produto (ou 10%) e 20%; lote que vence no meio da cobertura conta inteiro. Limitações D47 e D49 na seção 5, item 10.
 
+- **2026-10-15** — **N4 aprovado** (`necessidade_service`). **D50–D53 decididas:** dia fora da vigência conta venda 0; produto sem calendário aparece com aviso se vigente em D; trânsito por provedor injetável, ligado no N6, com teste obrigatório que falhe se o trânsito vier vazio havendo ordem aprovada para a loja; limiar do indicador de perda decidido no N9.
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---
@@ -599,7 +617,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    ~~Planejar a Fase 4~~ — plano aprovado em 2026-10-15 (seção 1, "Fase 4 — plano").
    ~~N1 (migration 0020) e N2 (seeds)~~ — aprovados e commitados em 2026-10-15. ~~D44 e D45~~ — decididas.
    ~~N3~~ — aprovado e commitado em 2026-10-15 (D46–D49 decididas).
-   **Próximo: N4** (`necessidade_service` com banco).
+   ~~N4~~ — aprovado e commitado em 2026-10-15 (D50–D53 decididas).
+   **Próximo: N5** (migration 0022: ordens, itens, linhas por loja).
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.
