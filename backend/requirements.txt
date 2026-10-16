@@ -22,5 +22,9 @@ python-multipart==0.0.12
 # Variáveis de ambiente
 python-dotenv==1.0.1
 
+# Fusos horários (zoneinfo): no Windows não há base de fusos do sistema.
+# Usado na validade da contagem de estoque (D44, America/Sao_Paulo).
+tzdata==2026.2
+
 # Agendamento de tarefas (rotina de zeragem diária)
 apscheduler==3.11.2

@@ -19,6 +19,8 @@ Casos:
   K4  mesmo produto e dia da semana duas vezes -> barrado por uq_calendario_produto_dia
   S1  seed principal: tipo preenchido a partir de tem_producao_propria
       (INT-001..INT-010 produzidos, INT-011 distribuído)
+  L1  migration 0021: loja inserida sem horário de fechamento (por SQL) ->
+      21:00 (padrão do banco, D44)
 
 Cada erro confere o NOME da constraint (quando há uma). Saída ASCII
 ([OK]/[FALHA]), limpeza no início e no fim, exit 1 se algo falhar.
@@ -38,12 +40,13 @@ from sqlalchemy.exc import DataError, IntegrityError  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
 from app.models.calendario_producao import CalendarioProducao, DiaSemana  # noqa: E402
 from app.models.central_producao import CentralProducao, SecaoCentral  # noqa: E402
+from app.models.loja import Loja  # noqa: E402
 from app.models.negocio import Negocio  # noqa: E402
 from app.models.produto import Produto, TipoAbastecimento, UnidadeMedida  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 14
+TOTAL_CASOS = 15
 PREFIXO_NEGOCIO_TESTE = "_Teste Abastecimento"
 CODIGOS_SEED_PRODUZIDOS = [f"INT-{n:03d}" for n in range(1, 11)]
 CODIGO_SEED_DISTRIBUIDO = "INT-011"
@@ -101,6 +104,7 @@ def _limpar(db, negocio_ids):
     db.query(CalendarioProducao).filter(CalendarioProducao.negocio_id.in_(negocio_ids)).delete(
         synchronize_session=False)
     db.query(Produto).filter(Produto.negocio_id.in_(negocio_ids)).delete(synchronize_session=False)
+    db.query(Loja).filter(Loja.negocio_id.in_(negocio_ids)).delete(synchronize_session=False)
     db.query(CentralProducao).filter(CentralProducao.negocio_id.in_(negocio_ids)).delete(synchronize_session=False)
     db.query(Negocio).filter(Negocio.id.in_(negocio_ids)).delete(synchronize_session=False)
     db.commit()
@@ -243,6 +247,21 @@ def main():
         registrar("S1 seed: tipo migrado de tem_producao_propria", ok,
                   f"{sum(1 for v in por_codigo.values() if v == 'produzido')} produzidos, "
                   f"{CODIGO_SEED_DISTRIBUIDO}={por_codigo.get(CODIGO_SEED_DISTRIBUIDO)!r}")
+
+        # ---- loja: horário de fechamento (0021) ----
+        central_l = CentralProducao(negocio_id=ids["neg"], nome="_Central Loja", ativa=True)
+        db.add(central_l)
+        db.commit()
+        db.execute(text(
+            "INSERT INTO lojas (negocio_id, central_producao_id, nome, horario_zeragem, ativo, criado_em) "
+            "VALUES (:neg, :central, '_Loja SQL', '06:00', true, now())"),
+            {"neg": ids["neg"], "central": central_l.id})
+        db.commit()
+        fechamento = db.execute(text(
+            "SELECT horario_fechamento::text FROM lojas WHERE negocio_id = :neg AND nome = '_Loja SQL'"),
+            {"neg": ids["neg"]}).scalar()
+        registrar("L1 padrao do banco no fechamento da loja", fechamento == "21:00:00",
+                  f"horario_fechamento = {fechamento!r}")
 
     except Exception as e:
         registrar("ERRO INESPERADO", False, f"{type(e).__name__}: {e}")

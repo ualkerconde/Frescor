@@ -46,6 +46,13 @@ class Loja(Base):
     # individualmente por loja.
     horario_zeragem: Mapped[time] = mapped_column(Time, nullable=False, default=time(6, 0))
 
+    # Horário de fechamento (hora local, migration 0021, D44). A contagem de
+    # estoque só vale para a necessidade se feita desde o fechamento de D−1
+    # menos 2 h (app/services/necessidade_calculo.py).
+    horario_fechamento: Mapped[time] = mapped_column(
+        Time, nullable=False, default=time(21, 0), server_default="21:00:00"
+    )
+
     ativo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
