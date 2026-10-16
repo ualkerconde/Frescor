@@ -93,6 +93,8 @@ class OrdemProducao(Base):
     versao_metodo: Mapped[str] = mapped_column(String(32), nullable=False)
     # Data de referência mais antiga das previsões usadas (None = nenhuma).
     referencia_previsao = mapped_column(Date, nullable=True)
+    # Datas e horas da ordem em UTC sem fuso (como o app grava). O serviço
+    # preenche gerado_em; o padrão do banco (now(), hora local) é só reserva.
     gerado_em: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     gerado_por_usuario_id = mapped_column(ForeignKey("usuarios.id"), nullable=True)
     aprovado_em = mapped_column(DateTime, nullable=True)

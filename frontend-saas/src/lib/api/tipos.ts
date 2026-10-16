@@ -166,3 +166,105 @@ export interface QualidadePrevisao {
   data_fim: string
   por_unidade: QualidadeUnidade[]
 }
+
+// ---- Ordem de produção (Fase 4 / N7) ----
+
+/** POST /producao/ordens/gerar */
+export interface GeracaoOrdem {
+  ordem_id: number
+  data_producao: string
+  data_entrega: string
+  itens: number
+  linhas: number
+  sem_quantidade: number
+  substituiu_rascunho: boolean
+  previsao_atualizada: boolean
+}
+
+/**
+ * A conta da necessidade gravada em cada linha (backend: ResultadoNecessidade
+ * + pouco_historico e taxa_perda). Números chegam como texto decimal.
+ */
+export interface ContaNecessidade {
+  data_producao: string
+  chegada: string | null
+  dias_cobertura: string[]
+  dias_cobertura_sem_limite: number
+  dias_ate_chegada: string[]
+  minimo: string | null
+  margem: string | null
+  origem_margem: 'produto' | 'padrao' | 'pouco_historico' | null
+  alvo: string | null
+  estoque_contado: string | null
+  contagem_valida: boolean
+  contagem_local: string | null
+  limite_contagem_local: string | null
+  estoque_considerado: string
+  transito_considerado: string
+  consumo_ate_chegada: string
+  vencido_ate_chegada: string
+  estoque_na_chegada: string | null
+  necessidade_bruta: string | null
+  necessidade: string | null
+  avisos: string[]
+  pouco_historico?: boolean
+  /** Perda ÷ venda das 4 semanas até a véspera (fração); null = sem venda. */
+  taxa_perda?: string | null
+}
+
+export interface TotalOrdem {
+  unidade: Unidade
+  sugerido: string
+  final: string
+}
+
+export interface LinhaOrdem {
+  id: number
+  loja: { id: number; codigo: string | null; nome: string }
+  quantidade_sugerida: string | null
+  quantidade_final: string | null
+  editada: boolean
+  editado_em: string | null
+  motivo_edicao: string | null
+  avisos: string[]
+  componentes: Partial<ContaNecessidade>
+}
+
+export interface ItemOrdem {
+  id: number
+  produto: { id: number; codigo: string | null; nome: string }
+  tipo_abastecimento: 'produzido' | 'distribuido'
+  unidade: Unidade
+  total_sugerido: string
+  total_final: string
+  linhas: LinhaOrdem[]
+}
+
+export interface OrdemResumo {
+  id: number
+  data_producao: string
+  data_entrega: string
+  tipo: 'programada' | 'emergencial'
+  status: 'rascunho' | 'aprovada'
+  versao_metodo: string
+  referencia_previsao: string | null
+  gerado_em: string
+  gerado_por: string | null
+  aprovado_em: string | null
+  aprovado_por: string | null
+  linhas: number
+  linhas_editadas: number
+  linhas_sem_quantidade: number
+  totais: TotalOrdem[]
+}
+
+/** GET /producao/ordens/{id} */
+export interface OrdemDetalhe extends OrdemResumo {
+  itens: ItemOrdem[]
+}
+
+/** GET /producao/ordens?data= */
+export interface OrdensDoDia {
+  data_producao: string
+  ordens: OrdemResumo[]
+}

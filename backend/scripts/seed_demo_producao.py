@@ -20,7 +20,7 @@ O que é criado (gestor `gestor.producao@teste.com`, senha `senha123`):
     PRD-03 Torta de Frango (UN, validade 2, seg/qui): cobertura maior que a
            validade (D36); na P02 **nunca foi contada** (sem linha de estoque);
     PRD-04 Pão de Forma (KG, validade 5, seg/qui): na P02 a contagem é de
-           3 dias atrás, mais antiga que o fechamento de ontem (D33);
+           3 dias atrás, mais antiga que o fechamento da véspera (D33);
     PRD-05 Manteiga 200 g (UN, validade 30, ter/sex): **distribuído** (D39);
     PRD-06 Empada de Frango (UN, validade 2, diário): só 2 semanas de venda,
            "pouco histórico", margem de 20% (D34);
@@ -28,17 +28,20 @@ O que é criado (gestor `gestor.producao@teste.com`, senha `senha123`):
 - 8 semanas de vendas e perdas até ontem (PRD-06: só 2 semanas), origem
   `manual`, gravadas com a regra da importação (substitui, D5). Perda pela
   validade (1 dia ~9%, 2 dias ~5%, 3 dias ~3%, 5 dias ~1,5%, 30 dias ~1%).
-- contagens de estoque (`estoque_atual`) feitas "no fechamento de ontem":
+- contagens de estoque (`estoque_atual`) feitas "no fechamento de hoje":
   sobra de ~15% da venda de ontem, em peças (KG: peças × peso médio).
 
-Hora da contagem: ontem às 21h, hora local do computador, gravada em UTC
-sem fuso, como o app grava (`atualizado_em` usa `datetime.utcnow`). As 21h
-são escolha da demonstração: o horário de fechamento da loja ainda não
-existe no banco (D44, em aberto).
+Hora da contagem: hoje às 21h (o horário de fechamento padrão da loja,
+D44), em São Paulo, gravada em UTC sem fuso, como o app grava
+(`atualizado_em` usa `datetime.utcnow`). É o cenário da tela de produção:
+à noite, depois que as lojas fecham e contam, o gestor gera a ordem de
+AMANHÃ, e a contagem vale (feita desde o fechamento da véspera de D menos
+2 h). Até 2026-10-15 a contagem era "de ontem", o que só servia para a
+ordem de hoje.
 
 Idempotente: tudo é procurado antes de ser criado; vendas e perdas são
 substituídas; o estoque é regravado. A janela acompanha a data de hoje
-(vendas antigas do PRD-06 apagadas; contagens sempre "de ontem"), para a
+(vendas antigas do PRD-06 apagadas; contagens sempre "de hoje"), para a
 demonstração valer em qualquer dia.
 
 Não gera previsão nem ordem: entre com o gestor e use as telas (ou a API).
@@ -58,6 +61,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import func  # noqa: E402
 from sqlalchemy.dialects.postgresql import insert as pg_insert  # noqa: E402
 from sqlalchemy.orm.attributes import flag_modified  # noqa: E402
+
+from zoneinfo import ZoneInfo  # noqa: E402
 
 from app.core.security import hash_senha  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
@@ -83,6 +88,7 @@ SEMANAS_HISTORICO = 8
 SEMANAS_POUCO_HISTORICO = 2
 SOBRA_CONTADA = 0.15
 HORA_CONTAGEM = time(21, 0)
+FUSO_PADRAO = ZoneInfo("America/Sao_Paulo")
 DIAS_CONTAGEM_ANTIGA = 3
 
 _TODOS = list(DiaSemana)
@@ -147,8 +153,8 @@ def _perda(codigo, loja_codigo, venda, validade, unidade, dia) -> Decimal:
 
 
 def _utc_sem_fuso(dia: date, hora: time) -> datetime:
-    """Hora local do computador -> UTC sem fuso (como o app grava atualizado_em)."""
-    return datetime.combine(dia, hora).astimezone(timezone.utc).replace(tzinfo=None)
+    """Hora de São Paulo (fuso padrão da loja, D44) -> UTC sem fuso (como o app grava atualizado_em)."""
+    return datetime.combine(dia, hora, tzinfo=FUSO_PADRAO).astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _upsert(db, modelo, constraint, linhas):
@@ -197,8 +203,9 @@ def main():
             print(f"Gestor:  {gestor.email} (id={gestor.id}) [existente]")
 
         ontem = date.today() - timedelta(days=1)
-        contagem_ontem = _utc_sem_fuso(ontem, HORA_CONTAGEM)
-        contagem_antiga = _utc_sem_fuso(ontem - timedelta(days=DIAS_CONTAGEM_ANTIGA), HORA_CONTAGEM)
+        hoje = ontem + timedelta(days=1)
+        contagem_hoje = _utc_sem_fuso(hoje, HORA_CONTAGEM)  # fechamento de hoje
+        contagem_antiga = _utc_sem_fuso(hoje - timedelta(days=DIAS_CONTAGEM_ANTIGA), HORA_CONTAGEM)
         vendas, perdas = [], []
         estoques_gravados = 0
         for codigo, (nome, unidade, peso, validade, margem, tipo, dias, media, semanas) in PRODUTOS.items():
@@ -266,7 +273,7 @@ def main():
                 # coluna gravaria "agora". Atribuir não basta: se o valor já é o
                 # mesmo, o SQLAlchemy não o inclui no UPDATE (daí o flag_modified).
                 estoque.atualizado_em = (
-                    contagem_antiga if (loja_codigo, codigo) in CONTAGEM_ANTIGA else contagem_ontem
+                    contagem_antiga if (loja_codigo, codigo) in CONTAGEM_ANTIGA else contagem_hoje
                 )
                 flag_modified(estoque, "atualizado_em")
                 estoques_gravados += 1
@@ -284,8 +291,8 @@ def main():
         total_perdas = db.query(func.count(PerdaDiaria.id)).filter(PerdaDiaria.loja_id.in_(ids_lojas)).scalar()
         print(f"Vendas gravadas: {len(vendas)} (total nas lojas: {total_vendas}); "
               f"perdas: {len(perdas)} (total: {total_perdas})")
-        print(f"Contagens de estoque: {estoques_gravados}, fechamento de {ontem:%d/%m/%Y} às "
-              f"{HORA_CONTAGEM:%H:%M} (hora local; {contagem_ontem:%d/%m %H:%M} UTC); "
+        print(f"Contagens de estoque: {estoques_gravados}, fechamento de {hoje:%d/%m/%Y} às "
+              f"{HORA_CONTAGEM:%H:%M} (São Paulo; {contagem_hoje:%d/%m %H:%M} UTC); "
               f"sem contagem: {sorted(SEM_CONTAGEM)}; antiga ({DIAS_CONTAGEM_ANTIGA} dias): {sorted(CONTAGEM_ANTIGA)}")
         print(f"Entre no SaaS com {GESTOR['email']} / {SENHA}.")
     except Exception:

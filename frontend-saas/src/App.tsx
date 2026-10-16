@@ -1,7 +1,7 @@
 /*
  * Rotas do frontend do SaaS.
  * /entrar: login do gestor.
- * Área autenticada (LayoutAutenticado): /importar, /consultar e /previsao.
+ * Área autenticada (LayoutAutenticado): /importar, /consultar, /previsao e /producao.
  * / e qualquer outra rota -> /importar (ou login, sem sessão).
  *
  * Telas novas (a partir da Fase 3) entram com o código dividido por tela:
@@ -16,6 +16,7 @@ import { Entrar } from "@/paginas/Entrar"
 import { Importar } from "@/paginas/Importar"
 
 const Previsao = lazy(() => import("@/paginas/Previsao").then((m) => ({ default: m.Previsao })))
+const Producao = lazy(() => import("@/paginas/Producao").then((m) => ({ default: m.Producao })))
 
 function Carregando() {
   return <p className="text-muted-foreground">Carregando…</p>
@@ -39,6 +40,14 @@ function App() {
           element={
             <Suspense fallback={<Carregando />}>
               <Previsao />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/producao"
+          element={
+            <Suspense fallback={<Carregando />}>
+              <Producao />
             </Suspense>
           }
         />

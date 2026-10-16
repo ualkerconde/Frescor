@@ -1,8 +1,9 @@
 /*
  * Verificação automática de acessibilidade (passo W8) com o axe-core, nas
  * telas e nos estados principais: login (vazio e com erro), importação
- * (vazia, com sucesso e com erros), consulta (com dados e vazia) e previsão
- * (com dados e a conta aberta, vazia, com erro ao gerar).
+ * (vazia, com sucesso e com erros), consulta (com dados e vazia), previsão
+ * (com dados e a conta aberta, vazia, com erro ao gerar) e ordem de produção
+ * (rascunho com lojas, conta e diálogo abertos; aprovada; dia sem ordem).
  *
  * Limitação: no jsdom o axe não calcula contraste de cor (não há
  * renderização real). Os contrastes são garantidos pelo tema.test.ts, que
@@ -15,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { salvarTokens } from '@/lib/api/sessao'
 import { dataIso, somarDias } from '@/lib/formato'
 import { itemPrevisao } from '@/test/previsao'
+import { ordemDetalhe, resumoDe } from '@/test/producao'
 import { ME, renderizarApp, resposta, simularApi } from '@/test/renderizar'
 
 async function violacoes(): Promise<string[]> {
@@ -156,6 +158,43 @@ describe('acessibilidade (axe-core, WCAG)', () => {
       expect(await violacoes()).toEqual([])
       await userEvent.click(screen.getByRole('button', { name: 'Gerar previsão' }))
       await screen.findByRole('alert')
+      expect(await violacoes()).toEqual([])
+    })
+
+    it('ordem de produção em rascunho (lojas, conta e diálogo de ajuste abertos)', async () => {
+      const amanha = somarDias(dataIso(new Date()), 1)
+      const ordem = ordemDetalhe(amanha)
+      simularApi({
+        'GET /web/me': resposta(200, ME),
+        'GET /producao/ordens': resposta(200, { data_producao: amanha, ordens: [resumoDe(ordem)] }),
+        'GET /producao/ordens/7': resposta(200, ordem),
+      })
+      renderizarApp('/producao')
+      await screen.findByRole('region', { name: 'Resumo da ordem' })
+      expect(await violacoes()).toEqual([])
+      await userEvent.click(screen.getByRole('button', { name: 'Ver as lojas de Pão Francês' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Ver a conta de Pão Francês na loja 001' }))
+      expect(await violacoes()).toEqual([])
+      await userEvent.click(screen.getByRole('button', { name: 'Ajustar Pão Francês na loja 001' }))
+      await screen.findByRole('dialog')
+      expect(await violacoes()).toEqual([])
+    })
+
+    it('ordem de produção aprovada e dia sem ordem', async () => {
+      const amanha = somarDias(dataIso(new Date()), 1)
+      const ordem = ordemDetalhe(amanha, { status: 'aprovada', aprovado_em: '2026-10-16T01:00:00', aprovado_por: 'Gestor', linhas_sem_quantidade: 0 })
+      simularApi({
+        'GET /web/me': resposta(200, ME),
+        'GET /producao/ordens': (_init, url) =>
+          resposta(200, { data_producao: url.searchParams.get('data'), ordens: url.searchParams.get('data') === amanha ? [resumoDe(ordem)] : [] }),
+        'GET /producao/ordens/7': resposta(200, ordem),
+      })
+      const { unmount } = renderizarApp('/producao')
+      await screen.findByText('Ordem aprovada: só leitura.')
+      expect(await violacoes()).toEqual([])
+      unmount()
+      renderizarApp(`/producao?data=${somarDias(amanha, 1)}`)
+      await screen.findByText(/^Nenhuma ordem gerada para/)
       expect(await violacoes()).toEqual([])
     })
 

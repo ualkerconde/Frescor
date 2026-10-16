@@ -252,6 +252,9 @@ def main():
         erros = [f"{k}: {obtido.get(k)} != {v}" for k, v in esperado.items()
                  if obtido.get(k) != (None if v is None else DEC(v))]
         erros += [f"final != sugerida em {k}" for k, v in linhas.items() if v.quantidade_final != v.quantidade_sugerida]
+        # gerado_em em UTC, como aprovado_em/editado_em (o now() do banco é hora local).
+        if abs(ordem.gerado_em - datetime.utcnow()) > timedelta(minutes=5):
+            erros.append(f"gerado_em {ordem.gerado_em} não está em UTC (agora UTC {datetime.utcnow():%H:%M})")
         ok = (ordem.status == StatusOrdemProducao.RASCUNHO and ordem.data_entrega == D and r.itens == 4
               and r.linhas == 8 and r.sem_quantidade == 2 and not r.substituiu_rascunho and not erros)
         registrar("G1 gerar a ordem", ok, f"status={ordem.status.value} itens={r.itens} linhas={r.linhas} "

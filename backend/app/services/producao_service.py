@@ -207,6 +207,9 @@ def gerar_ordem(
             status=StatusOrdemProducao.RASCUNHO,
             versao_metodo=VERSAO_METODO_NECESSIDADE,
             referencia_previsao=necessidades.referencia_previsao,
+            # UTC, como aprovado_em e editado_em: o padrão da coluna (now() do
+            # PostgreSQL) grava a hora local do banco e misturaria fusos.
+            gerado_em=datetime.utcnow(),
             gerado_por_usuario_id=usuario_id,
         )
         db.add(ordem)

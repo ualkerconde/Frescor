@@ -263,7 +263,7 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 | N6 | `producao_service`: gerar (substitui só o rascunho, tudo ou nada, trava por central), editar linha da loja, aprovar; liga o `ProvedorTransito` às linhas aprovadas (D52) | gerar 2× não duplica; aprovada não regera; edição guarda sugerido e final; ordem aprovada entra como trânsito na seguinte; **teste que falha se o trânsito vier vazio havendo ordem aprovada para a loja (D52)**; **o serviço só apaga/regera ordem em rascunho: ordem aprovada não pode ser apagada nem regerada (apagaria o trânsito), com teste e sabotagem**; loja da central conferida no serviço (D57) | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N6 — resultado" abaixo. |
 | N7 | API: `POST /producao/ordens/gerar`, `GET /producao/ordens?data=`, `GET /producao/ordens/{id}`, `PATCH` da linha da loja, `POST /producao/ordens/{id}/aprovar` | TestClient: 401/403, escopo/404, isolamento | **Concluído (2026-10-15)**, aprovado pelo Ualker. Ver "N7 — resultado" abaixo. |
 | N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | **Concluído (2026-10-15)**, aprovado pelo Ualker. Critério de aceite atendido. Ver "N8 — resultado" abaixo. |
-| N9 | Tela `/producao` (carregada só quando aberta); **regerar um rascunho que tenha edições pede confirmação dizendo quantas linhas editadas serão perdidas (D58)**; limiar do indicador de perda (D53) | testes, axe, roteiro no navegador | — |
+| N9 | Tela `/producao` (carregada só quando aberta); **regerar um rascunho que tenha edições pede confirmação dizendo quantas linhas editadas serão perdidas (D58)**; limiar do indicador de perda (D53) | testes, axe, roteiro no navegador | **Concluído (2026-10-15)**, conferido no navegador e aprovado pelo Ualker. Ver "N9 — resultado" abaixo. |
 | N10 | READMEs, STATUS, regressão completa | backend e frontend | — |
 
 **N1 — resultado (2026-10-15):**
@@ -371,6 +371,21 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 - **7 sabotagens, todas pegas:** S1 produto inativo entra → F1, F3, F4, F5, F7; S2 sem o filtro de vigência → F1, F3, F4, F5; S3 sem o filtro do dia de produção → a rota responde 500 (o cálculo da cobertura recusa o dia; falha segura) → F1–F4, F6, F7; S4 habilitação desativada ignorada → F1, F3 (linha a mais PD/L2), F7; S5 total do item sem somar as lojas → F4 (66 virou 22); S6 margem padrão 0% → F3, F4; S7 sem atualizar a previsão (D41) → F1–F4 (todas as linhas sem quantidade).
 - Ajustes no próprio teste durante as sabotagens: a mensagem do F3 dizia "as 7 linhas batem" mesmo com linha a mais (agora mostra a contagem e as sobras); o F6 quebrava com componente vazio (agora falha com nome).
 - Regressão: 28 scripts do backend, todos exit 0.
+
+**N9 — resultado (2026-10-15; conferido no navegador pelo Ualker, roteiro de 8 passos, ok):**
+- Tela `/producao` (item "Produção" no menu), carregada com `React.lazy`, pela skill Frescor. Arquivos: `src/paginas/Producao.tsx` + `src/paginas/producao/` (`ResumoOrdem`, `TabelaOrdem`, `Dialogos`, `Marcadores`, `avisos.ts`, `conta.ts`, `quantidade.ts`); `src/lib/perda.ts` (faixas, D66); tipos em `lib/api/tipos.ts`.
+  - Dia de produção na URL (padrão amanhã; de hoje até D+6, D61). Sem ordem: estado vazio com "Gerar ordem" (fora do período, só a explicação).
+  - Rascunho: ação principal **"Aprovar ordem"**; secundárias "Gerar de novo" e "Apagar rascunho". **Gerar de novo com ajustes pede confirmação com o número de linhas ajustadas perdidas (D58)**; sem ajustes, gera direto. Aprovar e apagar confirmam em diálogo (apagar em vermelho); aprovar com linha sem quantidade explica e não deixa aprovar (D59).
+  - **Aprovada: só leitura** (aviso "Ordem aprovada: só leitura", sem Ajustar, Gerar de novo nem Apagar; "aprovada em … por …").
+  - Resumo: situação, entrega, quem/quando gerou e aprovou, **Produzir** e **Distribuir** por unidade (números grandes), alerta com as linhas sem quantidade pelo nome e "Confira estes" com os outros avisos.
+  - Tabelas **"Produção"** e **"A distribuir"** (D39): produto, sugerido, final (soma das lojas, D54), avisos; "Ver N lojas" abre as lojas com sugerido, final ("ajustado: motivo"), **perda em 4 faixas (D66)**, avisos, **"Ajustar"** (diálogo com a unidade ao lado do campo, motivo opcional, validação no navegador igual à do backend) e **"Ver a conta"** (passos em português montados só com os componentes gravados).
+  - Erros 404/409/422 com a frase do backend, em português e sem código nem id; sucesso em aviso que some sozinho.
+- Componentes do shadcn ajustados à skill pela primeira vez: `Dialog` ("Fechar" em português, título Sora 18, sombra da skill) e `Textarea` (igual ao Input).
+- **Defeito do N6 achado e corrigido no N9:** `ordens_producao.gerado_em` vinha do `now()` do PostgreSQL (fuso do banco: America/Sao_Paulo, hora local), enquanto `aprovado_em` e `editado_em` eram UTC; a tela mostraria "gerada às 22:25, aprovada à 01:25". Agora o serviço grava `gerado_em` em UTC; G1 do `test_producao_service.py` confere (sabotagem: sem a correção, G1 falha com "22:26 não está em UTC (agora 01:26)"). **Registro:** `previsoes_diarias.gerado_em` continua com o `now()` do banco (hora local) e a tela de previsão já o lê como local; padronizar em UTC fica para quando mexer na previsão.
+- **Seed demo de produção:** as contagens passaram do "fechamento de ontem" para o **fechamento de hoje (21h de São Paulo)**, que é o cenário da tela (a ordem de amanhã gerada à noite, depois que as lojas contam); com a de ontem, toda contagem apareceria como antiga. `test_seeds_fase4.py` ajustado (11/11).
+- Verificações: typecheck ok; lint sem erros (os 3 avisos antigos do shadcn); **188 testes** em 15 arquivos (eram 150: +12 da tela, +23 de conta/avisos/quantidade/faixas, +2 axe e o resto de casos parametrizados); **axe 0 violações** (rascunho com lojas, conta e diálogo abertos; aprovada; dia sem ordem); build ok — JS principal **487,4 kB** (155,1 kB gzip), tela de produção em chunk próprio de **25,6 kB** (8,1 kB gzip). Backend: 28 scripts, todos exit 0.
+- **Sabotagens da tela, todas pegas:** F1 gerar de novo sem confirmar (D58) → teste D58; F2 aprovada com "Ajustar" → teste só leitura; F3 limite de "perda alta" em 10% → 2 testes das faixas + teste das lojas; F4 código do erro na tela ("Erro 409: …") → testes de 409 e 422; F5 aprovar sem bloquear linha sem quantidade → teste do diálogo.
+- **Fluxo real pelo proxy do Vite** (servidores do Ualker já rodando: uvicorn com `--reload` na 8000, Vite na 3001), como `gestor.producao@teste.com`: gerar amanhã (16/10, sexta) → 5 produtos, 10 linhas, 2 sem quantidade (Sonho, sem calendário); Pão Francês com a contagem das 21h válida e a sobra vencida (validade 1); perda nas 4 faixas (Manteiga 1,8% baixa; Bolo 4,1% normal; Empada 5,2% alta; Pão 9,3% muito alta); `gerado_em` em UTC; aprovar com linha sem quantidade → 422 em português. **O rascunho do teste foi apagado** (amanhã volta ao estado vazio). Não há navegador nesta sessão: a conferência visual é do Ualker.
 
 **Tela de revisão e aprovação (proposta aprovada):** topo com data de produção (padrão: a próxima), situação (Rascunho / Aprovada), resumo por unidade e "Confira estes" (pelo nome: sem previsão, sem contagem recente, cobertura maior que a validade, estoque acima do máximo, recebimento não confirmado). Tabela de produção por produto (sugerido, final, cobertura, etiquetas); abrir a linha mostra as lojas (previsão somada, estoque e quando foi contado, em trânsito, sugerido, final editável) e "Ver a conta". Bloco "A distribuir" separado. Ação principal "Gerar ordem" (sem ordem) / "Aprovar ordem" (rascunho); "Recalcular" secundária; diálogo de confirmação antes de aprovar, listando o que tem aviso. Ordem aprovada só leitura ("Aprovada por X em …").
 
@@ -601,6 +616,7 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 | D63 | Lista de ordens do dia na API | — | — | **Decidida (2026-10-15):** `GET /producao/ordens?data=` devolve todas as ordens do dia da central (programada e, na Fase 8, emergenciais), em resumo; o detalhe vem em `GET /producao/ordens/{id}`. |
 | D64 | O que cada ação da API devolve | — | — | **Decidida (2026-10-15):** `PATCH` da linha devolve a linha; `aprovar` devolve o resumo da ordem; `DELETE` responde 204 sem corpo. |
 | D65 | Códigos de erro da API da ordem | — | — | **Decidida (2026-10-15):** 404 fora do escopo (mesma resposta para outra central, outro negócio e inexistente); 409 ordem aprovada; 422 regra ferida, em português. |
+| D66 | Faixas do indicador de perda (limiar da D53) | — | — | **Decidida (2026-10-15):** perda ÷ venda das 4 semanas até a véspera em 4 faixas: **até 3%** verde "perda baixa"; **acima de 3% até 5%** sem destaque "normal"; **acima de 5% até 8%** amarelo "perda alta"; **acima de 8%** vermelho "perda muito alta". Limites numa constante única (`frontend-saas/src/lib/perda.ts`, `LIMITES_PERDA`). Configuração por negócio: trabalho futuro (seção 5, item 10). |
 | DF1 | Frontend do SaaS em TypeScript ou JavaScript | — | TypeScript | **Decidida (2026-10-13): TypeScript.** |
 | DF2 | Onde guardar os tokens no frontend do SaaS | A) localStorage; B) access em memória + refresh em localStorage; C) refresh em cookie `httpOnly` (exige backend) | A no V1 | **Decidida (2026-10-13): A (localStorage).** **Endurecimento antes da produção:** refresh token em cookie `httpOnly` + proteção CSRF (mudança no backend). |
 | DF3 | Biblioteca de dados no frontend | TanStack Query ou hooks próprios | TanStack Query | **Decidida (2026-10-13): TanStack Query.** |
@@ -666,6 +682,10 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-15** — **N8 aprovado: critério de aceite da Fase 4 atendido** (`test_aceite_fase4.py`, de ponta a ponta pela rota real, 7 casos, 7 sabotagens pegas).
 
+- **2026-10-15** — N9 feito (tela `/producao`), aguardando conferência no navegador. **D66 decidida:** faixas do indicador de perda 3% / 5% / 8% numa constante única (por negócio: trabalho futuro). Corrigido `gerado_em` da ordem para UTC (defeito do N6). Seed demo de produção com a contagem do fechamento de hoje. Nota: a confirmação de regerar é a D58 (a mensagem do Ualker citou D62).
+
+- **2026-10-15** — **N9 aprovado**: tela `/producao` conferida no navegador pelo Ualker.
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---
@@ -705,7 +725,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    ~~N6~~ — aprovado e commitado em 2026-10-15 (D58–D62 decididas).
    ~~N7~~ — aprovado e commitado em 2026-10-15 (D63–D65 decididas).
    ~~N8~~ — aprovado e commitado em 2026-10-15 (critério de aceite da Fase 4 atendido).
-   **Próximo: N9** (tela `/producao` no `frontend-saas`, com a confirmação de regerar rascunho editado, D58, e o limiar do indicador de perda, D53).
+   ~~N9~~ — conferido no navegador, aprovado e commitado em 2026-10-15.
+   **Próximo: N10** (READMEs, STATUS, regressão completa; fechar a Fase 4).
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.
@@ -713,5 +734,6 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    - D15: trocar nomes técnicos ("bakery") antes do deploy de produção.
 10. **Trabalho futuro da necessidade (Fase 5/7)** — limitações aceitas no N3:
    - **D47 — idade do estoque contado:** sem lote nem recebimento, o estoque contado é tratado como o mais novo possível. Com a confirmação de recebimento (Fase 5), usar a data real da última entrega; com lote, a fabricação real. Conferir na Fase 7 se a premissa otimista gera falta.
+   - **D66 — faixas de perda por negócio:** hoje os limites (3% / 5% / 8%) são uma constante única no frontend. Se redes diferentes pedirem limites diferentes (ou por seção), levar para uma configuração do negócio no backend.
    - **D56 — histórico de edições da linha da ordem:** hoje só a última edição fica gravada. Se a Fase 7 precisar ver cada ajuste do gestor, criar uma tabela própria de histórico.
    - **D49 — lote que vence no meio da cobertura:** conta inteiro mesmo que não dê tempo de vendê-lo antes de vencer. Refino possível: limitar o que cada lote cobre à previsão dos dias em que ele ainda vale. Medir na Fase 7 (perda × ruptura) antes de mudar.

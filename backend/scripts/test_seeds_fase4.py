@@ -19,7 +19,8 @@ Casos:
   D4  demo: perda em todo dia de venda, UN inteira, perda do Pão Francês
       entre 6% e 12% da venda
   D5  demo: 13 contagens; P02 + PRD-03 sem linha; P02 + PRD-04 com contagem
-      de 3 dias antes; as outras no fechamento de ontem (21h local em UTC);
+      de 3 dias antes; as outras no fechamento de hoje (21h de São Paulo em
+      UTC; a ordem de amanhã é gerada à noite, N9);
       KG = peças × peso médio; UN = peças; sobra ~15% da venda de ontem
   I1  rodar os dois seeds de novo não muda nada (contagens e somas iguais),
       e duas contagens alteradas antes voltam ao valor e à hora esperados:
@@ -38,6 +39,7 @@ import sys
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 PASTA_BACKEND = Path(__file__).resolve().parent.parent
 sys.path.append(str(PASTA_BACKEND))
@@ -85,7 +87,8 @@ def rodar_seed(nome):
 
 
 def utc_sem_fuso(dia, hora):
-    return datetime.combine(dia, hora).astimezone(timezone.utc).replace(tzinfo=None)
+    """Hora de São Paulo (fuso padrão da loja, D44) -> UTC sem fuso."""
+    return datetime.combine(dia, hora, tzinfo=ZoneInfo("America/Sao_Paulo")).astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def calendario(db, negocio):
@@ -218,8 +221,9 @@ def casos_demo(db, ontem):
         JOIN negocios n ON n.id = e.negocio_id
         LEFT JOIN vendas_diarias v ON v.loja_id = e.loja_id AND v.produto_id = e.produto_id AND v.data = :ontem
         WHERE n.nome = :n"""), {"n": NEGOCIO_DEMO, "ontem": ontem}).all()
-    hora_ontem = utc_sem_fuso(ontem, time(21, 0))
-    hora_antiga = utc_sem_fuso(ontem - timedelta(days=3), time(21, 0))
+    hoje = ontem + timedelta(days=1)
+    hora_ontem = utc_sem_fuso(hoje, time(21, 0))  # fechamento de hoje (seed desde 2026-10-15, N9)
+    hora_antiga = utc_sem_fuso(hoje - timedelta(days=3), time(21, 0))
     erros = []
     pares = set()
     for loja, prod, peso, pecas, calculado, quando, venda_ontem in estoque:
@@ -232,7 +236,7 @@ def casos_demo(db, ontem):
     ok = len(estoque) == 13 and ("P02", "PRD-03") not in pares and not erros
     registrar("D5 contagens de estoque da demo", ok,
               f"{len(estoque)} contagens; P02/PRD-03 {'ausente' if ('P02', 'PRD-03') not in pares else 'PRESENTE'}; "
-              f"fechamento de ontem = {hora_ontem} UTC" + (f"; erros: {erros}" if erros else ""))
+              f"fechamento de hoje = {hora_ontem} UTC" + (f"; erros: {erros}" if erros else ""))
 
 
 def main():
