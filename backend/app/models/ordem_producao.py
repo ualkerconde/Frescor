@@ -60,6 +60,9 @@ class OrdemProducao(Base):
     __tablename__ = "ordens_producao"
     __table_args__ = (
         UniqueConstraint("negocio_id", "id", name="uq_ordem_negocio_id"),
+        # Alvo da FK do romaneio (0024): central e entrega iguais às da ordem.
+        UniqueConstraint("negocio_id", "central_producao_id", "id", "data_entrega",
+                         name="uq_ordem_negocio_central_id_entrega"),
         CheckConstraint("data_entrega >= data_producao", name="ck_ordem_entrega_depois_da_producao"),
         CheckConstraint(
             "(status = 'aprovada' AND aprovado_em IS NOT NULL AND aprovado_por_usuario_id IS NOT NULL)"

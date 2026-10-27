@@ -45,6 +45,7 @@ class OrdemProducaoLinha(Base):
     __tablename__ = "ordens_producao_linhas"
     __table_args__ = (
         UniqueConstraint("item_id", "loja_id", name="uq_ordem_linha_item_loja"),
+        UniqueConstraint("negocio_id", "id", name="uq_ordem_linha_negocio_id"),  # alvo do item do romaneio (0024)
         CheckConstraint(
             "quantidade_sugerida IS NULL OR quantidade_sugerida >= 0", name="ck_ordem_linha_sugerida_nao_negativa"
         ),

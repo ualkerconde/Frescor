@@ -31,3 +31,6 @@ from app.models.ordem_producao import OrdemProducao, StatusOrdemProducao, TipoOr
 from app.models.ordem_producao_item import OrdemProducaoItem  # noqa: F401
 from app.models.ordem_producao_linha import OrdemProducaoLinha  # noqa: F401
 from app.models.setor_producao import SetorProducao  # noqa: F401
+from app.models.romaneio import Romaneio, StatusRomaneio  # noqa: F401
+from app.models.romaneio_entrega import RomaneioEntrega, SituacaoEntrega  # noqa: F401
+from app.models.romaneio_item import RomaneioItem, MotivoDivergencia  # noqa: F401

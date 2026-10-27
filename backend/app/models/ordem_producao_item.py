@@ -11,15 +11,17 @@ A quantidade planejada NÃO é gravada aqui: é a soma das linhas por loja
 (`ordens_producao_linhas`). Gravar a soma ao lado das parcelas abriria
 espaço para as duas divergirem depois de uma edição.
 
-`quantidade_produzida`: produção real, preenchida na Fase 5 (pode ficar
-abaixo do planejado; o rateio em escassez é decisão do gestor, regra de
-ouro 4).
+`quantidade_produzida`: produção real (Fase 5, D69), registrada pelo
+gestor antes de gerar o romaneio, com quem e quando (os três juntos ou
+nenhum, `ck_ordem_item_producao_coerente`). Para produto distribuído, é a
+quantidade disponível para envio. Pode ficar abaixo do planejado; o rateio
+em escassez é decisão do gestor (regra de ouro 4, D70).
 
 Isolamento (D2): FKs compostas com a ordem e o produto do mesmo negócio.
 Apagar a ordem apaga os itens (CASCADE).
 """
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, ForeignKeyConstraint, Numeric, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, ForeignKeyConstraint, Numeric, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -33,6 +35,13 @@ class OrdemProducaoItem(Base):
         UniqueConstraint("ordem_id", "produto_id", name="uq_ordem_item_produto"),
         CheckConstraint(
             "quantidade_produzida IS NULL OR quantidade_produzida >= 0", name="ck_ordem_item_produzida_nao_negativa"
+        ),
+        CheckConstraint(
+            "(quantidade_produzida IS NULL AND producao_registrada_em IS NULL"
+            " AND producao_registrada_por_usuario_id IS NULL)"
+            " OR (quantidade_produzida IS NOT NULL AND producao_registrada_em IS NOT NULL"
+            " AND producao_registrada_por_usuario_id IS NOT NULL)",
+            name="ck_ordem_item_producao_coerente",
         ),
         ForeignKeyConstraint(
             ["negocio_id", "ordem_id"], ["ordens_producao.negocio_id", "ordens_producao.id"],
@@ -55,5 +64,7 @@ class OrdemProducaoItem(Base):
         Enum(UnidadeMedida, name="unidademedida", values_callable=lambda c: [e.value for e in c]),
         nullable=False,
     )
-    # Produção real (Fase 5); NULL até lá.
+    # Produção real (D69); NULL até o gestor registrar.
     quantidade_produzida = mapped_column(Numeric(12, 3), nullable=True)
+    producao_registrada_em = mapped_column(DateTime, nullable=True)  # UTC sem fuso
+    producao_registrada_por_usuario_id = mapped_column(ForeignKey("usuarios.id"), nullable=True)

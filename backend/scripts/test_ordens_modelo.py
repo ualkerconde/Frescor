@@ -224,8 +224,10 @@ def main():
                     "fk_ordem_item_negocio_produto")
         deve_barrar("I4 item de outro negocio na ordem",
                     lambda s: s.add(item(produto=ids["prod_x"], negocio=ids["neg_x"])), "fk_ordem_item_negocio_ordem")
-        deve_barrar("I5 produzida negativa", lambda s: s.add(item(produto=ids["prod_2"],
-                                                                  quantidade_produzida=DEC("-1"))),
+        # Com quem e quando (0024, ck_ordem_item_producao_coerente): só o "não negativo" pode barrar.
+        deve_barrar("I5 produzida negativa", lambda s: s.add(item(
+            produto=ids["prod_2"], quantidade_produzida=DEC("-1"), producao_registrada_em=datetime(2026, 11, 2, 15, 0),
+            producao_registrada_por_usuario_id=ids["gestor"])),
                     "ck_ordem_item_produzida_nao_negativa")
 
         # ---- linhas ----
