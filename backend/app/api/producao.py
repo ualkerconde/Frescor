@@ -10,10 +10,13 @@ e central vêm sempre do gestor autenticado; não há `central_id` na URL
 - PATCH  /producao/ordens/{id}/linhas/{linha_id} quantidade final de uma loja (só rascunho)
 - POST   /producao/ordens/{id}/aprovar           rascunho -> aprovada
 - DELETE /producao/ordens/{id}                   apaga um rascunho
+- GET    /producao/ordens/{id}/pdf?setores=...   PDF da ordem APROVADA, uma folha por setor (D67)
+- GET    /producao/setores                       setores de produção da central (D67)
 
 Respostas de erro: 404 para ordem/linha inexistente ou de outra central ou
 negócio (mesma mensagem, sem revelar se existe); 409 para ordem aprovada
-(não é editada, regerada nem apagada); 422 para pedido que fere uma regra
+(não é editada, regerada nem apagada) e para imprimir ordem que ainda não
+foi aprovada; 422 para pedido que fere uma regra
 (data fora do permitido, quantidade inválida, linha sem quantidade ao
 aprovar, loja fora da central).
 """
@@ -37,9 +40,17 @@ from app.schemas.producao import (
     OrdemResumoResponse,
     OrdensDoDiaResponse,
     ProdutoOrdem,
+    SetorResponse,
     TotalUnidadeResponse,
 )
 from app.services.necessidade_service import CentralNaoEncontrada
+from app.services.ordem_pdf_service import (
+    SEM_SETOR,
+    OrdemNaoAprovada,
+    gerar_pdf,
+    montar_impressao,
+    setores_da_central,
+)
 from app.services.producao_consulta_service import LinhaOrdem, ResumoOrdem, listar_ordens, obter_ordem
 from app.services.producao_service import (
     OrdemAprovada,
@@ -65,7 +76,7 @@ class _Erros:
             return False
         if isinstance(erro, (OrdemNaoEncontrada, CentralNaoEncontrada)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(erro)) from erro
-        if isinstance(erro, OrdemAprovada):
+        if isinstance(erro, (OrdemAprovada, OrdemNaoAprovada)):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(erro)) from erro
         if isinstance(erro, OrdemInvalida):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(erro)) from erro
@@ -185,3 +196,57 @@ def apagar(
     with _Erros():
         apagar_ordem(db, gestor.negocio_id, gestor.central_producao_id, ordem_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _ler_setores(texto: Optional[str]) -> list[int | str] | None:
+    """'3,5,sem' -> [3, 5, 'sem']; vazio/ausente -> None (todos). Item inválido -> 422."""
+    if texto is None or texto.strip() == "":
+        return None
+    escolhidos: list[int | str] = []
+    for parte in texto.split(","):
+        parte = parte.strip().lower()
+        if parte == SEM_SETOR:
+            escolhidos.append(SEM_SETOR)
+        elif parte.isdigit():
+            escolhidos.append(int(parte))
+        else:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="Setores inválidos. Escolha os setores da lista.")
+    return escolhidos
+
+
+@router.get(
+    "/producao/ordens/{ordem_id}/pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}, "description": "PDF da ordem, uma folha por setor."}},
+)
+def imprimir(
+    ordem_id: int,
+    setores: Optional[str] = Query(
+        None, description="Ids dos setores separados por vírgula e/ou 'sem' (produtos sem setor); vazio = todos."
+    ),
+    db: Session = Depends(get_db),
+    gestor: GestorCentralAutenticado = Depends(obter_gestor_central),
+):
+    """PDF da ordem APROVADA (rascunho -> 409), uma folha por setor; os setores escolhidos ou todos."""
+    escolhidos = _ler_setores(setores)
+    with _Erros():
+        impressao = montar_impressao(db, gestor.negocio_id, gestor.central_producao_id, ordem_id, escolhidos)
+    nome = f"ordem-producao-{impressao.data_producao:%Y-%m-%d}.pdf"
+    return Response(
+        content=gerar_pdf(impressao),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{nome}"'},
+    )
+
+
+@router.get("/producao/setores", response_model=list[SetorResponse])
+def listar_setores(
+    db: Session = Depends(get_db),
+    gestor: GestorCentralAutenticado = Depends(obter_gestor_central),
+):
+    """Setores de produção da central do gestor (ativos e inativos), na ordem de exibição."""
+    return [
+        SetorResponse(id=s.id, nome=s.nome, ordem=s.ordem, ativo=s.ativo)
+        for s in setores_da_central(db, gestor.negocio_id, gestor.central_producao_id)
+    ]

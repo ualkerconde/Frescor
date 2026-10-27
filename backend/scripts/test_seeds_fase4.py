@@ -22,6 +22,9 @@ Casos:
       de 3 dias antes; as outras no fechamento de hoje (21h de São Paulo em
       UTC; a ordem de amanhã é gerada à noite, N9);
       KG = peças × peso médio; UN = peças; sobra ~15% da venda de ontem
+  D6  demo: setores da central (D67) "Pães" (PRD-01, PRD-04), "Bolos e doces"
+      (PRD-02, PRD-07), "Salgados" (PRD-03), nessa ordem; PRD-05 e PRD-06
+      sem setor
   I1  rodar os dois seeds de novo não muda nada (contagens e somas iguais),
       e duas contagens alteradas antes voltam ao valor e à hora esperados:
       P01 + PRD-02 (quantidade e hora, como se fosse de outro dia) e
@@ -50,7 +53,7 @@ from app.db.session import SessionLocal  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 11
+TOTAL_CASOS = 12
 
 NEGOCIO_PRINCIPAL = "Rede Padaria Teste"
 NEGOCIO_DEMO = "Rede Demo Produção"
@@ -158,6 +161,24 @@ def caso_sincronizacao(db):
               f"INT-005 {alterado['INT-005']} -> {depois['INT-005']}; INT-007 volta a {depois['INT-007'][-7:]}")
 
 
+def caso_setores(db):
+    setores = db.execute(text("""
+        SELECT s.nome, s.ordem, s.ativo, s.central_producao_id = c.id,
+               coalesce(string_agg(p.codigo, ',' ORDER BY p.codigo), '')
+        FROM setores_producao s JOIN negocios n ON n.id = s.negocio_id
+        JOIN centrais_producao c ON c.negocio_id = n.id
+        LEFT JOIN produtos p ON p.setor_producao_id = s.id
+        WHERE n.nome = :n GROUP BY s.nome, s.ordem, s.ativo, s.central_producao_id, c.id
+        ORDER BY s.ordem"""), {"n": NEGOCIO_DEMO}).all()
+    sem_setor = [c for (c,) in db.execute(text("""
+        SELECT p.codigo FROM produtos p JOIN negocios n ON n.id = p.negocio_id
+        WHERE n.nome = :n AND p.setor_producao_id IS NULL ORDER BY p.codigo"""), {"n": NEGOCIO_DEMO})]
+    esperado = [("Pães", 1, True, True, "PRD-01,PRD-04"), ("Bolos e doces", 2, True, True, "PRD-02,PRD-07"),
+                ("Salgados", 3, True, True, "PRD-03")]
+    ok = [tuple(s) for s in setores] == esperado and sem_setor == ["PRD-05", "PRD-06"]
+    registrar("D6 setores da demo", ok, f"{[(s[0], s[4]) for s in setores]}; sem setor: {sem_setor}")
+
+
 def casos_demo(db, ontem):
     central = db.execute(text("""
         SELECT c.id, c.secao::text, c.prazo_entrega_dias, c.ativa FROM centrais_producao c
@@ -246,6 +267,7 @@ def main():
         casos_principal(db)
         caso_sincronizacao(db)
         casos_demo(db, ontem)
+        caso_setores(db)
 
         antes = foto(db)
         # Altera uma contagem (como se fosse de outro dia) para obrigar o seed a

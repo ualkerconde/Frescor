@@ -96,3 +96,10 @@ class OrdemDetalheResponse(OrdemResumoResponse):
 class OrdensDoDiaResponse(BaseModel):
     data_producao: date
     ordens: list[OrdemResumoResponse]
+
+
+class SetorResponse(BaseModel):
+    id: int
+    nome: str
+    ordem: int = Field(description="Ordem de exibição (das folhas impressas e da lista na tela).")
+    ativo: bool

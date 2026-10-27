@@ -25,6 +25,10 @@ O que é criado (gestor `gestor.producao@teste.com`, senha `senha123`):
     PRD-06 Empada de Frango (UN, validade 2, diário): só 2 semanas de venda,
            "pouco histórico", margem de 20% (D34);
     PRD-07 Sonho (UN, validade 1): **sem calendário** (D42).
+- setores de produção da central (D67): "Pães" (PRD-01, PRD-04), "Bolos e
+  doces" (PRD-02, PRD-07) e "Salgados" (PRD-03); a Empada (PRD-06) fica
+  **sem setor** (sai na folha "Sem setor" da impressão). A Manteiga é
+  distribuída e não entra na folha de produção.
 - 8 semanas de vendas e perdas até ontem (PRD-06: só 2 semanas), origem
   `manual`, gravadas com a regra da importação (substitui, D5). Perda pela
   validade (1 dia ~9%, 2 dias ~5%, 3 dias ~3%, 5 dias ~1,5%, 30 dias ~1%).
@@ -74,6 +78,7 @@ from app.models.negocio import Negocio  # noqa: E402
 from app.models.perda_diaria import OrigemPerda, PerdaDiaria  # noqa: E402
 from app.models.produto import Produto, TipoAbastecimento, UnidadeMedida  # noqa: E402
 from app.models.produto_loja import ProdutoLoja  # noqa: E402
+from app.models.setor_producao import SetorProducao  # noqa: E402
 from app.models.usuario import StatusUsuario, TipoUsuario, Usuario  # noqa: E402
 from app.models.venda_diaria import OrigemVenda, VendaDiaria  # noqa: E402
 
@@ -109,6 +114,12 @@ PRODUTOS = {
     "PRD-07": ("Sonho", UnidadeMedida.UN, None, 1, None, PROD, [], 25, SEMANAS_HISTORICO),
 }
 CODIGO_POUCO_HISTORICO = "PRD-06"
+# Setores de produção (D67): nome -> (ordem de exibição, produtos). PRD-06 sem setor.
+SETORES = {
+    "Pães": (1, ["PRD-01", "PRD-04"]),
+    "Bolos e doces": (2, ["PRD-02", "PRD-07"]),
+    "Salgados": (3, ["PRD-03"]),
+}
 SEM_CONTAGEM = {("P02", "PRD-03")}
 CONTAGEM_ANTIGA = {("P02", "PRD-04")}
 
@@ -202,6 +213,16 @@ def main():
         else:
             print(f"Gestor:  {gestor.email} (id={gestor.id}) [existente]")
 
+        setor_ids = {}
+        for nome_setor, (ordem_setor, _) in SETORES.items():
+            setor, criado = _obter_ou_criar(
+                db, SetorProducao, {"negocio_id": negocio.id, "central_producao_id": central.id, "nome": nome_setor},
+                {"ordem": ordem_setor, "ativo": True},
+            )
+            setor.ordem, setor.ativo = ordem_setor, True
+            setor_ids[nome_setor] = setor.id
+            print(f"Setor:   {nome_setor} (id={setor.id}, ordem {ordem_setor}) [{'criado' if criado else 'existente'}]")
+
         ontem = date.today() - timedelta(days=1)
         hoje = ontem + timedelta(days=1)
         contagem_hoje = _utc_sem_fuso(hoje, HORA_CONTAGEM)  # fechamento de hoje
@@ -218,6 +239,9 @@ def main():
             produto.dias_validade = validade
             produto.margem_maxima_percentual = Decimal(margem) if margem else None
             produto.tipo_abastecimento = tipo
+            produto.setor_producao_id = next(
+                (setor_ids[n] for n, (_, codigos) in SETORES.items() if codigo in codigos), None
+            )
 
             existentes = (
                 db.query(CalendarioProducao)
@@ -236,12 +260,15 @@ def main():
             for loja_codigo, loja in lojas.items():
                 fator = LOJAS[loja_codigo][1]
                 _obter_ou_criar(db, ProdutoLoja, {"produto_id": produto.id, "loja_id": loja.id}, {"ativo": True})
-                if codigo == CODIGO_POUCO_HISTORICO:
-                    for modelo in (VendaDiaria, PerdaDiaria):
-                        db.query(modelo).filter(
-                            modelo.negocio_id == negocio.id, modelo.loja_id == loja.id,
-                            modelo.produto_id == produto.id, modelo.data < inicio,
-                        ).delete(synchronize_session=False)
+                # A janela anda com a data de hoje: o que ficou antes dela sai (para
+                # todos os produtos; o PRD-06 tem a janela curta de propósito).
+                # Até 2026-10-16 só o PRD-06 era limpo, e rodar o seed num dia
+                # seguinte deixava um dia de venda a mais nos outros.
+                for modelo in (VendaDiaria, PerdaDiaria):
+                    db.query(modelo).filter(
+                        modelo.negocio_id == negocio.id, modelo.loja_id == loja.id,
+                        modelo.produto_id == produto.id, modelo.data < inicio,
+                    ).delete(synchronize_session=False)
                 venda_ontem = Decimal(0)
                 for n in range(7 * semanas):
                     dia = inicio + timedelta(days=n)

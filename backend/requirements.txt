@@ -26,5 +26,8 @@ python-dotenv==1.0.1
 # Usado na validade da contagem de estoque (D44, America/Sao_Paulo).
 tzdata==2026.2
 
+# PDF da ordem de produção aprovada, uma folha por setor (D67).
+reportlab==5.0.1
+
 # Agendamento de tarefas (rotina de zeragem diária)
 apscheduler==3.11.2

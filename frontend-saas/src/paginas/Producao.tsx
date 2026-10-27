@@ -8,7 +8,9 @@
  *   "Apagar rascunho". Gerar de novo um rascunho com ajustes pede
  *   confirmação dizendo quantas linhas ajustadas serão perdidas (D58).
  *   Aprovar e apagar também confirmam (não se desfazem).
- * - Aprovada: só leitura (sem ajustar, gerar de novo nem apagar).
+ * - Aprovada: só leitura (sem ajustar, gerar de novo nem apagar); ação
+ *   principal "Imprimir" (PDF uma folha por setor, escolha de setores, D67).
+ *   Rascunho não imprime.
  * - Produtos em duas tabelas, "Produção" e "A distribuir" (D39), cada uma
  *   abrindo as lojas com avisos, perda (D66), "Ajustar" e "Ver a conta".
  * - Erros da API (404/409/422) aparecem com a frase do backend, em
@@ -16,7 +18,7 @@
  */
 import { useId, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { CircleAlert, ClipboardCheck, Factory, Lock, RefreshCw, Trash2 } from "lucide-react"
+import { CircleAlert, ClipboardCheck, Factory, Lock, Printer, RefreshCw, Trash2 } from "lucide-react"
 import { useSearchParams } from "react-router"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -28,6 +30,7 @@ import { apiFetch, apiJson } from "@/lib/api/cliente"
 import type { GeracaoOrdem, OrdemDetalhe, OrdensDoDia } from "@/lib/api/tipos"
 import { contar, dataIso, formatarData, somarDias } from "@/lib/formato"
 import { DialogoAjuste, DialogoConfirmar, type AlvoAjuste } from "./producao/Dialogos"
+import { DialogoImprimir } from "./producao/Imprimir"
 import { ResumoOrdem } from "./producao/ResumoOrdem"
 import { TabelaOrdem } from "./producao/TabelaOrdem"
 
@@ -55,6 +58,7 @@ export function Producao() {
   }
   const [confirmacao, setConfirmacao] = useState<Confirmacao>(null)
   const [alvoAjuste, setAlvoAjuste] = useState<AlvoAjuste | null>(null)
+  const [imprimindo, setImprimindo] = useState(false)
   const [erroGeracao, setErroGeracao] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const id = useId()
@@ -158,6 +162,12 @@ export function Producao() {
             caminho. Confira, ajuste o que precisar e aprove.
           </p>
         </div>
+        {ordem && !rascunho && (
+          <Button onClick={() => setImprimindo(true)}>
+            <Printer aria-hidden="true" />
+            Imprimir
+          </Button>
+        )}
         {ordem && rascunho && (
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={gerarDeNovo} carregando={geracao.isPending && confirmacao === null} textoCarregando="Gerando…">
@@ -262,6 +272,14 @@ export function Producao() {
         )}
       </div>
 
+      {ordem && !rascunho && (
+        <DialogoImprimir
+          aberto={imprimindo}
+          ordemId={ordem.id}
+          dataProducao={ordem.data_producao}
+          aoFechar={() => setImprimindo(false)}
+        />
+      )}
       <DialogoAjuste
         alvo={alvoAjuste}
         salvando={ajuste.isPending}

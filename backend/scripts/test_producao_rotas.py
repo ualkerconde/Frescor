@@ -355,7 +355,9 @@ def main():
         esperado = {"/producao/ordens/gerar": ["post"], "/producao/ordens": ["get"],
                     "/producao/ordens/{ordem_id}": ["get", "delete"],
                     "/producao/ordens/{ordem_id}/linhas/{linha_id}": ["patch"],
-                    "/producao/ordens/{ordem_id}/aprovar": ["post"]}
+                    "/producao/ordens/{ordem_id}/aprovar": ["post"],
+                    # N9b (D67): impressão e lista de setores.
+                    "/producao/ordens/{ordem_id}/pdf": ["get"], "/producao/setores": ["get"]}
         parametros = [x["name"] for p, m in spec["paths"].items() if p.startswith("/producao")
                       for op in m.values() for x in op.get("parameters", [])]
         ok = ({p: sorted(m) for p, m in caminhos.items()} == {p: sorted(m) for p, m in esperado.items()}

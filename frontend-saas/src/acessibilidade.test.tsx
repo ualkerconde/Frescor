@@ -188,9 +188,13 @@ describe('acessibilidade (axe-core, WCAG)', () => {
         'GET /producao/ordens': (_init, url) =>
           resposta(200, { data_producao: url.searchParams.get('data'), ordens: url.searchParams.get('data') === amanha ? [resumoDe(ordem)] : [] }),
         'GET /producao/ordens/7': resposta(200, ordem),
+        'GET /producao/setores': resposta(200, [{ id: 1, nome: 'Pães', ordem: 1, ativo: true }]),
       })
       const { unmount } = renderizarApp('/producao')
       await screen.findByText('Ordem aprovada: só leitura.')
+      expect(await violacoes()).toEqual([])
+      await userEvent.click(screen.getByRole('button', { name: 'Imprimir' }))
+      await screen.findByLabelText('Pães')
       expect(await violacoes()).toEqual([])
       unmount()
       renderizarApp(`/producao?data=${somarDias(amanha, 1)}`)

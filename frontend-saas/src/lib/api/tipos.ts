@@ -263,6 +263,14 @@ export interface OrdemDetalhe extends OrdemResumo {
   itens: ItemOrdem[]
 }
 
+/** GET /producao/setores (D67) */
+export interface SetorProducao {
+  id: number
+  nome: string
+  ordem: number
+  ativo: boolean
+}
+
 /** GET /producao/ordens?data= */
 export interface OrdensDoDia {
   data_producao: string

@@ -8,7 +8,18 @@ Cadastrados e gerenciados exclusivamente pelo software web. O app móvel
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -42,6 +53,11 @@ class Produto(Base):
         # O código identifica o produto na importação de CSV (D7); único no
         # negócio para não haver linha ambígua (migration 0016).
         UniqueConstraint("negocio_id", "codigo", name="uq_produto_negocio_codigo"),
+        # Setor do mesmo negócio (migration 0023, D67).
+        ForeignKeyConstraint(
+            ["negocio_id", "setor_producao_id"], ["setores_producao.negocio_id", "setores_producao.id"],
+            name="fk_produto_negocio_setor",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -101,6 +117,11 @@ class Produto(Base):
     # True = sazonal (repete todo ano no mesmo período); False = descontinuado
     # definitivamente a partir de data_fim_vigencia.
     vigencia_recorrente: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Setor de produção (bolo, biscoito, pão...; D67, migration 0023), opcional:
+    # define em qual folha o produto sai na impressão da ordem aprovada.
+    # Sem setor (ou setor inativo / de outra central) -> folha "Sem setor".
+    setor_producao_id = mapped_column(ForeignKey("setores_producao.id"), nullable=True, index=True)
 
     # Ciclo de previsão: semanal (padrão) ou sazonal (evento específico do calendário).
     ciclo_previsao: Mapped[CicloPrevisao] = mapped_column(
