@@ -34,6 +34,10 @@ O que é criado (gestor `gestor.producao@teste.com`, senha `senha123`):
   validade (1 dia ~9%, 2 dias ~5%, 3 dias ~3%, 5 dias ~1,5%, 30 dias ~1%).
 - contagens de estoque (`estoque_atual`) feitas "no fechamento de hoje":
   sobra de ~15% da venda de ontem, em peças (KG: peças × peso médio).
+- operadores do app (Fase 5 / E2), para confirmar o recebimento do
+  romaneio (D77): `operador.p01@teste.com` (loja P01) e
+  `operador.p02@teste.com` (loja P02), senha `senha123`, só com acesso ao
+  app. Se já existem, o perfil volta ao esperado; a senha não é trocada.
 
 Hora da contagem: hoje às 21h (o horário de fechamento padrão da loja,
 D44), em São Paulo, gravada em UTC sem fuso, como o app grava
@@ -86,6 +90,11 @@ NOME_NEGOCIO = "Rede Demo Produção"
 NOME_CENTRAL = "Central Demo Produção"
 LOJAS = {"P01": ("Loja Demo Norte", 1.0), "P02": ("Loja Demo Sul", 0.6)}
 GESTOR = {"email": "gestor.producao@teste.com", "nome": "Gestor Demo Produção"}
+# Operadores do app (Fase 5 / E2): confirmam o recebimento do romaneio (D77).
+OPERADORES = {
+    "P01": {"email": "operador.p01@teste.com", "nome": "Operador Demo Norte"},
+    "P02": {"email": "operador.p02@teste.com", "nome": "Operador Demo Sul"},
+}
 SENHA = "senha123"
 SEMENTE = "frescor-demo-producao-v1"
 
@@ -213,6 +222,27 @@ def main():
         else:
             print(f"Gestor:  {gestor.email} (id={gestor.id}) [existente]")
 
+        # Operadores: procurados pelo e-mail (único no banco); se já existem, o
+        # perfil volta ao esperado (loja, só app, ativo). A senha só é definida
+        # na criação, como a do gestor.
+        for loja_codigo, dados in OPERADORES.items():
+            operador = db.query(Usuario).filter(Usuario.email == dados["email"]).first()
+            criado = operador is None
+            if criado:
+                operador = Usuario(email=dados["email"], senha_hash=hash_senha(SENHA))
+                db.add(operador)
+            operador.negocio_id = negocio.id
+            operador.nome = dados["nome"]
+            operador.tipo_usuario = TipoUsuario.OPERADOR_LOJA
+            operador.loja_id = lojas[loja_codigo].id
+            operador.central_producao_id = None
+            operador.status = StatusUsuario.ATIVO
+            operador.tem_acesso_app = True
+            operador.tem_acesso_web = False
+            db.flush()
+            print(f"Operador: {operador.email} (id={operador.id}, loja {loja_codigo}) "
+                  f"[{'criado' if criado else 'existente'}]")
+
         setor_ids = {}
         for nome_setor, (ordem_setor, _) in SETORES.items():
             setor, criado = _obter_ou_criar(
@@ -322,6 +352,7 @@ def main():
               f"{HORA_CONTAGEM:%H:%M} (São Paulo; {contagem_hoje:%d/%m %H:%M} UTC); "
               f"sem contagem: {sorted(SEM_CONTAGEM)}; antiga ({DIAS_CONTAGEM_ANTIGA} dias): {sorted(CONTAGEM_ANTIGA)}")
         print(f"Entre no SaaS com {GESTOR['email']} / {SENHA}.")
+        print(f"No app: {', '.join(o['email'] for o in OPERADORES.values())} / {SENHA}.")
     except Exception:
         db.rollback()
         raise

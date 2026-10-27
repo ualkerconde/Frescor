@@ -1,7 +1,8 @@
 """
 Testa os seeds da Fase 4 / N2: `seed_produtos.py` (tipo de abastecimento,
 margem, calendário sincronizado) e `seed_demo_producao.py` (negócio de
-demonstração com vendas, perdas e contagens de estoque).
+demonstração com vendas, perdas e contagens de estoque; operadores do app
+desde a Fase 5 / E2).
 
 Rode os dois seeds antes (o teste confere o estado e roda os dois de novo).
 
@@ -25,6 +26,9 @@ Casos:
   D6  demo: setores da central (D67) "Pães" (PRD-01, PRD-04), "Bolos e doces"
       (PRD-02, PRD-07), "Salgados" (PRD-03), nessa ordem; PRD-05 e PRD-06
       sem setor
+  D7  demo (Fase 5 / E2): operadores operador.p01 e operador.p02, um por loja,
+      só com acesso ao app, ativos, sem central; cada um entra no app
+      (POST /auth/login, 200) e vê os 7 produtos da própria loja (GET /produtos)
   I1  rodar os dois seeds de novo não muda nada (contagens e somas iguais),
       e duas contagens alteradas antes voltam ao valor e à hora esperados:
       P01 + PRD-02 (quantidade e hora, como se fosse de outro dia) e
@@ -53,7 +57,7 @@ from app.db.session import SessionLocal  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 12
+TOTAL_CASOS = 13
 
 NEGOCIO_PRINCIPAL = "Rede Padaria Teste"
 NEGOCIO_DEMO = "Rede Demo Produção"
@@ -179,6 +183,37 @@ def caso_setores(db):
     registrar("D6 setores da demo", ok, f"{[(s[0], s[4]) for s in setores]}; sem setor: {sem_setor}")
 
 
+def caso_operadores(db):
+    # Importado aqui: o TestClient só é preciso neste caso (sem "with", o
+    # lifespan da API não roda e o agendador de zeragem não inicia).
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    operadores = db.execute(text("""
+        SELECT u.email, u.tipo_usuario::text, l.codigo, u.central_producao_id, u.tem_acesso_app, u.tem_acesso_web,
+               u.status::text, n.nome
+        FROM usuarios u LEFT JOIN lojas l ON l.id = u.loja_id JOIN negocios n ON n.id = u.negocio_id
+        WHERE u.email IN ('operador.p01@teste.com', 'operador.p02@teste.com') ORDER BY u.email""")).all()
+    esperado = [("operador.p01@teste.com", "operador_loja", "P01", None, True, False, "ativo", NEGOCIO_DEMO),
+                ("operador.p02@teste.com", "operador_loja", "P02", None, True, False, "ativo", NEGOCIO_DEMO)]
+    perfis_ok = [tuple(o) for o in operadores] == esperado
+
+    cliente = TestClient(app)
+    acessos = []
+    for email in ("operador.p01@teste.com", "operador.p02@teste.com"):
+        r = cliente.post("/auth/login", json={"email": email, "senha": "senha123"})
+        if r.status_code != 200:
+            acessos.append((email, f"login {r.status_code}"))
+            continue
+        produtos = cliente.get("/produtos", headers={"Authorization": f"Bearer {r.json()['access_token']}"})
+        codigos = sorted(p.get("codigo") for p in produtos.json()) if produtos.status_code == 200 else []
+        acessos.append((email, f"login 200, /produtos {produtos.status_code} com {len(codigos)}"))
+        perfis_ok = perfis_ok and produtos.status_code == 200 and codigos == sorted(PRODUTOS_DEMO)
+    registrar("D7 operadores da demo entram no app", perfis_ok,
+              f"perfis={[(o[0].split('@')[0], o[2], o[4], o[5]) for o in operadores]}; {acessos}")
+
+
 def casos_demo(db, ontem):
     central = db.execute(text("""
         SELECT c.id, c.secao::text, c.prazo_entrega_dias, c.ativa FROM centrais_producao c
@@ -268,6 +303,7 @@ def main():
         caso_sincronizacao(db)
         casos_demo(db, ontem)
         caso_setores(db)
+        caso_operadores(db)
 
         antes = foto(db)
         # Altera uma contagem (como se fosse de outro dia) para obrigar o seed a
