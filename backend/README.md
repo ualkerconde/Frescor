@@ -34,7 +34,11 @@ backend/
 │   │   ├── 0016_produto_codigo_unico.py
 │   │   ├── 0017_extensao_unaccent.py
 │   │   ├── 0018_evento_central_e_fks_negocio.py
-│   │   └── 0019_previsoes_diarias.py
+│   │   ├── 0019_previsoes_diarias.py
+│   │   ├── 0020_secao_prazo_tipo_abastecimento.py
+│   │   ├── 0021_loja_horario_fechamento.py
+│   │   ├── 0022_ordens_producao.py
+│   │   └── 0023_setores_producao.py
 │   ├── env.py
 │   └── script.py.mako
 ├── alembic.ini
@@ -47,6 +51,7 @@ backend/
 │   │   ├── escopo.py          # SaaS: loja fora do escopo do gestor -> 404
 │   │   ├── eventos.py         # SaaS: POST/GET/DELETE /eventos (cadastro mínimo, D24)
 │   │   ├── previsoes.py       # SaaS: POST /previsoes/gerar, GET /previsoes, GET /previsoes/qualidade
+│   │   ├── producao.py        # SaaS: ordem de produção (gerar, listar, detalhar, ajustar, aprovar, apagar, PDF) e setores
 │   │   ├── web.py             # SaaS: /web/me, /web/lojas, /web/produtos (apoio às telas)
 │   │   ├── health.py          # /api/health
 │   │   ├── produtos.py        # App: /produtos, /estoque
@@ -76,7 +81,11 @@ backend/
 │   │   ├── evento.py                  # Eventos de demanda atípica + associações com lojas/produtos
 │   │   ├── venda_diaria.py            # Venda por loja + produto + dia + origem
 │   │   ├── perda_diaria.py            # Perda por loja + produto + dia + origem
-│   │   └── previsao_diaria.py         # Previsão gravada por loja + produto + dia, com os componentes
+│   │   ├── previsao_diaria.py         # Previsão gravada por loja + produto + dia, com os componentes
+│   │   ├── ordem_producao.py          # Ordem do dia da central (rascunho / aprovada)
+│   │   ├── ordem_producao_item.py     # Um item por produto na ordem
+│   │   ├── ordem_producao_linha.py    # Uma linha por loja: sugerida, final, conta, avisos, recebimento
+│   │   └── setor_producao.py          # Setor de produção da central (pão, bolo...): uma folha por setor na impressão
 │   ├── schemas/
 │   │   ├── auth.py
 │   │   ├── estoque.py
@@ -84,6 +93,7 @@ backend/
 │   │   ├── consulta.py
 │   │   ├── evento.py
 │   │   ├── previsao.py
+│   │   ├── producao.py
 │   │   ├── web.py
 │   │   └── zeragem.py
 │   ├── services/
@@ -102,20 +112,26 @@ backend/
 │   │   ├── previsao_gravacao.py     # Gera e grava 7 dias (substitui a geração anterior); VERSAO_METODO
 │   │   ├── previsao_consulta_service.py # Consulta das previsões gravadas e qualidade (teste no passado)
 │   │   ├── previsao_metricas.py     # WAPE, viés e o "ingênuo" (mesmo dia da semana passada)
-│   │   └── eventos_service.py       # Eventos da central (escopo D27) e carga para o motor
+│   │   ├── eventos_service.py       # Eventos da central (escopo D27) e carga para o motor
+│   │   ├── necessidade_calculo.py   # Necessidade, funções puras (cobertura, contagem, projeção, margem); VERSAO_METODO_NECESSIDADE
+│   │   ├── necessidade_service.py   # Necessidade de todas as lojas + produtos de uma central (lê o banco)
+│   │   ├── producao_service.py      # Ordem: gerar, ajustar, aprovar, apagar; trânsito das ordens aprovadas
+│   │   ├── producao_consulta_service.py # Leitura das ordens para a API e a tela
+│   │   └── ordem_pdf_service.py     # PDF da ordem aprovada, uma folha por setor (reportlab)
 │   └── main.py                 # Ponto de entrada da aplicação
 ├── scripts/
 │   ├── seed_dev.py                     # Negócio, central, 2 lojas, operadores e gestor de teste
 │   ├── seed_produtos.py                # Produtos de teste, habilitados em todas as lojas
 │   ├── seed_vendas.py                  # ~8 semanas de vendas e perdas das 2 lojas
 │   ├── seed_demo_previsao.py           # Negócio separado para ver "Sem previsão" e "Pouco histórico"
+│   ├── seed_demo_producao.py           # Negócio separado para a ordem de produção (contagens, setores)
 │   ├── backtest_previsao.py            # Teste no passado do motor (WAPE, viés, contra o ingênuo)
 │   ├── test_*.py                       # Scripts de teste (ver seção 3.3)
 │   └── _check_enums.py                 # Utilitário: lista os tipos enum do PostgreSQL
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
-└── requirements-dev.txt               # Só desenvolvimento: httpx (TestClient dos testes de rota)
+└── requirements-dev.txt               # Só desenvolvimento: httpx (TestClient) e pypdf (leitura do PDF nos testes)
 ```
 
 ---
@@ -210,12 +226,13 @@ Cole o valor gerado no campo `SECRET_KEY` do `.env`.
 alembic upgrade head
 ```
 
-Aplica as 19 migrações em sequência (0001 a 0019). Tabelas criadas:
+Aplica as 23 migrações em sequência (0001 a 0023). Tabelas criadas:
 `negocios`, `centrais_producao`, `lojas`, `usuarios`, `permissoes_web`,
 `produtos`, `produtos_lojas`, `estoque_atual`, `historico_contagens`,
 `niveis_classificacao`, `produto_classificacoes`, `calendario_producao`,
 `eventos`, `eventos_lojas`, `eventos_produtos`, `vendas_diarias`,
-`perdas_diarias`, `previsoes_diarias`.
+`perdas_diarias`, `previsoes_diarias`, `ordens_producao`,
+`ordens_producao_itens`, `ordens_producao_linhas`, `setores_producao`.
 
 | Migração | O que faz |
 | --- | --- |
@@ -233,6 +250,10 @@ Aplica as 19 migrações em sequência (0001 a 0019). Tabelas criadas:
 | 0017 | Extensão `unaccent` do PostgreSQL: a busca de produtos ignora acentos ("pao" acha "Pão"). Precisa estar disponível no PostgreSQL de produção |
 | 0018 | `eventos.central_producao_id` ("todas as lojas" = lojas da central do evento, D27) e `negocio_id` nas associações de eventos, com FKs compostas por negócio |
 | 0019 | Cria `previsoes_diarias`: uma linha por loja + produto + dia, com o número, a previsão sem evento e a própria, os componentes (base, tendência, peso, proxy), os eventos aplicados, a versão do método e quem/quando gerou; FKs compostas por negócio |
+| 0020 | `centrais_producao.secao` (padaria/açougue/hortifruti, D14) e `prazo_entrega_dias` (padrão 0, D32); `produtos.tipo_abastecimento` (`produzido`/`distribuido`, no lugar de `tem_producao_propria`, D40); `calendario_producao.negocio_id` com FK composta |
+| 0021 | `lojas.horario_fechamento` (padrão 21:00, hora local): a contagem vale desde o fechamento da véspera menos 2 h (D44) |
+| 0022 | Cria `ordens_producao` (rascunho/aprovada; uma programada por central e dia), `ordens_producao_itens` (por produto) e `ordens_producao_linhas` (por loja: sugerida, final, conta e avisos em JSON, edição, recebimento); FKs compostas; apagar a ordem apaga itens e linhas |
+| 0023 | Cria `setores_producao` (por central: nome, ordem, ativo) e `produtos.setor_producao_id` opcional (D67) |
 
 Toda migração tem `downgrade` funcional. Para conferir uma migração nova:
 `alembic upgrade head` → `alembic downgrade -1` → `alembic upgrade head`.
@@ -282,6 +303,18 @@ principal (11 produtos, lojas 001/002). Idempotente; a cada execução a janela
 acompanha a data de hoje. Depois, entre na tela de previsão com o gestor demo e
 clique em "Gerar previsão".
 
+**Demonstração da ordem de produção** (opcional): `python scripts/seed_demo_producao.py`
+cria outro negócio **separado**, "Rede Demo Produção" (gestor
+`gestor.producao@teste.com` / `senha123`; central padaria com prazo 0; lojas
+`P01` e `P02`), com 8 semanas de vendas e perdas, **contagens no fechamento de
+hoje (21h)** e 7 produtos, cada um com um caso da necessidade: validade de 1 dia,
+margem própria, cobertura maior que a validade, contagem antiga, nunca contado,
+**distribuído**, pouco histórico e sem calendário. Tem os setores "Pães", "Bolos e
+doces" e "Salgados", e a Empada **sem setor**. É separado porque a Loja 001 do
+seed principal tem contagens reais feitas no app. Idempotente; a janela acompanha
+a data de hoje (rode de novo em outro dia para as contagens valerem para amanhã).
+Depois, entre na tela "Produção" e clique em "Gerar ordem".
+
 ### 3.3 Scripts de teste
 
 Rodam contra o banco configurado no `.env`, criam os próprios dados de
@@ -317,6 +350,17 @@ python scripts/test_previsao_metricas.py      # WAPE, viés e ingênuo (6)
 python scripts/test_previsoes_gravadas.py     # gravação de 7 dias, substituição, trava (15)
 python scripts/test_previsoes_rotas.py        # API de previsão: gerar, consultar, qualidade (26)
 python scripts/test_aceite_fase3.py           # critério de aceite da Fase 3: os 5 cenários (6)
+
+# Fase 4 — necessidade e ordem de produção
+python scripts/test_abastecimento_modelo.py   # migrations 0020/0021: seção, prazo, tipo, calendário, fechamento (15)
+python scripts/test_seeds_fase4.py            # seeds da Fase 4 (rode seed_produtos e seed_demo_producao antes) (12)
+python scripts/test_necessidade_calculo.py    # necessidade, sem banco: cobertura, contagem, prazo 0 e 1, trânsito (22)
+python scripts/test_necessidade_service.py    # necessidade com banco: quem entra, de onde vem cada entrada (13)
+python scripts/test_ordens_modelo.py          # migration 0022: regras de banco das ordens (22)
+python scripts/test_producao_service.py       # gerar, ajustar, aprovar, apagar; trânsito da ordem aprovada (18)
+python scripts/test_producao_rotas.py         # API da ordem: 401/403, 404/409/422, escopo (19)
+python scripts/test_ordem_pdf.py              # PDF da ordem aprovada: uma folha por setor, filtro, 409, 404 (12)
+python scripts/test_aceite_fase4.py           # critério de aceite da Fase 4, de ponta a ponta pela rota (7)
 ```
 
 Saída esperada: uma linha `[OK]` por caso e, no fim, `TODOS OS CASOS PASSARAM`
@@ -477,6 +521,33 @@ Para cada loja + produto + dia (detalhes e números nas decisões D16–D31 do `
 
 Qualquer mudança no cálculo exige atualizar `VERSAO_METODO` em `app/services/previsao_gravacao.py` no mesmo commit (hoje `2026.10-v2`); a versão vai gravada em cada previsão.
 
+### SaaS web — ordem de produção (exigem token do SaaS)
+
+A central vem do token: nenhuma rota recebe `central_id`. Erros: **404** ordem ou linha fora do escopo (mesma resposta para outra central, outro negócio e inexistente); **409** ordem aprovada (não é ajustada, gerada de novo nem apagada) e imprimir ordem que não foi aprovada; **422** regra ferida, em português.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `POST` | `/producao/ordens/gerar` | Corpo opcional `{"data_producao"}` (padrão amanhã; de hoje até 6 dias à frente). Atualiza a previsão se estiver desatualizada, calcula a necessidade (com o trânsito das ordens aprovadas) e grava a ordem em **rascunho**, substituindo o rascunho do dia. Final = sugerida. |
+| `GET` | `/producao/ordens?data=` | Ordens do dia em resumo: situação, totais por unidade, `linhas_editadas` (perdidas se o rascunho for gerado de novo), `linhas_sem_quantidade`. |
+| `GET` | `/producao/ordens/{id}` | Itens por produto (total sugerido e final = soma das lojas) e linhas por loja (quantidades, avisos, a conta da necessidade). |
+| `PATCH` | `/producao/ordens/{id}/linhas/{linha_id}` | `{quantidade_final, motivo?}` (UN inteiro; KG até 3 casas). Só rascunho. |
+| `POST` | `/producao/ordens/{id}/aprovar` | Exige quantidade em todas as linhas e lojas ativas na central. Aprovada fica travada e vira trânsito das próximas ordens. |
+| `DELETE` | `/producao/ordens/{id}` | Apaga um rascunho (204). |
+| `GET` | `/producao/ordens/{id}/pdf?setores=1,2,sem` | PDF da ordem **aprovada**, uma folha por setor (vazio = todos; `sem` = produtos sem setor). Só produtos produzidos. |
+| `GET` | `/producao/setores` | Setores de produção da central, na ordem. |
+
+### Necessidade (Fase 4)
+
+Para cada loja + produto na data de produção D (decisões D32–D62 do `docs/STATUS.md`):
+
+1. **Chegada** = D + prazo de entrega da central; **cobertura** = da chegada até a véspera da próxima chegada pelo calendário do produto, limitada à validade (contada da fabricação).
+2. **Mínimo** = soma da previsão **gravada** de cada dia da cobertura; dia fora da vigência conta 0.
+3. **Alvo** = mínimo × (1 + margem): a do produto, 10% sem margem, pelo menos 20% com pouco histórico.
+4. **Estoque na chegada** = contagem válida (desde o fechamento da véspera − 2 h, hora de São Paulo) + trânsito das ordens aprovadas − venda prevista até a chegada, sem o que vence antes.
+5. **Necessidade** = alvo − estoque na chegada, para cima (UN inteiro; KG em 0,1 kg).
+
+Qualquer mudança nesse cálculo (ou nos filtros do `necessidade_service.py`) exige atualizar `VERSAO_METODO_NECESSIDADE` em `app/services/necessidade_calculo.py` no mesmo commit (hoje `2026.10-n1`); a versão vai gravada em cada ordem.
+
 ---
 
 ## 7. Segurança — Isolamento Multiempresa
@@ -567,11 +638,13 @@ python scripts/seed_dev.py
 python scripts/seed_produtos.py
 python scripts/seed_vendas.py
 python scripts/seed_demo_previsao.py   # opcional: demonstração da tela de previsão
+python scripts/seed_demo_producao.py   # opcional: demonstração da ordem de produção
 
 # Testes (lista completa na seção 3.3)
 python scripts/test_auth_web.py
 python scripts/test_consulta_rotas.py
 python scripts/test_aceite_fase3.py
+python scripts/test_aceite_fase4.py
 ```
 
 ### Banco (via psql)

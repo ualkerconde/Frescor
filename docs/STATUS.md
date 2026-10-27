@@ -17,7 +17,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | 1 — Fundação de dados | **Concluída (2026-10-13)** | Migrations 0007–0014, models, seeds e testes verificados; app mobile testado no iPhone. |
 | 2 — Ingestão de vendas e perdas | **Concluída (2026-10-13)** | P1–P8 feitos; critério de aceite atendido no P6 (importar CSV e consultar). Pendências que ficam: ver "Fase 2 — o que fica" abaixo. |
 | 3 — Motor de previsão | **Concluída (2026-10-15)** | F1–F10 feitos; critério de aceite atendido nos 5 cenários (`test_aceite_fase3.py`); tela de previsão e estados "Sem previsão"/"Pouco histórico" conferidos no navegador pelo Ualker. Pendências para antes da produção: seção 5, item 9. |
-| 4 — Necessidade e produção | **Em andamento** — plano aprovado em 2026-10-15 | N1–N10, decisões D32–D43; ver "Fase 4 — plano" abaixo |
+| 4 — Necessidade e produção | **Concluída (2026-10-27)** — N1–N10 e N9b, aprovados pelo Ualker | Plano aprovado em 2026-10-15; decisões D32–D67; critério de aceite atendido no N8 (`test_aceite_fase4.py`). Pendências para antes da produção: seção 5, itens 9 e 10. |
 | 5 — Distribuição | Não iniciada | |
 | 6 — Frontend do SaaS (`frontend-saas/`) | **Telas da Fase 2 concluídas** (W1–W8, 2026-10-13, conferidas no navegador) | Login, importação e consulta. As telas das Fases 3–5 (previsão, ordem de produção, romaneio) entram junto com cada fase, **com o código dividido por tela** (ver observação do W8). |
 | 7 — Validação com dado real | Não iniciada | Depende de cliente piloto (D3) |
@@ -265,7 +265,7 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 | N8 | `test_aceite_fase4.py`: central com 2+ lojas, conta à mão | critério do doc §8 + sabotagens | **Concluído (2026-10-15)**, aprovado pelo Ualker. Critério de aceite atendido. Ver "N8 — resultado" abaixo. |
 | N9 | Tela `/producao` (carregada só quando aberta); **regerar um rascunho que tenha edições pede confirmação dizendo quantas linhas editadas serão perdidas (D58)**; limiar do indicador de perda (D53) | testes, axe, roteiro no navegador | **Concluído (2026-10-15)**, conferido no navegador e aprovado pelo Ualker. Ver "N9 — resultado" abaixo. |
 | N9b | Setores de produção (D67): migration 0023 (`setores_producao` por central; `produtos.setor_producao_id`), PDF da ordem aprovada uma folha por setor (`GET /producao/ordens/{id}/pdf?setores=`, `GET /producao/setores`), botão "Imprimir" com a escolha de setores, setores no seed demo | ciclo da migration; folhas por setor, filtro, rascunho 409, outra central/negócio 404; sabotagem; PDF de exemplo | **Concluído (2026-10-27)**, aprovado pelo Ualker (escolhas 1–5 aceitas; a 6 vai para a Fase 6). Ver "N9b — resultado" abaixo. |
-| N10 | READMEs, STATUS, regressão completa | backend e frontend | — |
+| N10 | READMEs, STATUS, regressão completa | backend e frontend | **Concluído (2026-10-27)**, aprovado pelo Ualker; fecha a Fase 4. Ver "N10 — resultado" abaixo. |
 
 **N1 — resultado (2026-10-15):**
 - Migration `0020_secao_prazo_tipo_abastecimento`: `centrais_producao.secao` (enum `secaocentral`: padaria, acougue, hortifruti; NOT NULL, padrão `padaria`) e `prazo_entrega_dias` (NOT NULL, padrão 0, `ck_central_prazo_entrega_nao_negativo`); `produtos.tipo_abastecimento` (enum `tipoabastecimento`: produzido, distribuido; NOT NULL, padrão `produzido`), preenchido a partir de `tem_producao_propria`, que foi **removida**; `calendario_producao.negocio_id` (NOT NULL, preenchido pelo produto) com `fk_calendario_negocio_produto` (negócio + produto) e índice. Downgrade recria `tem_producao_propria` a partir do tipo. Escolha registrada: padrão `produzido` para produto sem tipo (aparece na ordem, onde o gestor vê; como distribuído sumiria da ordem sem aviso).
@@ -405,6 +405,16 @@ necessidade          = max(0, alvo − estoque na chegada), arredondada (D37:
 - **6 sabotagens do backend, todas pegas:** S1 sem página nova por setor → P1, P2, P3, P4, P6 (Pães e Bolos na mesma folha); S2 escolha de setores ignorada → P6, P7; S3 rascunho imprime → P9; S4 sem filtro de central → P10 (o gestor da outra central recebia o PDF); S5 distribuídos na folha → P2, P3; S6 setor inativo com folha própria → P1, P2, P4, P8.
 - Tela: botão **"Imprimir"** (ação principal da ordem aprovada; o rascunho não tem) abre o diálogo com **"Todos os setores" marcado**, os setores ativos e "Sem setor"; "Abrir PDF" baixa com o token e abre numa aba nova (aberta no clique, para não ser bloqueada; se for, baixa o arquivo); nenhum setor → "Escolha pelo menos um setor."; erro da API em português, sem código. `src/paginas/producao/Imprimir.tsx` (novo). Testes: +5 da tela (17 no total), axe também no diálogo de impressão. **2 sabotagens da tela pegas:** lista de setores enviada mesmo com "todos" → teste de "todos"; "Imprimir" no rascunho → teste do rascunho.
 - Verificações: backend **29 scripts, todos exit 0** (inclui o `test_ordem_pdf.py`; `test_producao_rotas.py` com as 2 rotas novas no OpenAPI); frontend typecheck ok, lint sem erros (3 avisos antigos), **193 testes**, build ok (JS principal 487,4 kB; tela de produção 29 kB). PDF real da ordem aprovada de 16/10 da Rede Demo Produção conferido como imagem: 3 folhas (Pães: Pão Francês 54,4 kg = 36,1 + 18,3; Bolos e doces: Bolo de Cenoura 71 un = 44 + 27; Sem setor: Empada 31 un = 20 + 11), sem o Sonho (0) e sem a Manteiga (distribuída).
+
+**N10 — resultado (2026-10-27; aprovado pelo Ualker, Fase 4 concluída):**
+- `backend/README.md`: migrations 0020–0023 (estrutura, contagem "23 migrações", tabelas e o que cada uma faz); arquivos novos (`producao.py` da API e do schema, 4 models, 5 serviços); seed demo de produção (para que serve, gestor, casos, setores, por que é separado); os 9 scripts de teste da Fase 4 com o número de casos; `requirements-dev.txt` (pypdf); rotas da ordem de produção (8, com os códigos 404/409/422) e o resumo do método da necessidade com a regra do `VERSAO_METODO_NECESSIDADE` (hoje `2026.10-n1`). `frontend-saas/README.md`: tela `/producao` (rascunho, aprovada, impressão), seed demo de produção, estrutura (`producao/`, `lib/perda.ts`), decisões (conta só com os componentes gravados, validação igual à do backend, PDF em aba aberta no clique, faixas de perda), JS principal ~487 kB.
+- **Regressão completa (2026-10-27):** backend — alembic em **0023 (head)**; seed demo de produção rodado antes (a data tinha mudado; 700 vendas, contagens do fechamento de 27/10); **29 scripts, todos exit 0, 554 verificações [OK]** (Fase 4: abastecimento 15, seeds 12, necessidade cálculo 22, necessidade serviço 13, ordens modelo 22, produção serviço 18, produção rotas 19, PDF 12, aceite 7); `backtest_previsao.py` exit 0 (motor 9,6% contra 10,2% do ingênuo; perfil semanal a 0,60 p.p.; o aviso de sempre para INT-001/002/006). Frontend — typecheck ok; lint sem erros (os 3 avisos antigos do shadcn); **193 testes** em 15 arquivos; build ok (JS principal 487,4 kB / 155,1 kB gzip; previsão 21,3 kB; produção 29,0 kB); `npm audit --omit=dev` 0.
+- **Sabotagens do N10 (uma em cada ponta da cadeia, com a bateria inteira da Fase 4 rodada em cada uma), todas pegas:**
+  - N10-S1 trânsito fora da projeção (cálculo) → falham `test_necessidade_calculo` (N15, N18), `test_necessidade_service` (E11) e `test_producao_service` (T1, D52). O `test_aceite_fase4` **não** pega: o cenário dele tem prazo 0, sem trânsito (a cobertura do trânsito fica no N3/N4/N6).
+  - N10-S2 sem o filtro de vigência (serviço) → falham `test_necessidade_service` (E1) e `test_aceite_fase4` (F1, F3, F4, F5: o produto vencido entra na ordem).
+  - N10-S3 PDF sem página nova por setor (impressão) → falha `test_ordem_pdf` (P1, P2, P3, P4, P6: dois setores na mesma folha).
+  - Depois de restaurar: nenhuma marca de sabotagem no código, `git diff` só com os READMEs, a bateria da Fase 4 limpa de novo (9 exit 0).
+- **Fase 4 fechada** com a aprovação do Ualker e o commit do N10 (2026-10-27). O que fica de pendência (não bloqueia a Fase 5): seção 5, item 9 (cadastro de setores antes do primeiro cliente real; e as anteriores: job noturno e cache da qualidade da previsão, D3, D15) e item 10 (limitações aceitas: idade do estoque contado, lote que vence no meio da cobertura, histórico de edições, faixas de perda por negócio).
 
 **Tela de revisão e aprovação (proposta aprovada):** topo com data de produção (padrão: a próxima), situação (Rascunho / Aprovada), resumo por unidade e "Confira estes" (pelo nome: sem previsão, sem contagem recente, cobertura maior que a validade, estoque acima do máximo, recebimento não confirmado). Tabela de produção por produto (sugerido, final, cobertura, etiquetas); abrir a linha mostra as lojas (previsão somada, estoque e quando foi contado, em trânsito, sugerido, final editável) e "Ver a conta". Bloco "A distribuir" separado. Ação principal "Gerar ordem" (sem ordem) / "Aprovar ordem" (rascunho); "Recalcular" secundária; diálogo de confirmação antes de aprovar, listando o que tem aviso. Ordem aprovada só leitura ("Aprovada por X em …").
 
@@ -711,6 +721,10 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-27** — **N9b aprovado.** Escolhas 1 a 5 da impressão aceitas como estão; a 6 (tela e rota para cadastrar setores e atribuir o setor ao produto) vai para a Fase 6 e é **pendência obrigatória antes do primeiro cliente real** (seção 5, item 9).
 
+- **2026-10-27** — N10 feito (READMEs, regressão completa: backend 29 scripts / 554 verificações, frontend 193 testes; 3 sabotagens de ponta a ponta pegas). Fase 4 pronta para fechar, aguardando aprovação; sem commit.
+
+- **2026-10-27** — **Fase 4 concluída**, aprovada pelo Ualker. Registrado no item 10 da seção 5 que o teste de aceite da Fase 4 não cobre trânsito (prazo 0); cenário de aceite com prazo maior que 0 fica como melhoria futura. Próximo: planejar a Fase 5.
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---
@@ -752,7 +766,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    ~~N8~~ — aprovado e commitado em 2026-10-15 (critério de aceite da Fase 4 atendido).
    ~~N9~~ — conferido no navegador, aprovado e commitado em 2026-10-15.
    ~~N9b~~ (setores e impressão, D67) — aprovado e commitado em 2026-10-27.
-   **Próximo: N10** (READMEs, STATUS, regressão completa; fechar a Fase 4).
+   ~~N10~~ — aprovado e commitado em 2026-10-27. **Fase 4 concluída.**
+   **Próximo: planejar a Fase 5 (distribuição / romaneio).**
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.
@@ -762,6 +777,7 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 10. **Trabalho futuro da necessidade (Fase 5/7)** — limitações aceitas no N3:
    - **D47 — idade do estoque contado:** sem lote nem recebimento, o estoque contado é tratado como o mais novo possível. Com a confirmação de recebimento (Fase 5), usar a data real da última entrega; com lote, a fabricação real. Conferir na Fase 7 se a premissa otimista gera falta.
    - **D67 — cadastro de setores:** Fase 6; obrigatório antes do primeiro cliente real (item 9).
+   - **Aceite da Fase 4 sem trânsito:** o `test_aceite_fase4.py` usa prazo de entrega 0, em que não há trânsito; ele não pega um defeito no trânsito (visto na sabotagem N10-S1). A regra é coberta pelos testes do N3, N4 e N6. Melhoria futura: um cenário de aceite com prazo maior que 0 (ordem aprovada entrando como trânsito na seguinte, de ponta a ponta pela rota).
    - **D66 — faixas de perda por negócio:** hoje os limites (3% / 5% / 8%) são uma constante única no frontend. Se redes diferentes pedirem limites diferentes (ou por seção), levar para uma configuração do negócio no backend.
    - **D56 — histórico de edições da linha da ordem:** hoje só a última edição fica gravada. Se a Fase 7 precisar ver cada ajuste do gestor, criar uma tabela própria de histórico.
    - **D49 — lote que vence no meio da cobertura:** conta inteiro mesmo que não dê tempo de vendê-lo antes de vencer. Refino possível: limitar o que cada lote cobre à previsão dos dias em que ele ainda vale. Medir na Fase 7 (perda × ruptura) antes de mudar.
