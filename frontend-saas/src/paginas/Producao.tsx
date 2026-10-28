@@ -156,7 +156,7 @@ export function Producao() {
     <section className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px]">Ordem de produção</h1>
+          <h1 className="text-[28px] leading-tight">Ordem de produção</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
             Quanto produzir e mandar para cada loja, calculado com a previsão, a contagem das lojas e o que já está a
             caminho. Confira, ajuste o que precisar e aprove.
@@ -186,7 +186,7 @@ export function Producao() {
         )}
       </div>
 
-      <div className="grid gap-4 rounded-lg border border-line bg-card p-6 md:grid-cols-3">
+      <div className="grid gap-4 painel p-6 md:grid-cols-3">
         <div className="flex flex-col gap-2">
           <Label htmlFor={`${id}-data`}>Dia de produção</Label>
           <Input
@@ -220,7 +220,7 @@ export function Producao() {
         ) : carregando ? (
           <p className="text-muted-foreground">Carregando…</p>
         ) : !ordem ? (
-          <div className="rounded-lg bg-surface p-6">
+          <div className="painel-vazio p-6">
             <p className="text-foreground">Nenhuma ordem gerada para {formatarData(data)}.</p>
             {foraDoPeriodo ? (
               <p className="mt-1 text-muted-foreground">

@@ -923,6 +923,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 
 - **2026-10-28** — **E4 aprovado**, commitado e enviado ao GitHub. As 3 escolhas viraram decisões: **D86** (loja zerada pelo rateio fica no romaneio com 0), **D87** (produção corrigida não refaz o rascunho; ajusta a D69) e **D88** (ordem não programada ou não aprovada → 409 em todas as ações do romaneio).
 
+- **2026-10-28** — **Redesenho visual do frontend-saas** (pedido do Ualker: "moderno, único, impressionante"), num branch com PR para revisão, sem mudar regra de negócio. Mantém a identidade da direção B (teal, dourado, Sora + Source Sans 3) e o contraste AA. A primeira versão (aurora, degradês, vidro, brilhos) foi recusada pelo Ualker por ter "cara de IA"; a regra de **contenção** entrou na skill (nada de degradê, brilho, vidro, sombra colorida nem animação de enfeite). Versão final: barra lateral `--secondary` lisa com navegação em grupos no lugar do cabeçalho; login em duas metades (formulário sobre branco; painel escuro com um recorte de ordem de produção); painéis com borda de 1px e raio 12; tabelas dentro de painel. 3 cores novas na skill (`--ink-muted`, `--ink-line`, `--primary-soft`), com contraste conferido no `tema.test.ts`. O dourado pode ser texto **só** sobre `--secondary`. Skill atualizada.
+
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
 ---

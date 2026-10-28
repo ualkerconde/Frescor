@@ -61,7 +61,14 @@
   --fr-warning-bg: #fdf3e1;
   --fr-error: #b42318;
   --fr-error-bg: #fdecea;
+  /* Barra lateral (fundo --secondary): texto secundário e divisória. */
+  --fr-ink-muted: #a9b7c1;
+  --fr-ink-line: #2c3e4d;
+  /* Fundo de hover/seleção em linhas de tabela e itens de lista. */
+  --fr-primary-soft: #e2f0ec;
   --fr-shadow-elevado: 0 1px 2px rgb(21 33 43 / 0.06), 0 4px 12px rgb(21 33 43 / 0.06);
+  /* Painel: só um traço de sombra; quem separa é a borda de 1px. */
+  --fr-shadow-painel: 0 1px 2px rgb(21 33 43 / 0.04);
 
   /* ---- variáveis que os componentes do shadcn leem ---- */
   --background: var(--fr-bg);
@@ -122,6 +129,9 @@
   --color-warning-bg: var(--fr-warning-bg);
   --color-error: var(--fr-error);
   --color-error-bg: var(--fr-error-bg);
+  --color-ink-muted: var(--fr-ink-muted);
+  --color-ink-line: var(--fr-ink-line);
+  --color-primary-soft: var(--fr-primary-soft);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -130,6 +140,7 @@
   --radius-2xl: 18px;
 
   --shadow-elevado: var(--fr-shadow-elevado);
+  --shadow-painel: var(--fr-shadow-painel);
 }
 
 @layer base {
@@ -149,6 +160,15 @@
   h3 {
     @apply font-heading text-heading;
     font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: var(--fr-primary-soft);
+    color: var(--fr-text);
   }
   /* Foco visível da skill: anel de 2px --primary com 2px de afastamento. */
   :focus-visible {
@@ -160,6 +180,42 @@
 /* Números sempre com algarismos de largura fixa (skill). */
 @utility numero {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Painel: o bloco branco padrão das telas (filtros, formulários, tabelas).
+ * Plano: borda de 1px --line, raio 12px e um traço de sombra. Sem
+ * degradê, brilho ou faixa colorida: a hierarquia vem do texto e do espaço.
+ */
+@utility painel {
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  background: var(--fr-card);
+  box-shadow: var(--fr-shadow-painel);
+}
+
+/* Número de dashboard (KPI): o mesmo painel, sem efeito de hover (não é clicável). */
+@utility painel-kpi {
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  background: var(--fr-card);
+  box-shadow: var(--fr-shadow-painel);
+}
+
+/* Estado vazio: fundo surface com borda tracejada. */
+@utility painel-vazio {
+  border: 1px dashed color-mix(in srgb, var(--fr-input-border) 55%, transparent);
+  border-radius: 12px;
+  background: var(--fr-card);
+}
+
+/* Número grande do dashboard: Sora 600, levemente apertado, algarismos tabulares. */
+@utility numero-destaque {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fr-secondary);
 }
 
 /* Animações curtas e respeito a quem pede menos movimento (skill). */
