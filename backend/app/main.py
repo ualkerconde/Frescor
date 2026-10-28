@@ -30,6 +30,7 @@ from app.api import (
     previsoes,
     producao,
     produtos,
+    recebimentos,
     web,
     zeragem,
 )
@@ -85,6 +86,7 @@ app.include_router(eventos.router, tags=["Eventos (SaaS web)"])
 app.include_router(previsoes.router, tags=["Previsão (SaaS web)"])
 app.include_router(producao.router, tags=["Ordem de produção (SaaS web)"])
 app.include_router(distribuicao.router, tags=["Distribuição e romaneio (SaaS web)"])
+app.include_router(recebimentos.router, tags=["Recebimento (app mobile)"])
 
 
 @app.get("/")
