@@ -24,7 +24,7 @@ Casos:
   L3 loja de outro negócio -> barrada (fk_ordem_linha_negocio_loja)
   L4 sugerida negativa -> barrada
   L5 final negativa -> barrada
-  L6 recebida negativa -> barrada
+  L6 a linha não tem mais as colunas de recebimento nem a regra delas (0025)
   L7 sugerida e final NULL (por SQL) -> aceita, componentes {} e avisos []
   C1 apagar a ordem apaga os itens e as linhas (CASCADE), sem tocar outra ordem
 
@@ -263,8 +263,14 @@ def main():
                     "ck_ordem_linha_sugerida_nao_negativa")
         deve_barrar("L5 final negativa", lambda s: s.add(linha_2(quantidade_final=DEC("-1"))),
                     "ck_ordem_linha_final_nao_negativa")
-        deve_barrar("L6 recebida negativa", lambda s: s.add(linha_2(quantidade_recebida=DEC("-1"))),
-                    "ck_ordem_linha_recebida_nao_negativa")
+        # L6 (0025): o recebimento saiu da linha da ordem e fica no romaneio (D75, D79).
+        sobrou = sorted(nome for (nome,) in db.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'ordens_producao_linhas'"
+            " AND column_name IN ('quantidade_recebida', 'recebido_em')")))
+        sobrou += [nome for (nome,) in db.execute(text(
+            "SELECT conname FROM pg_constraint WHERE conname = 'ck_ordem_linha_recebida_nao_negativa'"))]
+        registrar("L6 sem colunas de recebimento na linha (0025)", not sobrou,
+                  "colunas e regra removidas" if not sobrou else f"ainda existem: {sobrou}")
         db.execute(text("INSERT INTO ordens_producao_linhas (negocio_id, item_id, loja_id) VALUES (:n, :i, :l)"),
                    {"n": ids["neg"], "i": ids["item_2"], "l": ids["loja"]})
         db.commit()

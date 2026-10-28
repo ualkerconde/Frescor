@@ -14,8 +14,9 @@ Uma linha por loja em cada item da ordem: quanto mandar para aquela loja.
   chegada) para o "Ver a conta" da tela. `avisos` (JSON) à parte, para a
   tela listar o que precisa de atenção.
 - Edição: quem, quando e motivo opcional (só a última edição).
-- Recebimento (Fase 5): `quantidade_recebida` e `recebido_em`. Linha de
-  ordem aprovada com `recebido_em` NULL é estoque em trânsito (D43).
+- Recebimento: não fica aqui. A loja confirma no romaneio
+  (`romaneios_entregas`, `romaneios_itens`); as colunas de recebimento
+  desta tabela saíram na 0025 (D75, D79).
 
 A loja precisa ser da central da ordem: regra do serviço (o vínculo
 loja-central pode mudar com o tempo; o banco não o congela).
@@ -50,9 +51,6 @@ class OrdemProducaoLinha(Base):
             "quantidade_sugerida IS NULL OR quantidade_sugerida >= 0", name="ck_ordem_linha_sugerida_nao_negativa"
         ),
         CheckConstraint("quantidade_final IS NULL OR quantidade_final >= 0", name="ck_ordem_linha_final_nao_negativa"),
-        CheckConstraint(
-            "quantidade_recebida IS NULL OR quantidade_recebida >= 0", name="ck_ordem_linha_recebida_nao_negativa"
-        ),
         ForeignKeyConstraint(
             ["negocio_id", "item_id"], ["ordens_producao_itens.negocio_id", "ordens_producao_itens.id"],
             name="fk_ordem_linha_negocio_item", ondelete="CASCADE",
@@ -74,5 +72,3 @@ class OrdemProducaoLinha(Base):
     editado_em = mapped_column(DateTime, nullable=True)
     editado_por_usuario_id = mapped_column(ForeignKey("usuarios.id"), nullable=True)
     motivo_edicao = mapped_column(String(255), nullable=True)
-    quantidade_recebida = mapped_column(Numeric(12, 3), nullable=True)
-    recebido_em = mapped_column(DateTime, nullable=True)

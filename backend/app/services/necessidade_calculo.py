@@ -13,8 +13,9 @@ Método (docs/STATUS.md, "Fase 4 — plano"), para a data de produção D:
                          limitada à validade do produto (D36)
     mínimo             = Σ previsão de cada dia da cobertura (doc §4.4)
     alvo               = mínimo × (1 + margem) (D34)
-    estoque na chegada = contado + em trânsito − previsão dos dias entre a contagem
-                         e a chegada, sem o que vence antes da chegada (D35, D45)
+    estoque na chegada = contado + em trânsito + recebido depois da contagem (D79)
+                         − previsão dos dias entre a contagem e a chegada, sem o
+                         que vence antes da chegada (D35, D45)
     necessidade        = max(0, alvo − estoque na chegada), arredondada (D37)
 
 Por que cada peça:
@@ -57,7 +58,8 @@ from zoneinfo import ZoneInfo
 # Mudou uma regra da necessidade (cobertura, contagem, margem, projeção,
 # arredondamento, filtros do necessidade_service), muda a versão.
 # n1 (2026-10-15): D32-D53.
-VERSAO_METODO_NECESSIDADE = "2026.10-n1"
+# n2 (2026-10-28): trânsito pelo romaneio e pelo recebimento (D79, D85, D89).
+VERSAO_METODO_NECESSIDADE = "2026.10-n2"
 
 # Margem (D34): sem margem no produto, 10%; produto com pouco histórico
 # (cold start), pelo menos 20% (doc §4.2: em lançamento, falta é pior que
@@ -99,10 +101,17 @@ class Contagem:
 
 @dataclass(frozen=True)
 class LoteTransito:
-    """Linha de ordem aprovada para a loja, ainda sem recebimento confirmado (D43)."""
+    """
+    Entrega aprovada para a loja (D43, D79): ainda não confirmada (trânsito)
+    ou confirmada pela loja no prazo (`recebido_em_utc` preenchido, com a
+    quantidade recebida). A confirmação com atraso vem sem a hora: pela D89,
+    a chegada fica presumida no dia de entrega, antes da contagem.
+    """
 
     data_entrega: date
     quantidade: Decimal
+    # Hora da confirmação no prazo, em UTC sem fuso (como `recebido_em`).
+    recebido_em_utc: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -164,6 +173,8 @@ class ResultadoNecessidade:
     # Estoque contado que entrou na projeção (0 se desatualizado ou ausente).
     estoque_considerado: Decimal
     transito_considerado: Decimal
+    # Entregas confirmadas depois da contagem válida (D79 (2)): não estão nela.
+    recebido_apos_contagem: Decimal
     consumo_ate_chegada: Decimal
     # Sobra que vence antes de chegar à cobertura.
     vencido_ate_chegada: Decimal
@@ -297,7 +308,8 @@ def calcular_necessidade(e: EntradaNecessidade) -> ResultadoNecessidade:
         dias_ate_chegada=(), minimo=None, margem=None, origem_margem=None, alvo=None,
         estoque_contado=e.contagem.quantidade if e.contagem else None, contagem_valida=False,
         contagem_local=None, limite_contagem_local=None, estoque_considerado=Decimal(0),
-        transito_considerado=Decimal(0), consumo_ate_chegada=Decimal(0), vencido_ate_chegada=Decimal(0),
+        transito_considerado=Decimal(0), recebido_apos_contagem=Decimal(0), consumo_ate_chegada=Decimal(0),
+        vencido_ate_chegada=Decimal(0),
         estoque_na_chegada=None, necessidade_bruta=None, necessidade=None,
     )
     if not e.dias_producao:
@@ -329,14 +341,29 @@ def calcular_necessidade(e: EntradaNecessidade) -> ResultadoNecessidade:
         else:
             avisos.append(AVISO_CONTAGEM_DESATUALIZADA)
 
-    # Trânsito (D43): só o que chega entre a contagem (fim de D−1) e a chegada.
+    # Trânsito (D43, D79): só o que chega antes da chegada desta produção.
+    # - Confirmada no prazo, com contagem válida: entra pela recebida se a
+    #   confirmação foi DEPOIS da contagem (não está nela); antes, já está na
+    #   contagem e não conta de novo.
+    # - Não confirmada (ou com atraso, D89): entrega a partir de D é trânsito;
+    #   antes de D, está presumida na contagem (chegou no dia de entrega,
+    #   antes do fechamento).
     transito_considerado = Decimal(0)
+    recebido_apos_contagem = Decimal(0)
     for lote in e.transito:
-        if e.data_producao <= lote.data_entrega < cob.chegada:
+        if lote.data_entrega >= cob.chegada:
+            continue
+        fabricacao = lote.data_entrega - timedelta(days=e.prazo_entrega_dias)
+        validade = ultimo_dia_valido(fabricacao, e.dias_validade)
+        if lote.recebido_em_utc is not None and campos["contagem_valida"]:
+            if lote.recebido_em_utc > e.contagem.atualizado_em_utc:
+                recebido_apos_contagem += lote.quantidade
+                lotes.append((lote.quantidade, None, validade))
+        elif e.data_producao <= lote.data_entrega:
             transito_considerado += lote.quantidade
-            fabricacao = lote.data_entrega - timedelta(days=e.prazo_entrega_dias)
-            lotes.append((lote.quantidade, lote.data_entrega, ultimo_dia_valido(fabricacao, e.dias_validade)))
-    campos.update(estoque_considerado=estoque_considerado, transito_considerado=transito_considerado)
+            lotes.append((lote.quantidade, lote.data_entrega, validade))
+    campos.update(estoque_considerado=estoque_considerado, transito_considerado=transito_considerado,
+                  recebido_apos_contagem=recebido_apos_contagem)
 
     dias_com_previsao = dias_ate_chegada + cob.dias
     if any(e.previsoes.get(d) is None for d in dias_com_previsao):

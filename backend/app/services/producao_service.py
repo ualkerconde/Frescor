@@ -27,12 +27,16 @@ Regras:
   autenticado (a rota passa os dados de `obter_gestor_central`); ordem ou
   linha de outra central ou negócio responde como inexistente.
 
-Trânsito (D43, D52): `provedor_transito_ordens` devolve, por loja +
-produto, as linhas de ordens APROVADAS ainda sem recebimento confirmado
-(`recebido_em` NULL) com entrega a partir de D. Entrega antes de D conta
-como já recebida no fim do dia de entrega (está na contagem de D−1); a
-linha da necessidade ganha o aviso "recebimento não confirmado" quando há
-entrega assim nos 7 dias antes de D.
+Trânsito (D43, D52, D79, D89): `provedor_transito_ordens` devolve, por
+loja + produto, as entregas de ordens APROVADAS que podem entrar na
+projeção: as ainda não confirmadas com entrega a partir de D (pela final do
+romaneio aprovado ou, sem romaneio, pela final da ordem) e as confirmadas no
+prazo (pela recebida, com a hora). Entrega antes de D sem confirmação, ou
+confirmada com atraso, conta como chegada no dia de entrega, antes da
+contagem do fechamento: já está na contagem de D−1. A linha da necessidade
+ganha os avisos das entregas assim nos 7 dias antes de D ("recebimento não
+confirmado", "sem confirmação", "confirmada com atraso") e, nos
+componentes, a quantidade presumida recebida (`recebimento_presumido`).
 """
 
 from collections import defaultdict
@@ -41,7 +45,7 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import text
+from sqlalchemy import and_, text
 from sqlalchemy.orm import Session
 
 from app.models.loja import Loja
@@ -49,11 +53,18 @@ from app.models.ordem_producao import OrdemProducao, StatusOrdemProducao, TipoOr
 from app.models.ordem_producao_item import OrdemProducaoItem
 from app.models.ordem_producao_linha import OrdemProducaoLinha
 from app.models.produto import TipoAbastecimento, UnidadeMedida
+from app.models.romaneio import Romaneio, StatusRomaneio
+from app.models.romaneio_entrega import RomaneioEntrega, SituacaoEntrega
+from app.models.romaneio_item import RomaneioItem
 from app.services.necessidade_calculo import VERSAO_METODO_NECESSIDADE, LoteTransito
 from app.services.necessidade_service import NecessidadesCentral, Par, calcular_necessidades
 from app.services.previsao_gravacao import HORIZONTE_DIAS, gerar_previsoes
+from app.services.recebimento_service import confirmada_no_prazo, dia_local
 
 AVISO_RECEBIMENTO_NAO_CONFIRMADO = "recebimento_nao_confirmado"  # D43
+AVISO_SEM_CONFIRMACAO = "sem_confirmacao"  # D79 (4)
+AVISO_CONFIRMADA_COM_ATRASO = "confirmada_com_atraso"  # D85
+_ORDEM_MARCAS = (AVISO_RECEBIMENTO_NAO_CONFIRMADO, AVISO_SEM_CONFIRMACAO, AVISO_CONFIRMADA_COM_ATRASO)
 DIAS_AVISO_RECEBIMENTO = 7
 CASAS_KG = Decimal("0.001")
 # Trava por central (primeiro inteiro separa das travas da previsão, 3001).
@@ -102,44 +113,111 @@ def _json(valor):
     return valor
 
 
-def _linhas_aprovadas_pendentes(db: Session, negocio_id: int, lojas: Sequence[int]):
-    """Linhas de ordens aprovadas, sem recebimento confirmado, das lojas (qualquer central)."""
-    return (
+@dataclass(frozen=True)
+class _Entrega:
+    """Uma linha de ordem aprovada para a loja, com o que o romaneio aprovado diz dela."""
+
+    loja_id: int
+    produto_id: int
+    data_entrega: date
+    # Recebida (se confirmada), senão a final do romaneio aprovado, senão a final da ordem.
+    quantidade: Decimal | None
+    # None = a ordem não tem romaneio aprovado (vale a ordem, como na Fase 4).
+    situacao: SituacaoEntrega | None
+    recebido_em: datetime | None
+
+
+def _entregas(db: Session, negocio_id: int, lojas: Sequence[int], desde: date) -> list[_Entrega]:
+    """Linhas de ordens aprovadas das lojas (qualquer central, D62) com entrega a partir de `desde`."""
+    consulta = (
         db.query(OrdemProducaoLinha.loja_id, OrdemProducaoItem.produto_id, OrdemProducao.data_entrega,
-                 OrdemProducaoLinha.quantidade_final)
+                 OrdemProducaoLinha.quantidade_final, Romaneio.id, RomaneioEntrega.situacao,
+                 RomaneioEntrega.recebido_em, RomaneioItem.quantidade_final, RomaneioItem.quantidade_recebida)
         .join(OrdemProducaoItem, OrdemProducaoItem.id == OrdemProducaoLinha.item_id)
         .join(OrdemProducao, OrdemProducao.id == OrdemProducaoItem.ordem_id)
+        .outerjoin(RomaneioItem, and_(RomaneioItem.ordem_linha_id == OrdemProducaoLinha.id,
+                                      RomaneioItem.negocio_id == negocio_id))
+        .outerjoin(RomaneioEntrega, and_(RomaneioEntrega.id == RomaneioItem.entrega_id,
+                                         RomaneioEntrega.negocio_id == negocio_id))
+        .outerjoin(Romaneio, and_(Romaneio.id == RomaneioEntrega.romaneio_id, Romaneio.negocio_id == negocio_id,
+                                  Romaneio.status == StatusRomaneio.APROVADO))
         .filter(
             OrdemProducao.negocio_id == negocio_id,
             OrdemProducaoLinha.negocio_id == negocio_id,
             OrdemProducao.status == StatusOrdemProducao.APROVADA,
             OrdemProducaoLinha.loja_id.in_(list(lojas)),
-            OrdemProducaoLinha.recebido_em.is_(None),
+            OrdemProducao.data_entrega >= desde,
         )
     )
+    entregas = []
+    for loja_id, produto_id, data_entrega, final_ordem, romaneio_id, situacao, recebido_em, final, recebida in consulta:
+        if romaneio_id is None:
+            # Sem romaneio aprovado (ou só rascunho): vale a final da ordem (D79 (1)).
+            entregas.append(_Entrega(loja_id, produto_id, data_entrega, final_ordem, None, None))
+        elif situacao == SituacaoEntrega.RECEBIDA:
+            entregas.append(_Entrega(loja_id, produto_id, data_entrega, recebida, situacao, recebido_em))
+        else:
+            entregas.append(_Entrega(loja_id, produto_id, data_entrega, final, situacao, None))
+    return entregas
 
 
 def provedor_transito_ordens(
     db: Session, negocio_id: int, lojas: Sequence[int], data_producao: date
 ) -> dict[Par, list[LoteTransito]]:
-    """D43/D52: trânsito por loja + produto (entrega a partir de D)."""
+    """
+    D43/D52/D79: por loja + produto, o que pode entrar na projeção:
+    - entrega a partir de D ainda não confirmada: trânsito, pela final do
+      romaneio aprovado (já rateada) ou, sem romaneio, pela final da ordem;
+    - entrega confirmada NO PRAZO: pela recebida, com a hora da confirmação
+      (o cálculo decide pela contagem se ela já está no estoque contado).
+    Entrega antes de D não confirmada, ou confirmada com atraso, fica fora:
+    está presumida na contagem (chegou no dia de entrega, antes do
+    fechamento; D43, D89).
+    """
     transito: dict[Par, list[LoteTransito]] = defaultdict(list)
-    for loja_id, produto_id, entrega, quantidade in _linhas_aprovadas_pendentes(db, negocio_id, lojas).filter(
-        OrdemProducao.data_entrega >= data_producao
-    ):
-        if quantidade is not None and quantidade > 0:
-            transito[(loja_id, produto_id)].append(LoteTransito(entrega, Decimal(quantidade)))
+    for x in _entregas(db, negocio_id, lojas, data_producao - timedelta(days=1)):
+        if x.quantidade is None or x.quantidade <= 0:
+            continue
+        recebido = (x.recebido_em if x.recebido_em is not None and confirmada_no_prazo(x.data_entrega, x.recebido_em)
+                    else None)
+        if x.data_entrega < data_producao and recebido is None:
+            continue
+        transito[(x.loja_id, x.produto_id)].append(LoteTransito(x.data_entrega, Decimal(x.quantidade), recebido))
     return dict(transito)
 
 
-def _recebimentos_presumidos(db: Session, negocio_id: int, lojas: Sequence[int], data_producao: date) -> set[Par]:
+def _marcas_recebimento(
+    db: Session, negocio_id: int, lojas: Sequence[int], data_producao: date, agora: datetime
+) -> dict[Par, tuple[set[str], Decimal]]:
+    """
+    D60/D79/D85: avisos das entregas dos 7 dias antes de D e a quantidade
+    presumida recebida (sem confirmação), por loja + produto.
+    - sem romaneio aprovado, ou romaneio sem a saída registrada:
+      "recebimento não confirmado" (D43), presumida pela final;
+    - saiu e o dia de entrega terminou sem confirmação: "sem confirmação",
+      presumida pela final do romaneio (D79 (4));
+    - confirmada no dia seguinte: "confirmada com atraso" (D85).
+    """
+    marcas: dict[Par, tuple[set[str], Decimal]] = defaultdict(lambda: (set(), Decimal(0)))
     inicio = data_producao - timedelta(days=DIAS_AVISO_RECEBIMENTO)
-    return {
-        (loja_id, produto_id)
-        for loja_id, produto_id, _, _ in _linhas_aprovadas_pendentes(db, negocio_id, lojas).filter(
-            OrdemProducao.data_entrega >= inicio, OrdemProducao.data_entrega < data_producao
-        )
-    }
+    hoje_local = dia_local(agora)
+    for x in _entregas(db, negocio_id, lojas, inicio):
+        if x.data_entrega >= data_producao:
+            continue
+        par = (x.loja_id, x.produto_id)
+        avisos, presumido = marcas[par]
+        quantidade = Decimal(x.quantidade or 0)
+        if x.situacao in (None, SituacaoEntrega.AGUARDANDO_SAIDA):
+            avisos.add(AVISO_RECEBIMENTO_NAO_CONFIRMADO)
+            presumido += quantidade
+        elif x.situacao == SituacaoEntrega.EXPEDIDA:
+            if hoje_local > x.data_entrega and quantidade > 0:
+                avisos.add(AVISO_SEM_CONFIRMACAO)
+                presumido += quantidade
+        elif not confirmada_no_prazo(x.data_entrega, x.recebido_em):
+            avisos.add(AVISO_CONFIRMADA_COM_ATRASO)
+        marcas[par] = (avisos, presumido)
+    return {par: m for par, m in marcas.items() if m[0]}
 
 
 def _ordem_programada(db: Session, negocio_id: int, central_producao_id: int, data_producao: date):
@@ -163,6 +241,7 @@ def gerar_ordem(
     usuario_id: int | None,
     hoje: date,
     atualizar_previsao: AtualizarPrevisao | None = gerar_previsoes,
+    agora: datetime | None = None,
 ) -> ResultadoGeracaoOrdem:
     """Gera (ou regera, se rascunho) a ordem programada da central para `data_producao`."""
     if data_producao < hoje:
@@ -216,7 +295,7 @@ def gerar_ordem(
         db.flush()
 
         lojas = sorted({i.loja_id for i in necessidades.itens})
-        presumidos = _recebimentos_presumidos(db, negocio_id, lojas, data_producao) if lojas else set()
+        marcas = _marcas_recebimento(db, negocio_id, lojas, data_producao, agora or datetime.utcnow()) if lojas else {}
         itens: dict[int, OrdemProducaoItem] = {}
         linhas = sem_quantidade = 0
         for x in necessidades.itens:
@@ -230,10 +309,11 @@ def gerar_ordem(
                 db.flush()
                 itens[x.produto_id] = item
             avisos = list(x.resultado.avisos)
-            if (x.loja_id, x.produto_id) in presumidos:
-                avisos.append(AVISO_RECEBIMENTO_NAO_CONFIRMADO)
+            marcas_par, presumido = marcas.get((x.loja_id, x.produto_id), (set(), Decimal(0)))
+            avisos.extend(a for a in _ORDEM_MARCAS if a in marcas_par)
             componentes = _json(asdict(x.resultado))
-            componentes.update(pouco_historico=x.pouco_historico, taxa_perda=_json(x.taxa_perda))
+            componentes.update(pouco_historico=x.pouco_historico, taxa_perda=_json(x.taxa_perda),
+                               recebimento_presumido=_json(presumido))
             db.add(OrdemProducaoLinha(
                 negocio_id=negocio_id, item_id=item.id, loja_id=x.loja_id,
                 quantidade_sugerida=x.resultado.necessidade, quantidade_final=x.resultado.necessidade,
