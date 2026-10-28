@@ -36,20 +36,22 @@ Prévia visual: https://claude.ai/artifact/S9Td8ehP4vgptb7Z1YT9hh
 | `--success` / `--success-bg` | #1F7A3E / #E8F4EC | enviado, dentro da meta |
 | `--warning` / `--warning-bg` | #9A5B00 / #FDF3E1 | pendente, atenção |
 | `--error` / `--error-bg` | #B42318 / #FDECEA | erro, perda acima do limite |
-| `--ink` | #0F1B25 | fim do degradê das superfícies escuras (barra lateral, painel do login) |
-| `--ink-muted` | #A9B7C1 | texto secundário **sobre superfície escura** |
-| `--ink-line` | #2C3E4D | divisória decorativa sobre superfície escura |
-| `--mint` | #6FD6BD | realce (texto, ícone, brilho) **só sobre superfície escura**; nunca sobre claro |
+| `--ink-muted` | #A9B7C1 | texto secundário **sobre a barra escura** (`--secondary`) |
+| `--ink-line` | #2C3E4D | divisória decorativa sobre a barra escura |
 | `--primary-soft` | #E2F0EC | hover de linha de tabela, seleção de texto |
 
-Contrastes conferidos (WCAG 2.1): text/bg 15,8 · muted/bg 6,0 · muted/surface 5,5 · branco/primary 6,4 · primary/bg 6,2 · text/accent 7,6 · success/bg 5,2 · warning/bg 5,2 · error/bg 6,3 · branco/error 6,6 · branco/success 5,4 · success/success-bg 4,75 · warning/warning-bg 4,9 · error/error-bg 5,75. Superfície escura: branco/ink 17,4 · ink-muted/secondary 7,0 · accent/secondary 6,7 · mint/secondary 8,3. Claro: text/primary-soft 13,9 · muted/primary-soft 5,3. Todos AA.
+Contrastes conferidos (WCAG 2.1): text/bg 15,8 · muted/bg 6,0 · muted/surface 5,5 · branco/primary 6,4 · primary/bg 6,2 · text/accent 7,6 · success/bg 5,2 · warning/bg 5,2 · error/bg 6,3 · branco/error 6,6 · branco/success 5,4 · success/success-bg 4,75 · warning/warning-bg 4,9 · error/error-bg 5,75. Barra escura: branco/secondary 14,4 · ink-muted/secondary 7,0 · accent/secondary 6,7. Claro: text/primary-soft 13,9 · muted/primary-soft 5,3. Todos AA.
 
-### Superfícies escuras (desde 28/10/2026)
-A barra lateral do web e o painel de marca do login usam um degradê `--secondary` → `--ink`, com trama de pontos branca a 7% e um brilho `--primary` desfocado. Ali:
+### Superfície escura (desde 28/10/2026)
+A barra lateral do web e o painel de produto do login são `--secondary` **liso**. Ali:
 - texto principal branco, secundário `--ink-muted`;
-- o `--accent` (dourado) **pode** ser texto, ícone e marcador (6,7:1), por exemplo o item de menu atual;
-- `--mint` é o realce verde (status "ok", foco visível no lugar do `--primary`).
+- o `--accent` (dourado) pode ser texto curto (6,7:1), com moderação;
+- foco visível em anel branco (o `--primary` some no escuro);
+- o logo vai monocromático: folha branca, "certo" em `--secondary`.
 Isso não é modo escuro: o conteúdo das telas continua só na paleta clara.
+
+### Contenção (decisão do Ualker, 28/10/2026)
+A primeira versão do redesenho, com aurora, brilhos, texto em degradê, cartões de vidro, faixas coloridas e sombras verdes, foi recusada por ter "cara de IA". Ficou a regra: **nada de degradê, brilho, desfoque decorativo, vidro, trama de fundo, sombra colorida ou animação de enfeite.** A hierarquia vem da tipografia, do espaço e de bordas de 1px. O que impressiona é o produto bem resolvido (números alinhados, estados claros, densidade certa), não o efeito.
 
 Ao criar uma cor nova, confira o contraste antes de usar: no mínimo 4,5:1 para texto, 3:1 para texto ≥ 24px, ícones e bordas de controle.
 
@@ -65,12 +67,11 @@ Modo escuro ainda não foi definido. Não invente um: só a paleta clara existe 
 
 ## Espaço, raio e sombra
 - **Espaçamento:** escala de 4px: 4, 8, 12, 16, 24, 32, 48. Margem lateral mínima de 16px no mobile.
-- **Raio:** 10px em botões, inputs e cards pequenos; **16px nos painéis** (blocos de filtro, formulário, tabela, KPI, modal); 6px em badges; pill (999px) só em status.
-- **Sombra:** em camadas, nunca uma sombra preta pesada.
-  - painel (`painel`, `painel-kpi` no `index.css`): contorno de 1px a 6% + `0 8px 24px -12px` a 12%;
-  - botão primário: brilho interno de 1px + sombra verde `0 6px 16px -6px` do `--primary`;
-  - modal: `0 24px 64px -16px` do `--ink` a 45%, sobre véu `--ink` 40% com desfoque.
-- **Utilitários do web** (`frontend-saas/src/index.css`): `painel`, `painel-kpi` (faixa da marca de 3px no topo, verde → menta → dourado), `painel-vazio` (estado vazio tracejado), `numero-destaque`, `fundo-trabalho` (brilhos suaves nos cantos), `trama-pontos`. Use-os em vez de repetir classes soltas.
+- **Raio:** 10px em botões e inputs; **12px nos painéis e no modal** (blocos de filtro, formulário, tabela, KPI); 6px em badges; pill (999px) só em status.
+- **Sombra:** quase nenhuma. Quem separa é a borda de 1px `--line`.
+  - painel e botão: no máximo um traço `0 1px 2px` a 4–12%;
+  - modal: `0 16px 40px -12px` do `--secondary` a 30%, sobre véu `--secondary` a 40%, sem desfoque.
+- **Utilitários do web** (`frontend-saas/src/index.css`): `painel` (branco, borda 1px, raio 12), `painel-kpi` (igual, para números), `painel-vazio` (estado vazio tracejado), `numero-destaque` (Sora 600, −0,02em, tabular). Use-os em vez de repetir classes soltas.
 
 ## Componentes
 - **Botão:**
@@ -89,21 +90,20 @@ Modo escuro ainda não foi definido. Não invente um: só a paleta clara existe 
   - fundo `--card` ou `--surface`, raio 10, padding 16;
   - título em Sora 18 `--secondary`, com o status (badge) no canto direito.
 - **Estrutura do web (shell):**
-  - barra lateral escura fixa de 272px (≥ 1024px): logo, navegação em grupos ("Dados", "Planejamento"), e no rodapé avatar com iniciais (fundo `--accent`), nome, central · negócio e "Sair";
-  - item atual: fundo branco a 9%, marcador dourado de 3px à esquerda e ícone dourado;
+  - barra lateral `--secondary` lisa, fixa, de 248px (≥ 1024px): logo monocromático, navegação em grupos ("Dados", "Planejamento", rótulo 12px `--ink-muted`), itens de 44px com texto 15px e ícone 18px, e no rodapé avatar com iniciais (branco a 10%), nome, central · negócio e "Sair";
+  - item atual: fundo branco a 10% e texto branco; os outros em `--ink-muted`;
   - abaixo de 1024px vira faixa no topo, com a navegação rolando de lado;
-  - faixa clara fixa no topo do conteúdo: trilha ("Planejamento › Produção") e a data de hoje;
-  - cada tela entra com um "surgir" de 200ms.
-- **Login:** tela dividida. À esquerda, superfície escura com aurora (brilhos verde, menta e dourado se movendo devagar), a promessa do produto em Sora 700 com o fim em degradê menta → dourado, e uma ilustração de cartões de vidro (decorativa, `aria-hidden`). À direita, o formulário sobre `--bg`. No celular, só o logo sobre o fundo escuro e o formulário num cartão.
+  - faixa branca no topo do conteúdo com borda inferior: trilha ("Planejamento › Produção") e a data de hoje em texto simples.
+- **Login:** tela dividida em duas metades. À esquerda, sobre branco, o logo no topo, o formulário (título "Entrar" em Sora 28, campos sem ícone, botão "Entrar") e uma linha para o operador de loja no rodapé. À direita, só no desktop, painel `--secondary` liso com uma frase curta do produto e um recorte de uma ordem de produção desenhado como a tela real, sangrando pela borda direita (decorativo, `aria-hidden`, dados de exemplo). No celular, só o formulário.
 - **Tabela (web):**
-  - dentro de um painel (raio 16); tabela dentro de outra usa `contorno={false}`;
+  - dentro de um painel (raio 12); tabela dentro de outra usa `contorno={false}`;
   - cabeçalho 12px maiúsculo `--muted` sobre `--surface`, linhas de 48px, hover `--primary-soft`;
   - números alinhados à direita;
   - zebra com `--surface`;
   - no mobile, a tabela vira uma lista de cards.
 - **Número de dashboard:**
   - rótulo curto em cima (14px `--muted`);
-  - número grande em Sora 36–48 `--secondary`;
+  - número grande em Sora 600, 32px no web (36–48 no app mobile), `--secondary`, sem quebrar linha;
   - variação embaixo com seta e cor semântica ("▲ 6% vs. ontem").
   - No máximo 4 números por linha. **Perda subindo é vermelho**, mesmo sendo "para cima".
 - **Alerta:**
@@ -125,14 +125,13 @@ Modo escuro ainda não foi definido. Não invente um: só a paleta clara existe 
 8. **Cor nunca sozinha:** status sempre com texto ou ícone junto.
 
 ## Acessibilidade
-- Contraste AA em tudo (veja a tabela acima). O `--accent` nunca é texto.
+- Contraste AA em tudo (veja a tabela acima). O `--accent` nunca é texto sobre fundo claro (sobre `--secondary`, pode).
 - **Área de toque:** mínimo 44×44px, e **48×48px no app mobile**, com 8px entre os alvos.
 - **Foco visível:** anel de 2px `--primary` com 2px de offset (`focus-visible`). Nunca `outline: none` sem substituto.
 - `lang="pt-BR"`, labels ligadas aos inputs, `aria-live="polite"` para resultado de leitura e envio.
-- Respeite `prefers-reduced-motion`. Transições de interface de no máximo 200ms. A única exceção é o movimento ambiente lento e decorativo do login (aurora, cartões flutuando), que para com `prefers-reduced-motion`.
+- Respeite `prefers-reduced-motion`. Animações de no máximo 200ms, só para dar retorno (hover, abrir diálogo), nunca de enfeite.
 
 ## Marca
 - **Nome:** Frescor. O nome do módulo de padaria ("Fornada") e o slogan ("Quebra Zero") ainda não foram confirmados.
-- **Logo (conceito):** folha com degradê `--mint` → `--primary` → `--primary-hover`, cuja nervura é um "certo" `--accent`, ao lado de "Frescor" em Sora 700 `--secondary` (branco sobre superfície escura), com espaçamento entre letras de −0,03em.
-- **Tipografia de impacto:** títulos de página em Sora 700 com −0,025em; números de dashboard em Sora 700 com −0,03em.
+- **Logo (conceito):** folha `--primary` cuja nervura é um "certo" `--accent`, ao lado de "Frescor" em Sora 700 `--secondary`, com −0,02em entre letras. Sobre `--secondary`: folha branca e "certo" `--secondary` (monocromático).
 - INPI e registro.br ainda não foram consultados.

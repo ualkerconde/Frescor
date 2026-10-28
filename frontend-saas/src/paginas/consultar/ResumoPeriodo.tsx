@@ -35,7 +35,7 @@ function Numero({
       ) : (
         <ul className="mt-1">
           {totais.map((t) => (
-            <li key={t.unidade} className="numero-destaque text-[clamp(30px,2.6vw,40px)] leading-tight whitespace-nowrap">
+            <li key={t.unidade} className="numero-destaque text-[32px] leading-tight whitespace-nowrap">
               {formatarQuantidade(t.quantidade, t.unidade)}
             </li>
           ))}

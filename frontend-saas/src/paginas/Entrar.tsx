@@ -2,12 +2,11 @@
  * Tela de login do gestor da central (passo W4, redesenhada em 28/10/2026),
  * seguindo a skill Frescor.
  *
- * Visual: fundo escuro da marca (--secondary -> --ink) com uma "aurora"
- * verde e dourada que se move devagar (para com prefers-reduced-motion).
- * No desktop, à esquerda, a promessa do produto e uma ilustração feita de
- * cartões de vidro (previsão, ordem aprovada, quebra); à direita, o
- * formulário num painel claro. No celular, só o logo e o formulário.
- * A ilustração é decorativa (aria-hidden): os números são de exemplo.
+ * Visual: à esquerda, o formulário sobre branco, com o logo no topo. À
+ * direita (só no desktop), um painel liso em --secondary com uma frase
+ * curta do produto e um recorte de uma ordem de produção, como o gestor vê
+ * no sistema. O recorte é decorativo (aria-hidden) e usa dados de exemplo.
+ * Sem degradê, brilho ou animação: o produto é o que aparece.
  *
  * Regras mantidas: uma única ação principal ("Entrar"), labels visíveis,
  * erro de campo com ícone abaixo do campo, erro do servidor num alerta com
@@ -15,7 +14,7 @@
  * terminou sozinha.
  */
 import { useId, useRef, useState, type FormEvent } from "react"
-import { CircleAlert, CircleCheck, LockKeyhole, LogIn, Mail, TrendingDown, TriangleAlert } from "lucide-react"
+import { CircleAlert, CircleCheck, TriangleAlert } from "lucide-react"
 import { Navigate } from "react-router"
 import { Logo } from "@/components/marca/Logo"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -46,81 +45,50 @@ function erroDoLogin(erro: unknown): ErroDaTela {
   return { titulo: erro.message }
 }
 
-/** Barras da ilustração: previsto (altura) e vendido (marcador), em % da altura. */
-const BARRAS = [
-  { dia: "S", previsto: 62, vendido: 58 },
-  { dia: "T", previsto: 54, vendido: 55 },
-  { dia: "Q", previsto: 70, vendido: 66 },
-  { dia: "Q", previsto: 66, vendido: 69 },
-  { dia: "S", previsto: 84, vendido: 80 },
-  { dia: "S", previsto: 100, vendido: 96 },
-  { dia: "D", previsto: 76, vendido: 73 },
+/** Linhas do recorte de exemplo (produto, sugerido, final). */
+const LINHAS_EXEMPLO = [
+  { produto: "Pão Francês", sugerido: "142,0 kg", final: "144,6 kg" },
+  { produto: "Croissant", sugerido: "139 un", final: "139 un" },
+  { produto: "Baguete", sugerido: "98 un", final: "101 un" },
+  { produto: "Pão de Queijo", sugerido: "31,2 kg", final: "31,2 kg" },
+  { produto: "Bolo de Cenoura", sugerido: "43 un", final: "40 un" },
 ]
 
-/** Ilustração decorativa do painel escuro: cartões de vidro com dados de exemplo. */
-function Ilustracao() {
+/** Recorte de uma ordem de produção, no mesmo desenho das telas do sistema. */
+function RecorteOrdem() {
   return (
-    <div aria-hidden="true" className="relative mx-auto h-[340px] w-full max-w-[520px] select-none">
-      {/* Cartão principal: previsão da semana. */}
-      <div className="absolute inset-x-6 top-6 rounded-2xl border border-white/10 bg-white/[0.06] p-5 shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] backdrop-blur-md">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">Previsão da semana</p>
-            <p className="mt-1 font-heading text-[28px] leading-none font-bold tracking-[-0.03em] text-white numero">
-              8.420 <span className="text-base font-semibold text-ink-muted">un</span>
-            </p>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-mint/15 px-2.5 py-1 text-xs font-semibold text-mint">
-            <span className="size-1.5 rounded-full bg-mint" />
-            erro médio 4,1%
-          </span>
+    <div
+      aria-hidden="true"
+      className="w-[720px] rounded-xl border border-white/10 bg-card text-foreground shadow-[0_24px_48px_-12px_rgb(0_0_0/0.35)] select-none"
+    >
+      <div className="flex items-center justify-between border-b border-line px-5 py-4">
+        <div>
+          <p className="font-heading text-base font-semibold text-heading">Produção de quinta, 29/10</p>
+          <p className="text-sm text-muted-foreground">3 lojas · entrega às 6h</p>
         </div>
-        <div className="mt-5 flex h-32 items-end gap-3">
-          {BARRAS.map((b, i) => (
-            <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
-              <div className="relative w-full flex-1">
-                <div
-                  className="absolute inset-x-0 bottom-0 rounded-t-md bg-linear-to-t from-primary to-mint/90"
-                  style={{ height: `${b.previsto}%` }}
-                />
-                <div
-                  className="absolute inset-x-[-3px] h-[3px] rounded-full bg-highlight"
-                  style={{ bottom: `calc(${b.vendido}% - 1.5px)` }}
-                />
-              </div>
-              <span className="text-xs font-semibold text-ink-muted">{b.dia}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex gap-4 text-xs text-ink-muted">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-sm bg-mint" /> Previsto
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-[3px] w-3 rounded-full bg-highlight" /> Vendido
-          </span>
-        </div>
-      </div>
-
-      {/* Cartão flutuante: ordem aprovada. */}
-      <div className="absolute -right-2 -bottom-2 w-56 animate-flutuar rounded-2xl border border-white/10 bg-ink/80 p-4 shadow-[0_20px_50px_-18px_rgb(0_0_0/0.7)] backdrop-blur-md">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">Ordem de amanhã</p>
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-mint/15 px-2.5 py-1 text-sm font-semibold text-mint">
+        <span className="inline-flex items-center gap-1 rounded-full bg-success-bg px-2.5 py-0.5 text-sm font-semibold text-success">
           <CircleCheck className="size-4" />
           Aprovada
-        </p>
-        <p className="mt-2 text-sm text-white numero">1.240 un · 18 produtos</p>
+        </span>
       </div>
-
-      {/* Cartão flutuante: quebra. */}
-      <div className="absolute -bottom-6 left-0 w-48 animate-flutuar rounded-2xl border border-white/10 bg-ink/80 p-4 shadow-[0_20px_50px_-18px_rgb(0_0_0/0.7)] backdrop-blur-md [animation-delay:-3.5s]">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">Quebra</p>
-        <p className="mt-1 font-heading text-[26px] leading-none font-bold tracking-[-0.03em] text-white numero">2,8%</p>
-        <p className="mt-1.5 flex items-center gap-1 text-sm font-semibold text-mint numero">
-          <TrendingDown className="size-4" />
-          1,4 p.p. no mês
-        </p>
-      </div>
+      <table className="w-full text-[15px]">
+        <thead className="bg-surface/80 text-left text-xs font-semibold text-muted-foreground uppercase">
+          <tr>
+            <th className="h-9 px-5 font-semibold">Produto</th>
+            <th className="h-9 px-5 text-right font-semibold">Sugerido</th>
+            <th className="h-9 px-5 text-right font-semibold">Final</th>
+          </tr>
+        </thead>
+        <tbody>
+          {LINHAS_EXEMPLO.map((l) => (
+            <tr key={l.produto} className="border-t border-line/70">
+              <td className="h-11 px-5 font-semibold">{l.produto}</td>
+              <td className="h-11 px-5 text-right text-muted-foreground numero">{l.sugerido}</td>
+              <td className="h-11 px-5 text-right font-semibold numero">{l.final}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -165,129 +133,97 @@ export function Entrar() {
   }
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-linear-to-br from-heading via-ink to-ink lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(480px,1fr)]">
-      {/* Aurora: dois brilhos desfocados que se movem devagar, e a trama de pontos. */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-40 -left-32 size-[560px] animate-aurora rounded-full bg-primary opacity-55 blur-[110px]" />
-        <div className="absolute top-1/3 left-1/3 size-[420px] animate-aurora rounded-full bg-highlight opacity-[0.14] blur-[120px] [animation-delay:-9s]" />
-        <div className="absolute -bottom-40 left-10 size-[380px] animate-aurora rounded-full bg-mint opacity-20 blur-[110px] [animation-delay:-5s]" />
-        <div className="absolute inset-0 trama-pontos [mask-image:radial-gradient(ellipse_at_30%_40%,black,transparent_75%)]" />
-      </div>
-
-      {/* Lado da marca (o logo aparece também no celular, acima do formulário). */}
-      <section className="flex flex-col px-6 pt-8 pb-6 sm:px-10 lg:min-h-screen lg:px-14 lg:py-12 xl:px-20">
-        <Logo tamanho={38} sobreEscuro />
-
-        <div className="hidden flex-1 flex-col justify-center gap-12 py-10 lg:flex">
-          <div className="max-w-xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-sm font-semibold text-ink-muted backdrop-blur">
-              <span className="size-2 animate-pulsar rounded-full bg-mint" aria-hidden="true" />
-              Central de produção
-            </p>
-            <p className="mt-6 font-heading text-[44px] leading-[1.08] font-bold tracking-[-0.035em] text-white xl:text-[54px]">
-              Produza o que a loja{" "}
-              <span className="bg-linear-to-r from-mint to-highlight bg-clip-text text-transparent">vai vender.</span>
-            </p>
-            <p className="mt-5 max-w-md text-lg text-ink-muted">
-              Previsão de vendas, ordem de produção e romaneio no mesmo lugar, para cada loja receber o que precisa
-              com menos quebra.
-            </p>
-          </div>
-          <Ilustracao />
-        </div>
-
-        <p className="hidden text-sm text-ink-muted lg:block">Padaria · Açougue · Hortifruti</p>
-      </section>
-
+    <main className="min-h-screen bg-card lg:grid lg:grid-cols-2">
       {/* Lado do formulário. */}
-      <section className="flex items-start justify-center px-4 pb-12 sm:px-6 lg:items-center lg:bg-background lg:px-10 lg:py-12 lg:shadow-[-24px_0_80px_-24px_rgb(0_0_0/0.5)]">
-        <div className="w-full max-w-[400px] animate-surgir rounded-2xl bg-card p-6 shadow-[0_24px_64px_-16px_rgb(0_0_0/0.5)] sm:p-8 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none">
-          <p className="text-sm font-semibold tracking-[0.12em] text-primary uppercase">Painel do gestor</p>
-          <h1 className="mt-2 text-[36px] leading-tight font-bold tracking-[-0.03em]">Entrar</h1>
-          <p className="mt-2 text-muted-foreground">Use o e-mail e a senha de gestor da central.</p>
+      <section className="flex min-h-screen flex-col px-6 py-8 sm:px-12 lg:px-16">
+        <Logo tamanho={28} className="[&>span:last-child]:text-[22px]" />
 
-          <div aria-live="polite" className="mt-6 empty:hidden">
-            {motivoSaida && !erroServidor && (
-              <Alert variant="aviso">
-                <TriangleAlert aria-hidden="true" />
-                <AlertTitle>{motivoSaida}</AlertTitle>
-              </Alert>
-            )}
-            {erroServidor && (
-              <Alert variant="erro">
-                <CircleAlert aria-hidden="true" />
-                <AlertTitle>{erroServidor.titulo}</AlertTitle>
-                {erroServidor.oQueFazer && <AlertDescription>{erroServidor.oQueFazer}</AlertDescription>}
-              </Alert>
-            )}
-          </div>
+        <div className="flex flex-1 items-center py-12">
+          <div className="w-full max-w-[380px]">
+            <h1 className="text-[28px] leading-tight">Entrar</h1>
+            <p className="mt-2 text-muted-foreground">Use o e-mail e a senha de gestor da central.</p>
 
-          <form className="mt-8 flex flex-col gap-5" onSubmit={aoEnviar} noValidate>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={`${id}-email`}>E-mail</Label>
-              <div className="relative">
-                <Mail
-                  className="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
+            <div aria-live="polite" className="mt-6 empty:hidden">
+              {motivoSaida && !erroServidor && (
+                <Alert variant="aviso">
+                  <TriangleAlert aria-hidden="true" />
+                  <AlertTitle>{motivoSaida}</AlertTitle>
+                </Alert>
+              )}
+              {erroServidor && (
+                <Alert variant="erro">
+                  <CircleAlert aria-hidden="true" />
+                  <AlertTitle>{erroServidor.titulo}</AlertTitle>
+                  {erroServidor.oQueFazer && <AlertDescription>{erroServidor.oQueFazer}</AlertDescription>}
+                </Alert>
+              )}
+            </div>
+
+            <form className="mt-8 flex flex-col gap-5" onSubmit={aoEnviar} noValidate>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor={`${id}-email`}>E-mail</Label>
                 <Input
                   ref={campoEmail}
                   id={`${id}-email`}
                   type="email"
                   autoComplete="username"
                   inputMode="email"
-                  placeholder="nome@empresa.com.br"
-                  className="h-12 pl-11"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   aria-invalid={erroEmail ? true : undefined}
                   aria-describedby={erroEmail ? `${id}-email-erro` : undefined}
                 />
+                {erroEmail && (
+                  <p id={`${id}-email-erro`} className="flex items-start gap-2 text-sm text-error">
+                    <CircleAlert className="size-5 shrink-0" aria-hidden="true" />
+                    {erroEmail}
+                  </p>
+                )}
               </div>
-              {erroEmail && (
-                <p id={`${id}-email-erro`} className="flex items-start gap-2 text-sm text-error">
-                  <CircleAlert className="size-5 shrink-0" aria-hidden="true" />
-                  {erroEmail}
-                </p>
-              )}
-            </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={`${id}-senha`}>Senha</Label>
-              <div className="relative">
-                <LockKeyhole
-                  className="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
+              <div className="flex flex-col gap-2">
+                <Label htmlFor={`${id}-senha`}>Senha</Label>
                 <Input
                   ref={campoSenha}
                   id={`${id}-senha`}
                   type="password"
                   autoComplete="current-password"
-                  className="h-12 pl-11"
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
                   aria-invalid={erroSenha ? true : undefined}
                   aria-describedby={erroSenha ? `${id}-senha-erro` : undefined}
                 />
+                {erroSenha && (
+                  <p id={`${id}-senha-erro`} className="flex items-start gap-2 text-sm text-error">
+                    <CircleAlert className="size-5 shrink-0" aria-hidden="true" />
+                    {erroSenha}
+                  </p>
+                )}
               </div>
-              {erroSenha && (
-                <p id={`${id}-senha-erro`} className="flex items-start gap-2 text-sm text-error">
-                  <CircleAlert className="size-5 shrink-0" aria-hidden="true" />
-                  {erroSenha}
-                </p>
-              )}
-            </div>
 
-            <Button type="submit" size="lg" className="mt-2 w-full" carregando={enviando} textoCarregando="Entrando…">
-              <LogIn aria-hidden="true" />
-              Entrar
-            </Button>
-          </form>
+              <Button type="submit" className="mt-1 w-full" carregando={enviando} textoCarregando="Entrando…">
+                Entrar
+              </Button>
+            </form>
+          </div>
+        </div>
 
-          <p className="mt-8 border-t border-line pt-5 text-sm text-muted-foreground">
-            Operador de loja? A contagem é feita no app do celular.
+        <p className="text-sm text-muted-foreground">Operador de loja? A contagem é feita no app do celular.</p>
+      </section>
+
+      {/* Lado do produto (só no desktop): frase curta e o recorte da ordem, sangrando pela direita. */}
+      <section aria-hidden="true" className="hidden overflow-hidden bg-heading lg:flex lg:flex-col lg:justify-center lg:py-16 lg:pl-16">
+        <div className="max-w-md pr-16">
+          <p className="text-sm font-semibold text-highlight">Central de produção</p>
+          <p className="mt-3 font-heading text-[32px] leading-[1.2] font-semibold tracking-[-0.02em] text-white">
+            Da previsão de vendas ao romaneio, num só lugar.
           </p>
+          <p className="mt-4 text-ink-muted">
+            Cada loja recebe o que deve vender amanhã, com a conta de cada número à vista.
+          </p>
+        </div>
+        <div className="mt-12">
+          <RecorteOrdem />
         </div>
       </section>
     </main>

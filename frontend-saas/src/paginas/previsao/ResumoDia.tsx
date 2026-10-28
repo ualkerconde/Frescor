@@ -73,7 +73,7 @@ export function ResumoDia({
               <p className="text-sm text-muted-foreground">
                 Previsto em {t.unidade === "KG" ? "quilos" : "unidades"}
               </p>
-              <p className="mt-1 numero-destaque text-[clamp(30px,2.6vw,40px)] leading-tight whitespace-nowrap">
+              <p className="mt-1 numero-destaque text-[32px] leading-tight whitespace-nowrap">
                 {formatarPrevisao(t.previsto, t.unidade)}
               </p>
               <Variacao previsto={Number(t.previsto)} vendido={Number(t.vendido_semana_passada)} unidade={t.unidade} />
@@ -95,7 +95,7 @@ export function ResumoDia({
             <Package className="size-5" aria-hidden="true" />
             Produtos previstos (por loja)
           </p>
-          <p className="mt-1 numero-destaque text-[clamp(30px,2.6vw,40px)] leading-tight whitespace-nowrap">
+          <p className="mt-1 numero-destaque text-[32px] leading-tight whitespace-nowrap">
             {itens.length}
           </p>
           <p className="mt-1 text-sm text-muted-foreground numero">

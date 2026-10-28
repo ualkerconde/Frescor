@@ -156,7 +156,7 @@ export function Producao() {
     <section className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[32px] leading-tight">Ordem de produção</h1>
+          <h1 className="text-[28px] leading-tight">Ordem de produção</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
             Quanto produzir e mandar para cada loja, calculado com a previsão, a contagem das lojas e o que já está a
             caminho. Confira, ajuste o que precisar e aprove.

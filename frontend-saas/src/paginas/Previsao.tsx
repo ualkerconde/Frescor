@@ -130,7 +130,7 @@ export function Previsao() {
     <section className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[32px] leading-tight">Previsão de vendas</h1>
+          <h1 className="text-[28px] leading-tight">Previsão de vendas</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
             Quanto cada loja deve vender por produto, calculado com as vendas importadas. Use como ponto de partida para
             a produção.

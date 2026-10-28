@@ -150,7 +150,7 @@ export function Consultar() {
   return (
     <section className="flex flex-col gap-8">
       <div>
-        <h1 className="text-[32px] leading-tight">Consultar vendas e perdas</h1>
+        <h1 className="text-[28px] leading-tight">Consultar vendas e perdas</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Veja o que foi importado por período, loja e produto.
         </p>

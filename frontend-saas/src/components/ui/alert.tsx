@@ -9,7 +9,7 @@ import { cn } from "cn"
  * Contrastes (skill): erro 5,75 · atenção 4,9 · sucesso 4,75 (todos AA).
  */
 const alertVariants = cva(
-  "group/alert relative grid w-full gap-0.5 rounded-xl px-4 py-3.5 text-left ring-1 ring-current/15 ring-inset text-base has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-3 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-5",
+  "group/alert relative grid w-full gap-0.5 rounded-lg px-4 py-3 text-left ring-1 ring-current/15 ring-inset text-base has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-3 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
