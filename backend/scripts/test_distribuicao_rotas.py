@@ -15,7 +15,7 @@ Conta à mão: produção PA 8 (planejado 10) -> 8 x 6/10 = 4,8 e 8 x 4/10 =
 / 1,5, sem rateio.
 
 Casos:
-  A1 sem token -> 401 nas 9 rotas · A2 token do app -> 401 · A3 gestor sem
+  A1 sem token -> 401 nas 10 rotas · A2 token do app -> 401 · A3 gestor sem
      acesso web -> 403
   P1 registrar a produção da OA -> 200, 2 itens
   P2 produção inválida (UN fracionada, item repetido, item de outra ordem,
@@ -52,7 +52,7 @@ Casos:
      total UN; o gestor A2 não vê; período invertido e longo -> 422
   X1 apagar o rascunho da O2 pelo gestor A1 -> 404 (não apaga); pelo A2 ->
      204
-  O1 OpenAPI: as 9 rotas existem e nenhuma recebe central_id
+  O1 OpenAPI: as 10 rotas (com o PDF do E8) existem e nenhuma recebe central_id
 
 Saída ASCII ([OK]/[FALHA]), limpeza no início e no fim, exit 1 se falhar.
 
@@ -226,7 +226,7 @@ def main():
                  ("post", "/distribuicao/romaneios/gerar"), ("get", "/distribuicao/romaneios/1"),
                  ("patch", "/distribuicao/romaneios/1/itens/1"), ("post", "/distribuicao/romaneios/1/aprovar"),
                  ("delete", "/distribuicao/romaneios/1"), ("post", "/distribuicao/romaneios/1/saida"),
-                 ("get", "/distribuicao/divergencias")]
+                 ("get", "/distribuicao/romaneios/1/pdf"), ("get", "/distribuicao/divergencias")]
         sem_token = [chamar(m, u).status_code for m, u in rotas]
         registrar("A1 sem token -> 401", sem_token == [401] * len(rotas), f"{sem_token}")
         r = chamar("get", "/distribuicao/romaneios", criar_access_token(op_l1.id, op_l1.negocio_id))
@@ -448,7 +448,7 @@ def main():
                      "/distribuicao/romaneios/gerar", "/distribuicao/romaneios/{romaneio_id}",
                      "/distribuicao/romaneios/{romaneio_id}/itens/{item_id}",
                      "/distribuicao/romaneios/{romaneio_id}/aprovar", "/distribuicao/romaneios/{romaneio_id}/saida",
-                     "/distribuicao/divergencias"}
+                     "/distribuicao/romaneios/{romaneio_id}/pdf", "/distribuicao/divergencias"}
         parametros = {p["name"] for ops in caminhos.values() for op in ops.values() for p in op.get("parameters", [])}
         registrar("O1 OpenAPI sem central_id", esperados <= set(caminhos) and "central_id" not in parametros
                   and "central_producao_id" not in parametros, f"{len(caminhos)} caminhos; parametros {sorted(parametros)}")

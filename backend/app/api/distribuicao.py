@@ -71,6 +71,7 @@ from app.services.distribuicao_service import (
     registrar_producao,
     registrar_saida,
 )
+from app.services.romaneio_pdf_service import gerar_pdf, montar_impressao
 
 router = APIRouter()
 
@@ -260,6 +261,41 @@ def saida(
         entregas = registrar_saida(db, gestor.negocio_id, gestor.central_producao_id, romaneio_id,
                                    gestor.usuario_id, corpo.entrega_ids if corpo else None)
     return SaidaResponse(entregas=sorted(e.id for e in entregas))
+
+
+def _ler_lojas(texto: Optional[str]) -> list[int] | None:
+    """'3,5' -> [3, 5]; vazio/ausente -> None (todas). Item inválido -> 422."""
+    if texto is None or texto.strip() == "":
+        return None
+    partes = [p.strip() for p in texto.split(",")]
+    if not all(p.isdigit() for p in partes):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Lojas inválidas. Escolha as lojas da lista.")
+    return [int(p) for p in partes]
+
+
+@router.get(
+    "/distribuicao/romaneios/{romaneio_id}/pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}},
+                     "description": "PDF do romaneio: folha de carga e uma folha por loja."}},
+)
+def imprimir(
+    romaneio_id: int,
+    lojas: Optional[str] = Query(None, description="Ids das lojas separados por vírgula; vazio = todas."),
+    db: Session = Depends(get_db),
+    gestor: GestorCentralAutenticado = Depends(obter_gestor_central),
+):
+    """PDF do romaneio APROVADO (rascunho -> 409): folha de carga e uma folha por loja (D81)."""
+    escolhidas = _ler_lojas(lojas)
+    with _Erros():
+        impressao = montar_impressao(db, gestor.negocio_id, gestor.central_producao_id, romaneio_id, escolhidas)
+    nome = f"romaneio-{impressao.data_entrega:%Y-%m-%d}.pdf"
+    return Response(
+        content=gerar_pdf(impressao),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{nome}"'},
+    )
 
 
 @router.get("/distribuicao/divergencias", response_model=DivergenciasResponse)
