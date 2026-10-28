@@ -45,7 +45,7 @@ export function ResultadoImportacao({ relatorio }: { relatorio: RelatorioImporta
   return (
     <section aria-label="Resultado da importação" className="flex flex-col gap-6">
       {relatorio.sucesso ? (
-        <div className="rounded-lg bg-success-bg p-6">
+        <div className="rounded-2xl bg-success-bg p-6 ring-1 ring-success/15 ring-inset">
           <p className="flex items-center gap-2 font-semibold text-success">
             <CircleCheck className="size-5" aria-hidden="true" />
             Importação concluída
@@ -62,7 +62,7 @@ export function ResultadoImportacao({ relatorio }: { relatorio: RelatorioImporta
           </p>
         </div>
       ) : (
-        <div className="rounded-lg bg-error-bg p-6">
+        <div className="rounded-2xl bg-error-bg p-6 ring-1 ring-error/15 ring-inset">
           <p className="flex items-center gap-2 font-semibold text-error">
             <CircleX className="size-5" aria-hidden="true" />
             Arquivo com erros

@@ -110,14 +110,14 @@ export function Importar() {
   return (
     <section className="flex flex-col gap-8">
       <div>
-        <h1 className="text-[28px]">Importar vendas e perdas</h1>
+        <h1 className="text-[32px] leading-tight">Importar vendas e perdas</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Envie o arquivo CSV com as vendas ou as perdas das lojas. Se alguma linha tiver erro, nada é gravado e você
           vê o que corrigir.
         </p>
       </div>
 
-      <div className="flex max-w-2xl flex-col gap-6 rounded-lg border border-line bg-card p-6">
+      <div className="flex max-w-2xl flex-col gap-6 painel p-6">
         <fieldset>
           <legend className="text-sm font-semibold text-foreground">O que você vai importar?</legend>
           <div className="mt-2 inline-flex rounded-lg bg-surface p-1">

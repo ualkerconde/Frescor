@@ -15,14 +15,17 @@ import { Slot } from "radix-ui"
  * Ícones lucide em 20px. Rótulo sempre um verbo ("Importar vendas").
  */
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-transparent text-base font-semibold whitespace-nowrap transition-colors select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-60 aria-invalid:border-error [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-transparent text-base font-semibold whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-150 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-60 aria-invalid:border-error [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
-        secondary: "border-2 border-primary bg-transparent text-primary hover:bg-surface",
-        destructive: "bg-error text-white hover:bg-error/90",
-        outline: "border-input-border bg-card text-foreground hover:bg-surface",
+        // Primário: degradê sutil de cima para baixo (#11796A -> --primary, branco a 5,3:1
+        // no ponto mais claro), brilho interno e sombra verde. Pressionar afunda 1px.
+        default:
+          "bg-primary bg-linear-to-b from-[#11796a] to-primary text-primary-foreground shadow-primario hover:from-primary hover:to-primary-hover active:translate-y-px",
+        secondary: "border-2 border-primary bg-transparent text-primary hover:bg-surface active:translate-y-px",
+        destructive: "bg-error text-white shadow-sm hover:bg-error/90 active:translate-y-px",
+        outline: "border-input-border bg-card text-foreground hover:bg-surface active:translate-y-px",
         ghost: "text-foreground hover:bg-surface",
         link: "text-primary underline-offset-4 hover:underline",
       },

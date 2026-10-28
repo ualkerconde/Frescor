@@ -60,7 +60,7 @@ function LojasDoProduto({
   }
 
   return (
-    <Table aria-label={`Lojas de ${item.produto.nome}`}>
+    <Table aria-label={`Lojas de ${item.produto.nome}`} contorno={false}>
       <TableHeader>
         <TableRow>
           <TableHead>Loja</TableHead>

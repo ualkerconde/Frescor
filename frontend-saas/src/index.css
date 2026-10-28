@@ -61,7 +61,21 @@
   --fr-warning-bg: #fdf3e1;
   --fr-error: #b42318;
   --fr-error-bg: #fdecea;
+  /* Superfícies escuras (barra lateral e painel do login) e realces. */
+  --fr-ink: #0f1b25;
+  --fr-ink-muted: #a9b7c1;
+  --fr-ink-line: #2c3e4d;
+  --fr-mint: #6fd6bd;
+  --fr-primary-soft: #e2f0ec;
   --fr-shadow-elevado: 0 1px 2px rgb(21 33 43 / 0.06), 0 4px 12px rgb(21 33 43 / 0.06);
+  /* Sombra em camadas dos painéis: contorno de 1px + duas difusas. */
+  --fr-shadow-painel:
+    0 0 0 1px rgb(21 33 43 / 0.06), 0 1px 2px rgb(21 33 43 / 0.04), 0 8px 24px -12px rgb(21 33 43 / 0.12);
+  --fr-shadow-painel-hover:
+    0 0 0 1px rgb(14 107 92 / 0.18), 0 2px 4px rgb(21 33 43 / 0.05), 0 16px 32px -16px rgb(14 107 92 / 0.28);
+  --fr-shadow-primario: 0 1px 0 rgb(255 255 255 / 0.18) inset, 0 6px 16px -6px rgb(14 107 92 / 0.55);
+  /* Faixa da marca: verde do primário para o dourado. Só decoração. */
+  --fr-gradiente-marca: linear-gradient(90deg, var(--fr-primary) 0%, var(--fr-mint) 55%, var(--fr-accent) 100%);
 
   /* ---- variáveis que os componentes do shadcn leem ---- */
   --background: var(--fr-bg);
@@ -122,6 +136,11 @@
   --color-warning-bg: var(--fr-warning-bg);
   --color-error: var(--fr-error);
   --color-error-bg: var(--fr-error-bg);
+  --color-ink: var(--fr-ink);
+  --color-ink-muted: var(--fr-ink-muted);
+  --color-ink-line: var(--fr-ink-line);
+  --color-mint: var(--fr-mint);
+  --color-primary-soft: var(--fr-primary-soft);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -130,6 +149,53 @@
   --radius-2xl: 18px;
 
   --shadow-elevado: var(--fr-shadow-elevado);
+  --shadow-painel: var(--fr-shadow-painel);
+  --shadow-primario: var(--fr-shadow-primario);
+
+  --animate-surgir: surgir 0.2s ease-out both;
+  --animate-aurora: aurora 18s ease-in-out infinite alternate;
+  --animate-flutuar: flutuar 7s ease-in-out infinite;
+  --animate-pulsar: pulsar 2.4s ease-in-out infinite;
+
+  @keyframes surgir {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes aurora {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(6%, -4%, 0) scale(1.12);
+    }
+    100% {
+      transform: translate3d(-4%, 6%, 0) scale(0.96);
+    }
+  }
+  @keyframes flutuar {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+  @keyframes pulsar {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(111 214 189 / 0.55);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgb(111 214 189 / 0);
+    }
+  }
 }
 
 @layer base {
@@ -149,6 +215,16 @@
   h3 {
     @apply font-heading text-heading;
     font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  /* Título de página: Sora 700, um pouco mais apertado (dá o ar "editorial"). */
+  main h1 {
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  ::selection {
+    background: var(--fr-primary-soft);
+    color: var(--fr-text);
   }
   /* Foco visível da skill: anel de 2px --primary com 2px de afastamento. */
   :focus-visible {
@@ -160,6 +236,74 @@
 /* Números sempre com algarismos de largura fixa (skill). */
 @utility numero {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Painel: o bloco branco padrão das telas (filtros, formulários, tabelas).
+ * Raio 16px (controles continuam em 10px), contorno + sombra em camadas.
+ */
+@utility painel {
+  border-radius: 16px;
+  background: var(--fr-card);
+  box-shadow: var(--fr-shadow-painel);
+}
+
+/*
+ * Número de dashboard (KPI): painel com a faixa da marca no topo e um
+ * brilho verde discreto no canto. O hover só realça; não é clicável.
+ */
+@utility painel-kpi {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgb(14 107 92 / 0.07), transparent 55%),
+    var(--fr-card);
+  box-shadow: var(--fr-shadow-painel);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--fr-gradiente-marca);
+  }
+  &:hover {
+    box-shadow: var(--fr-shadow-painel-hover);
+    transform: translateY(-1px);
+  }
+}
+
+/* Estado vazio: fundo surface com borda tracejada suave. */
+@utility painel-vazio {
+  border-radius: 16px;
+  border: 1.5px dashed var(--fr-line);
+  background:
+    radial-gradient(60% 120% at 0% 0%, rgb(14 107 92 / 0.06), transparent 60%),
+    var(--fr-surface);
+}
+
+/* Número grande do dashboard: Sora, apertado, algarismos tabulares. */
+@utility numero-destaque {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fr-secondary);
+}
+
+/* Fundo da área de trabalho: brilho verde e dourado bem suaves nos cantos. */
+@utility fundo-trabalho {
+  background:
+    radial-gradient(900px 420px at 100% -10%, rgb(14 107 92 / 0.07), transparent 60%),
+    radial-gradient(700px 360px at -10% 110%, rgb(227 166 47 / 0.06), transparent 60%),
+    var(--fr-bg);
+}
+
+/* Trama de pontos para superfícies escuras (barra lateral, login). */
+@utility trama-pontos {
+  background-image: radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px);
+  background-size: 18px 18px;
 }
 
 /* Animações curtas e respeito a quem pede menos movimento (skill). */

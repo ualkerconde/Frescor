@@ -150,13 +150,13 @@ export function Consultar() {
   return (
     <section className="flex flex-col gap-8">
       <div>
-        <h1 className="text-[28px]">Consultar vendas e perdas</h1>
+        <h1 className="text-[32px] leading-tight">Consultar vendas e perdas</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Veja o que foi importado por período, loja e produto.
         </p>
       </div>
 
-      <form onSubmit={aoConsultar} noValidate className="flex flex-col gap-4 rounded-lg border border-line bg-card p-6">
+      <form onSubmit={aoConsultar} noValidate className="flex flex-col gap-4 painel p-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-inicio`}>Data inicial</Label>
@@ -277,7 +277,7 @@ export function Consultar() {
             ) : lista.isPending ? (
               <p className="text-muted-foreground">Carregando…</p>
             ) : total === 0 ? (
-              <div className="rounded-lg bg-surface p-6">
+              <div className="painel-vazio p-6">
                 <p className="text-foreground">
                   Nenhuma {nomeTipo} importada neste período{aplicados.loja !== TODAS_AS_LOJAS || aplicados.produto ? " com esses filtros" : ""}.
                 </p>

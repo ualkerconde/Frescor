@@ -33,11 +33,11 @@ function Numeros({ rotulo, itens }: { rotulo: string; itens: ItemOrdem[] }) {
   return (
     <>
       {somas.map((s) => (
-        <div key={`${rotulo}-${s.unidade}`} className="rounded-lg border border-line bg-card p-4">
+        <div key={`${rotulo}-${s.unidade}`} className="painel-kpi p-5">
           <p className="text-sm text-muted-foreground">
             {rotulo} em {s.unidade === "KG" ? "quilos" : "unidades"}
           </p>
-          <p className="font-heading text-[40px] leading-tight font-semibold text-heading numero">
+          <p className="mt-1 numero-destaque text-[clamp(30px,2.6vw,40px)] leading-tight whitespace-nowrap">
             {formatarQuantidade(s.total, s.unidade)}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">

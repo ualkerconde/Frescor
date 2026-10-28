@@ -46,8 +46,8 @@ function contraste(a: string, b: string): number {
 describe('tema x skill Frescor', () => {
   const skillTokens = tokensDaSkill()
 
-  it('a tabela da skill foi lida (17 cores)', () => {
-    expect(Object.keys(skillTokens)).toHaveLength(17)
+  it('a tabela da skill foi lida (22 cores)', () => {
+    expect(Object.keys(skillTokens)).toHaveLength(22)
   })
 
   it.each(Object.entries(tokensDaSkill()))('--fr-%s tem o valor da skill (%s)', (nome, valor) => {
@@ -69,6 +69,17 @@ describe('tema x skill Frescor', () => {
     ['branco sobre o erro (botão perigo)', 'branco', 'error', 4.5],
     ['título (heading) sobre o fundo', 'secondary', 'bg', 4.5],
     ['borda de controle sobre o card', 'input-border', 'card', 3],
+    // Superfícies escuras (barra lateral e login): degradê secondary -> ink.
+    ['branco sobre ink', 'branco', 'ink', 4.5],
+    ['branco sobre secondary (barra lateral)', 'branco', 'secondary', 4.5],
+    ['texto secundário escuro sobre secondary', 'ink-muted', 'secondary', 4.5],
+    ['texto secundário escuro sobre ink', 'ink-muted', 'ink', 4.5],
+    ['dourado como texto sobre secondary', 'accent', 'secondary', 4.5],
+    ['menta sobre secondary', 'mint', 'secondary', 4.5],
+    ['menta sobre ink', 'mint', 'ink', 4.5],
+    ['texto sobre primary-soft (hover de linha)', 'text', 'primary-soft', 4.5],
+    ['texto secundário sobre primary-soft', 'muted', 'primary-soft', 4.5],
+    ['primário sobre primary-soft', 'primary', 'primary-soft', 4.5],
   ]
   it.each(pares)('contraste: %s', (_rotulo, a, b, minimo) => {
     const cor = (n: string) => (n === 'branco' ? branco : skillTokens[n])

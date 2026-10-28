@@ -102,7 +102,8 @@ src/
   sempre com a unidade.
 - **Código dividido por tela** a partir da Fase 3: telas novas entram com
   `React.lazy` + `import()`. Conferir o tamanho no `npm run build`: o JS
-  principal está em ~487 kB (o Vite avisa acima de 500 kB). Bibliotecas usadas
+  principal está em ~499 kB depois do redesenho de 28/10/2026 (o Vite avisa
+  acima de 500 kB; não há folga: tela nova entra sempre com `React.lazy`). Bibliotecas usadas
   só por uma tela (ex.: os avisos do `sonner`, na previsão) ficam montadas
   nessa tela, para irem no pacote dela.
 - **Previsão na tela:** o número exibido é sempre o do backend (1 casa em UN,
