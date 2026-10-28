@@ -30,6 +30,8 @@ export interface AlvoAjuste {
   motivo: string | null
 }
 
+const DICA_ORDEM = "Confira a ordem e tente de novo."
+
 function paraCampo(valor: string | null): string {
   if (valor === null) return ""
   return String(Number(valor)).replace(".", ",")
@@ -39,12 +41,15 @@ export function DialogoAjuste({
   alvo,
   salvando,
   erroApi,
+  dica = DICA_ORDEM,
   aoFechar,
   aoSalvar,
 }: {
   alvo: AlvoAjuste | null
   salvando: boolean
   erroApi: string | null
+  /** O que fazer quando a API recusa (padrão: conferir a ordem). */
+  dica?: string
   aoFechar: () => void
   aoSalvar: (quantidade: string, motivo: string) => void
 }) {
@@ -52,7 +57,7 @@ export function DialogoAjuste({
     <Dialog open={alvo !== null} onOpenChange={(aberto) => !aberto && aoFechar()}>
       <DialogContent>
         {/* `key` zera o formulário a cada linha aberta. */}
-        {alvo && <FormularioAjuste key={alvo.linhaId} alvo={alvo} salvando={salvando} erroApi={erroApi} aoFechar={aoFechar} aoSalvar={aoSalvar} />}
+        {alvo && <FormularioAjuste key={alvo.linhaId} alvo={alvo} salvando={salvando} erroApi={erroApi} dica={dica} aoFechar={aoFechar} aoSalvar={aoSalvar} />}
       </DialogContent>
     </Dialog>
   )
@@ -62,12 +67,14 @@ function FormularioAjuste({
   alvo,
   salvando,
   erroApi,
+  dica,
   aoFechar,
   aoSalvar,
 }: {
   alvo: AlvoAjuste
   salvando: boolean
   erroApi: string | null
+  dica: string
   aoFechar: () => void
   aoSalvar: (quantidade: string, motivo: string) => void
 }) {
@@ -135,7 +142,7 @@ function FormularioAjuste({
         <Alert variant="erro">
           <CircleAlert aria-hidden="true" />
           <AlertTitle>A quantidade não foi salva. {erroApi}</AlertTitle>
-          <AlertDescription>Confira a ordem e tente de novo.</AlertDescription>
+          <AlertDescription>{dica}</AlertDescription>
         </Alert>
       )}
       <DialogFooter>
@@ -159,6 +166,7 @@ export function DialogoConfirmar({
   perigo = false,
   carregando,
   erroApi,
+  dica = DICA_ORDEM,
   bloqueio,
   aoFechar,
   aoConfirmar,
@@ -171,6 +179,8 @@ export function DialogoConfirmar({
   perigo?: boolean
   carregando: boolean
   erroApi: string | null
+  /** O que fazer quando a API recusa (padrão: conferir a ordem). */
+  dica?: string
   /** Quando preenchido, explica por que a ação não pode ser feita agora (sem o botão de confirmar). */
   bloqueio?: string | null
   aoFechar: () => void
@@ -195,7 +205,7 @@ export function DialogoConfirmar({
           <Alert variant="erro">
             <CircleAlert aria-hidden="true" />
             <AlertTitle>{erroApi}</AlertTitle>
-            <AlertDescription>Confira a ordem e tente de novo.</AlertDescription>
+            <AlertDescription>{dica}</AlertDescription>
           </Alert>
         )}
         <DialogFooter>

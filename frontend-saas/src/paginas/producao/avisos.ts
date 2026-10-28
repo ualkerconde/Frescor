@@ -52,7 +52,19 @@ export const AVISOS: Record<string, DescricaoAviso> = {
   recebimento_nao_confirmado: {
     rotulo: 'Recebimento não confirmado',
     gravidade: 'info',
-    explicacao: 'A entrega anterior foi considerada recebida; a loja ainda não confirmou.',
+    explicacao:
+      'A entrega anterior não teve a saída registrada no romaneio: foi considerada recebida pela quantidade aprovada.',
+  },
+  sem_confirmacao: {
+    rotulo: 'Sem confirmação',
+    gravidade: 'aviso',
+    explicacao:
+      'A loja não confirmou a entrega anterior até o fim do dia: ela foi considerada recebida pela quantidade enviada.',
+  },
+  confirmada_com_atraso: {
+    rotulo: 'Confirmada com atraso',
+    gravidade: 'info',
+    explicacao: 'A loja confirmou a entrega anterior só no dia seguinte: a conta não muda, só fica registrado.',
   },
 }
 

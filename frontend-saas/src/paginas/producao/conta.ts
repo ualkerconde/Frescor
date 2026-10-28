@@ -68,6 +68,14 @@ export function passosDaConta(c: Partial<ContaNecessidade>, unidade: Unidade): s
   } else if (Number(c.transito_considerado ?? 0) > 0) {
     passos.push(`Em trânsito, já aprovado: ${q(c.transito_considerado)}.`)
   }
+  if (Number(c.recebido_apos_contagem ?? 0) > 0) {
+    passos.push(`Recebido depois da contagem (confirmado pela loja): ${q(c.recebido_apos_contagem)}.`)
+  }
+  if (Number(c.recebimento_presumido ?? 0) > 0) {
+    passos.push(
+      `Entrega anterior sem confirmação da loja: ${q(c.recebimento_presumido)} considerados recebidos e já na contagem (não somam de novo).`,
+    )
+  }
   if (Number(c.vencido_ate_chegada ?? 0) > 0) {
     passos.push(`Vence antes da chegada e não conta: ${q(c.vencido_ate_chegada)}.`)
   }

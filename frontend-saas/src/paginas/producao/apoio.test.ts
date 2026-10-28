@@ -73,6 +73,20 @@ describe('conta da linha da ordem', () => {
   it('aviso desconhecido não some', () => {
     expect(descreverAviso('novo_aviso').rotulo).toBe('Atenção')
   })
+
+  it('recebimento (Fase 5): recebido depois da contagem e entrega sem confirmação', () => {
+    const passos = passosDaConta(
+      { ...CONTA_PAO, vencido_ate_chegada: '0', recebido_apos_contagem: '4.000', recebimento_presumido: '7.000' },
+      'UN',
+    )
+    expect(passos).toContain('Recebido depois da contagem (confirmado pela loja): 4 un.')
+    expect(passos).toContain(
+      'Entrega anterior sem confirmação da loja: 7 un considerados recebidos e já na contagem (não somam de novo).',
+    )
+    expect(passosDaConta(CONTA_PAO, 'KG').join(' ')).not.toMatch(/Recebido depois|sem confirmação/)
+    expect(descreverAviso('sem_confirmacao').rotulo).toBe('Sem confirmação')
+    expect(descreverAviso('confirmada_com_atraso').rotulo).toBe('Confirmada com atraso')
+  })
 })
 
 describe('quantidade digitada', () => {
