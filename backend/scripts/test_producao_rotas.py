@@ -357,7 +357,9 @@ def main():
                     "/producao/ordens/{ordem_id}/linhas/{linha_id}": ["patch"],
                     "/producao/ordens/{ordem_id}/aprovar": ["post"],
                     # N9b (D67): impressão e lista de setores.
-                    "/producao/ordens/{ordem_id}/pdf": ["get"], "/producao/setores": ["get"]}
+                    "/producao/ordens/{ordem_id}/pdf": ["get"], "/producao/setores": ["get", "post"],
+                    # Fase 6 / C1 (D102): cadastro de setores.
+                    "/producao/setores/{setor_id}": ["patch"]}
         parametros = [x["name"] for p, m in spec["paths"].items() if p.startswith("/producao")
                       for op in m.values() for x in op.get("parameters", [])]
         ok = ({p: sorted(m) for p, m in caminhos.items()} == {p: sorted(m) for p, m in esperado.items()}

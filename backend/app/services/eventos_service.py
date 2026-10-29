@@ -134,6 +134,8 @@ class EventoDetalhe:
     loja_ids: list[int]
     escopo_produto: EscopoProduto
     produto_ids: list[int]
+    # Todas as lojas do evento são da central do gestor (senão apagar -> 403). Fase 6 / C5.
+    pode_apagar: bool = True
 
 
 def _validar(nome, data_inicio, data_fim, valor_ajuste, escopo_loja, loja_ids, produto_ids) -> str:
@@ -267,6 +269,7 @@ def _detalhe(db: Session, evento: Evento, escopo: set[int]) -> EventoDetalhe:
         loja_ids=lojas,
         escopo_produto=evento.escopo_produto,
         produto_ids=produtos,
+        pode_apagar=_lojas_do_evento(db, evento) <= escopo,
     )
 
 

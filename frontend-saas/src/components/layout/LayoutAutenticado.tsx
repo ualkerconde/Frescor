@@ -1,6 +1,6 @@
 /*
  * Estrutura das telas autenticadas do SaaS (passo W5), pela skill Frescor:
- * cabeçalho com o logo, a navegação (Importar / Consultar / Previsão / Produção / Distribuição), quem está
+ * cabeçalho com o logo, a navegação (Importar / Consultar / Previsão / Produção / Distribuição / Cadastros), quem está
  * logado (gestor · central · negócio, de GET /web/me) e "Sair".
  *
  * "Sair" é um botão discreto (ghost): a ação principal de cada tela fica
@@ -9,7 +9,7 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
-import { ChartLine, Factory, LogOut, Search, Truck, Upload } from "lucide-react"
+import { ChartLine, ClipboardList, Factory, LogOut, Search, Truck, Upload } from "lucide-react"
 import { NavLink, Outlet } from "react-router"
 import { Logo } from "@/components/marca/Logo"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,7 @@ const ITENS_MENU = [
   { para: "/previsao", rotulo: "Previsão", Icone: ChartLine },
   { para: "/producao", rotulo: "Produção", Icone: Factory },
   { para: "/distribuicao", rotulo: "Distribuição", Icone: Truck },
+  { para: "/cadastros", rotulo: "Cadastros", Icone: ClipboardList },
 ]
 
 function QuemEsta() {
@@ -60,7 +61,7 @@ export function LayoutAutenticado() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-3 px-4 py-3">
           <Logo tamanho={32} className="[&>span:last-child]:text-[22px]" />
 
-          <nav aria-label="Principal" className="flex gap-2">
+          <nav aria-label="Principal" className="flex flex-wrap gap-2">
             {ITENS_MENU.map(({ para, rotulo, Icone }) => (
               <NavLink
                 key={para}

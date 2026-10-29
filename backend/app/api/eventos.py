@@ -47,6 +47,7 @@ def _resposta(e: EventoDetalhe) -> EventoResponse:
         loja_ids=e.loja_ids,
         escopo_produto=e.escopo_produto,
         produto_ids=e.produto_ids,
+        pode_apagar=e.pode_apagar,
     )
 
 

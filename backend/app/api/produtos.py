@@ -62,6 +62,8 @@ def listar_produtos(
         )
         .filter(
             ProdutoLoja.loja_id == atual.loja_id,
+            # Desativado na loja pelo SaaS (D100, Fase 6): sai da contagem.
+            ProdutoLoja.ativo.is_(True),
             Produto.negocio_id == atual.negocio_id,
             Produto.ativo.is_(True),
         )
@@ -119,6 +121,7 @@ def buscar_produto(
         )
         .filter(
             ProdutoLoja.loja_id == atual.loja_id,
+            ProdutoLoja.ativo.is_(True),  # D100
             Produto.negocio_id == atual.negocio_id,
             Produto.ativo.is_(True),
             or_(

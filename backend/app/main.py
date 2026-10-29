@@ -22,6 +22,7 @@ from fastapi.exceptions import RequestValidationError
 from app.api import (
     auth,
     auth_web,
+    cadastros,
     consultas,
     distribuicao,
     eventos,
@@ -87,6 +88,7 @@ app.include_router(previsoes.router, tags=["Previsão (SaaS web)"])
 app.include_router(producao.router, tags=["Ordem de produção (SaaS web)"])
 app.include_router(distribuicao.router, tags=["Distribuição e romaneio (SaaS web)"])
 app.include_router(recebimentos.router, tags=["Recebimento (app mobile)"])
+app.include_router(cadastros.router, tags=["Cadastros (SaaS web)"])
 
 
 @app.get("/")

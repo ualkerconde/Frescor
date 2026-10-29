@@ -31,6 +31,7 @@ Casos:
   L1 lista do gestor A1: os 3 criados + ev_todas + ev_comp (só com L2)
   L2 filtro por período · L3 gestor B vê só o de B
   L4 gestor A2 não vê os eventos da A1 e vê os da A2
+  L5 a lista diz se o gestor pode apagar cada evento (Fase 6 / C5)
   P1 o evento criado pela API entra na previsão (prever_central)
   P2 o "todas" da A1 vale para L1 e L2 e não para L3 (A2)
   D1 apaga o próprio -> 204; some da lista e das associações
@@ -76,7 +77,7 @@ from app.services.previsao_service import prever_central  # noqa: E402
 
 PASS = "[OK]"
 FAIL = "[FALHA]"
-TOTAL_CASOS = 44
+TOTAL_CASOS = 45
 PREFIXO_NEGOCIO_TESTE = "_Teste Eventos Rotas"
 EMAIL_TESTE = re.compile(r"^ter_[a-z_0-9]+_[0-9a-f]{8}@teste[.]com$")
 INEXISTENTE = 2_000_000_000
@@ -297,6 +298,11 @@ def main():
         r = cliente.get("/eventos", headers=h(ta2))
         nomes = [e["nome"] for e in corpo(r)] if r.status_code == 200 else corpo(r)
         registrar("L4 gestor A2 nao ve os da A1", nomes == ["ev_todas", "ev_comp", "ev_a2", "ev_a2_todas"], f"{nomes}")
+        # Fase 6 / C5: a lista diz se o gestor pode apagar (o mesmo critério do DELETE, D6/D7 abaixo).
+        r = cliente.get("/eventos", headers=h(ta1))
+        pode = {e["nome"]: e["pode_apagar"] for e in corpo(r)} if r.status_code == 200 else corpo(r)
+        registrar("L5 pode_apagar na lista", pode == {"ev_todas": False, "Feriado municipal": True, "Semana do pão": True,
+                                                       "ev_comp": False, "Natal": True}, f"{pode}")
 
         # ---------------- previsão ----------------
         # P1: o feriado (valor fixo 0 em L1, 03/11) criado pela API zera a

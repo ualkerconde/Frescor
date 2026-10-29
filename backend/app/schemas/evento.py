@@ -40,3 +40,6 @@ class EventoResponse(BaseModel):
     loja_ids: list[int] = Field(description="Só as lojas da central do gestor.")
     escopo_produto: EscopoProduto
     produto_ids: list[int]
+    pode_apagar: bool = Field(
+        True, description="False quando o evento vale também para lojas de outra central (apagar -> 403)."
+    )

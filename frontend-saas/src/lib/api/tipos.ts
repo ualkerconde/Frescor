@@ -48,6 +48,10 @@ export interface ProdutoWeb {
   nome: string
   unidade: Unidade
   ativo: boolean
+  // Fase 6 (lista do cadastro):
+  tipo_abastecimento?: TipoAbastecimento
+  setor?: string | null
+  lojas_ativas?: number
 }
 
 export interface ProdutosWeb {
@@ -425,4 +429,86 @@ export interface Divergencias {
   data_fim: string
   divergencias: Divergencia[]
   totais: { unidade: Unidade; enviada: string; recebida: string; diferenca: string }[]
+}
+
+// ---------------------------------------------------------------- cadastros (Fase 6)
+
+export type TipoAbastecimento = 'produzido' | 'distribuido'
+export type DiaSemana = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo'
+
+/** GET /web/central (D103) */
+export interface CentralCadastro {
+  id: number
+  nome: string
+  secao: 'padaria' | 'acougue' | 'hortifruti'
+  prazo_entrega_dias: number
+  ativa: boolean
+  lojas: number
+}
+
+/** GET /web/produtos/{id} (C2). Decimais chegam como texto. */
+export interface ProdutoDetalhe {
+  id: number
+  codigo: string | null
+  nome: string
+  codigo_barras: string | null
+  unidade: Unidade
+  peso_medio_kg: string | null
+  ativo: boolean
+  tipo_abastecimento: TipoAbastecimento
+  dias_validade: number | null
+  margem_maxima_percentual: string | null
+  data_inicio_vigencia: string | null
+  data_fim_vigencia: string | null
+  vigencia_recorrente: boolean
+  ciclo_previsao: 'semanal' | 'sazonal'
+  setor: { id: number; nome: string } | null
+  dias_producao: DiaSemana[]
+  tem_historico: boolean
+}
+
+/** Corpo de POST /web/produtos e PATCH /web/produtos/{id}. */
+export interface ProdutoEnvio {
+  nome: string
+  codigo: string | null
+  codigo_barras: string | null
+  unidade_medida: Unidade
+  peso_medio_kg: string | null
+  ativo: boolean
+  tipo_abastecimento: TipoAbastecimento
+  dias_validade: number | null
+  margem_maxima_percentual: string | null
+  data_inicio_vigencia: string | null
+  data_fim_vigencia: string | null
+  vigencia_recorrente: boolean
+  ciclo_previsao: 'semanal' | 'sazonal'
+  setor_producao_id: number | null
+  dias_producao: DiaSemana[]
+  habilitar_lojas?: boolean
+}
+
+/** GET /web/produtos/{id}/lojas (C3, D100) */
+export interface LojaDoProduto {
+  loja_id: number
+  codigo: string | null
+  nome: string
+  loja_ativa: boolean
+  habilitado: boolean
+  ativo: boolean
+}
+
+/** GET /eventos (F3, D24) */
+export interface Evento {
+  id: number
+  nome: string
+  data_inicio: string
+  data_fim: string
+  tipo_ajuste: 'multiplicador' | 'valor_fixo'
+  valor_ajuste: string
+  escopo_loja: 'todas' | 'especificas'
+  loja_ids: number[]
+  escopo_produto: 'todos' | 'especificos'
+  produto_ids: number[]
+  /** False: o evento vale também para lojas de outra central (só lá pode ser apagado). */
+  pode_apagar: boolean
 }
