@@ -2,8 +2,10 @@
  * Verificação automática de acessibilidade (passo W8) com o axe-core, nas
  * telas e nos estados principais: login (vazio e com erro), importação
  * (vazia, com sucesso e com erros), consulta (com dados e vazia), previsão
- * (com dados e a conta aberta, vazia, com erro ao gerar) e ordem de produção
- * (rascunho com lojas, conta e diálogo abertos; aprovada; dia sem ordem).
+ * (com dados e a conta aberta, vazia, com erro ao gerar), ordem de produção
+ * (rascunho com lojas, conta e diálogo abertos; aprovada; dia sem ordem) e
+ * distribuição (produção, rascunho com aprovação bloqueada, aprovado com
+ * itens, saída e diferenças).
  *
  * Limitação: no jsdom o axe não calcula contraste de cor (não há
  * renderização real). Os contrastes são garantidos pelo tema.test.ts, que
@@ -16,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { salvarTokens } from '@/lib/api/sessao'
 import { dataIso, somarDias } from '@/lib/formato'
 import { itemPrevisao } from '@/test/previsao'
+import { entregas, ordemComRomaneio, ordemDoDia, romaneioDetalhe } from '@/test/distribuicao'
 import { ordemDetalhe, resumoDe } from '@/test/producao'
 import { ME, renderizarApp, resposta, simularApi } from '@/test/renderizar'
 
@@ -199,6 +202,53 @@ describe('acessibilidade (axe-core, WCAG)', () => {
       unmount()
       renderizarApp(`/producao?data=${somarDias(amanha, 1)}`)
       await screen.findByText(/^Nenhuma ordem gerada para/)
+      expect(await violacoes()).toEqual([])
+    })
+
+    it('distribuição: sem romaneio (diálogo de produção), rascunho (aprovar bloqueado) e aprovado (itens, saída)', async () => {
+      const hoje = dataIso(new Date())
+      const rascunho = romaneioDetalhe(hoje)
+      rascunho.producao[0] = { ...rascunho.producao[0], total_final: '11.000' }
+      const e = entregas()
+      e[1] = {
+        ...e[1], situacao: { situacao: 'sem_confirmacao', pode_confirmar: true, com_diferenca: false },
+        expedido_em: '2026-10-27T09:00:00',
+      }
+      const aprovado = romaneioDetalhe(hoje, { status: 'aprovado', entregas: e })
+      let estado: { ordem: ReturnType<typeof ordemDoDia>; romaneio: typeof rascunho | null } = { ordem: ordemDoDia(hoje), romaneio: null }
+      simularApi({
+        'GET /web/me': resposta(200, ME),
+        'GET /distribuicao/romaneios': () => resposta(200, { data_entrega: hoje, ordens: [estado.ordem] }),
+        'GET /distribuicao/romaneios/30': () => resposta(200, estado.romaneio),
+        'GET /distribuicao/divergencias': resposta(200, {
+          data_inicio: hoje, data_fim: hoje, totais: [{ unidade: 'UN', enviada: '3.000', recebida: '2.000', diferenca: '-1.000' }],
+          divergencias: [{
+            data_entrega: hoje, loja: { id: 1, codigo: '001', nome: 'Loja Centro' }, produto: { id: 1, codigo: 'INT-007', nome: 'Pão Francês' },
+            unidade: 'UN', quantidade_enviada: '3.000', quantidade_recebida: '2.000', diferenca: '-1.000', motivo: 'falta',
+            observacao: null, recebido_em: `${hoje}T13:00:00`,
+          }],
+        }),
+      })
+      let tela = renderizarApp('/distribuicao')
+      await userEvent.click(await screen.findByRole('button', { name: 'Registrar produção' }))
+      await screen.findByRole('dialog')
+      expect(await violacoes()).toEqual([])
+      tela.unmount()
+
+      estado = { ordem: ordemComRomaneio(rascunho), romaneio: rascunho }
+      tela = renderizarApp('/distribuicao')
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprovar romaneio' }))
+      await screen.findByText(/Mais do que o produzido/)
+      expect(await violacoes()).toEqual([])
+      tela.unmount()
+
+      estado = { ordem: ordemComRomaneio(aprovado), romaneio: aprovado }
+      renderizarApp('/distribuicao')
+      await screen.findByRole('table', { name: 'Diferenças no recebimento' })
+      await userEvent.click(await screen.findByRole('button', { name: 'Ver os itens da loja 002' }))
+      expect(await violacoes()).toEqual([])
+      await userEvent.click(screen.getByRole('button', { name: 'Registrar saída' }))
+      await screen.findByRole('dialog')
       expect(await violacoes()).toEqual([])
     })
 

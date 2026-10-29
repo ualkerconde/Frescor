@@ -1,6 +1,6 @@
 /*
  * Estrutura das telas autenticadas do SaaS (passo W5), pela skill Frescor:
- * cabeçalho com o logo, a navegação (Importar / Consultar / Previsão / Produção), quem está
+ * cabeçalho com o logo, a navegação (Importar / Consultar / Previsão / Produção / Distribuição), quem está
  * logado (gestor · central · negócio, de GET /web/me) e "Sair".
  *
  * "Sair" é um botão discreto (ghost): a ação principal de cada tela fica
@@ -9,7 +9,7 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
-import { ChartLine, Factory, LogOut, Search, Upload } from "lucide-react"
+import { ChartLine, Factory, LogOut, Search, Truck, Upload } from "lucide-react"
 import { NavLink, Outlet } from "react-router"
 import { Logo } from "@/components/marca/Logo"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,7 @@ const ITENS_MENU = [
   { para: "/consultar", rotulo: "Consultar", Icone: Search },
   { para: "/previsao", rotulo: "Previsão", Icone: ChartLine },
   { para: "/producao", rotulo: "Produção", Icone: Factory },
+  { para: "/distribuicao", rotulo: "Distribuição", Icone: Truck },
 ]
 
 function QuemEsta() {

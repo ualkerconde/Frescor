@@ -38,7 +38,9 @@ backend/
 │   │   ├── 0020_secao_prazo_tipo_abastecimento.py
 │   │   ├── 0021_loja_horario_fechamento.py
 │   │   ├── 0022_ordens_producao.py
-│   │   └── 0023_setores_producao.py
+│   │   ├── 0023_setores_producao.py
+│   │   ├── 0024_romaneios.py
+│   │   └── 0025_tira_recebimento_da_ordem.py
 │   ├── env.py
 │   └── script.py.mako
 ├── alembic.ini
@@ -52,6 +54,8 @@ backend/
 │   │   ├── eventos.py         # SaaS: POST/GET/DELETE /eventos (cadastro mínimo, D24)
 │   │   ├── previsoes.py       # SaaS: POST /previsoes/gerar, GET /previsoes, GET /previsoes/qualidade
 │   │   ├── producao.py        # SaaS: ordem de produção (gerar, listar, detalhar, ajustar, aprovar, apagar, PDF) e setores
+│   │   ├── distribuicao.py    # SaaS: produção real, romaneio (gerar, ajustar, aprovar, apagar, saída, PDF), divergências
+│   │   ├── recebimentos.py    # App: /recebimentos (entregas a confirmar e confirmação da loja)
 │   │   ├── web.py             # SaaS: /web/me, /web/lojas, /web/produtos (apoio às telas)
 │   │   ├── health.py          # /api/health
 │   │   ├── produtos.py        # App: /produtos, /estoque
@@ -84,8 +88,11 @@ backend/
 │   │   ├── previsao_diaria.py         # Previsão gravada por loja + produto + dia, com os componentes
 │   │   ├── ordem_producao.py          # Ordem do dia da central (rascunho / aprovada)
 │   │   ├── ordem_producao_item.py     # Um item por produto na ordem
-│   │   ├── ordem_producao_linha.py    # Uma linha por loja: sugerida, final, conta, avisos, recebimento
-│   │   └── setor_producao.py          # Setor de produção da central (pão, bolo...): uma folha por setor na impressão
+│   │   ├── ordem_producao_linha.py    # Uma linha por loja: sugerida, final, conta, avisos
+│   │   ├── setor_producao.py          # Setor de produção da central (pão, bolo...): uma folha por setor na impressão
+│   │   ├── romaneio.py                # Romaneio da ordem (rascunho / aprovado): quanto vai para cada loja
+│   │   ├── romaneio_entrega.py        # Uma entrega por loja: saída e recebimento
+│   │   └── romaneio_item.py           # Um item por produto na entrega: sugerida, final, recebida e motivo da diferença
 │   ├── schemas/
 │   │   ├── auth.py
 │   │   ├── estoque.py
@@ -94,6 +101,7 @@ backend/
 │   │   ├── evento.py
 │   │   ├── previsao.py
 │   │   ├── producao.py
+│   │   ├── distribuicao.py    # Romaneio, saída, recebimento e divergências
 │   │   ├── web.py
 │   │   └── zeragem.py
 │   ├── services/
@@ -117,7 +125,12 @@ backend/
 │   │   ├── necessidade_service.py   # Necessidade de todas as lojas + produtos de uma central (lê o banco)
 │   │   ├── producao_service.py      # Ordem: gerar, ajustar, aprovar, apagar; trânsito das ordens aprovadas
 │   │   ├── producao_consulta_service.py # Leitura das ordens para a API e a tela
-│   │   └── ordem_pdf_service.py     # PDF da ordem aprovada, uma folha por setor (reportlab)
+│   │   ├── ordem_pdf_service.py     # PDF da ordem aprovada, uma folha por setor (reportlab)
+│   │   ├── distribuicao_calculo.py  # Rateio da produção entre as lojas, funções puras (D70)
+│   │   ├── distribuicao_service.py  # Produção real, romaneio (gerar, ajustar, aprovar, apagar) e saída
+│   │   ├── distribuicao_consulta_service.py # Leitura da distribuição do dia, do romaneio e das divergências
+│   │   ├── recebimento_service.py   # Confirmação da loja e o trânsito pelo romaneio (D77–D79, D85, D89)
+│   │   └── romaneio_pdf_service.py  # PDF do romaneio aprovado: folha de carga e uma folha por loja
 │   └── main.py                 # Ponto de entrada da aplicação
 ├── scripts/
 │   ├── seed_dev.py                     # Negócio, central, 2 lojas, operadores e gestor de teste
@@ -254,6 +267,8 @@ Aplica as 23 migrações em sequência (0001 a 0023). Tabelas criadas:
 | 0021 | `lojas.horario_fechamento` (padrão 21:00, hora local): a contagem vale desde o fechamento da véspera menos 2 h (D44) |
 | 0022 | Cria `ordens_producao` (rascunho/aprovada; uma programada por central e dia), `ordens_producao_itens` (por produto) e `ordens_producao_linhas` (por loja: sugerida, final, conta e avisos em JSON, edição, recebimento); FKs compostas; apagar a ordem apaga itens e linhas |
 | 0023 | Cria `setores_producao` (por central: nome, ordem, ativo) e `produtos.setor_producao_id` opcional (D67) |
+| 0024 | Cria `romaneios` (rascunho/aprovado; um por ordem), `romaneios_entregas` (uma por loja: saída e recebimento) e `romaneios_itens` (por produto: sugerida, final, recebida, motivo da diferença); quem/quando registrou a produção em `ordens_producao_itens`; FKs compostas; a ordem com romaneio não pode ser apagada; apagar o romaneio apaga entregas e itens |
+| 0025 | Tira `quantidade_recebida`/`recebido_em` da linha da ordem: o recebimento passa a ser do romaneio (D79) |
 
 Toda migração tem `downgrade` funcional. Para conferir uma migração nova:
 `alembic upgrade head` → `alembic downgrade -1` → `alembic upgrade head`.
@@ -361,7 +376,24 @@ python scripts/test_producao_service.py       # gerar, ajustar, aprovar, apagar;
 python scripts/test_producao_rotas.py         # API da ordem: 401/403, 404/409/422, escopo (19)
 python scripts/test_ordem_pdf.py              # PDF da ordem aprovada: uma folha por setor, filtro, 409, 404 (12)
 python scripts/test_aceite_fase4.py           # critério de aceite da Fase 4, de ponta a ponta pela rota (7)
+
+# Fase 5 — distribuição, romaneio e recebimento
+python scripts/test_romaneios_modelo.py       # migration 0024: regras de banco do romaneio (31)
+python scripts/test_distribuicao_calculo.py   # rateio, sem banco: pela final, sobra, falta, arredondamento (15)
+python scripts/test_distribuicao_service.py   # produção real, romaneio, aprovar, saída (24)
+python scripts/test_recebimento_transito.py   # confirmação da loja e trânsito pelo romaneio; migration 0025 (18)
+python scripts/test_distribuicao_rotas.py     # API da distribuição: 401/403, 404/409/422, escopo (26)
+python scripts/test_recebimentos_rotas.py     # API do app /recebimentos: loja do token, erros (17)
+python scripts/test_romaneio_pdf.py           # PDF do romaneio: carga + folha por loja, filtro, 409, 422 (10)
+python scripts/test_aceite_fase5.py           # aceite da Fase 5 pelas rotas, prazo 1 (12) — ver nota abaixo
 ```
+
+> **Nota do `test_aceite_fase5.py`:** ele usa o relógio real e para com aviso
+> se a data de São Paulo for diferente da do servidor (só acontece num
+> servidor em UTC entre 21h e 0h de São Paulo). No Windows, com o relógio em
+> São Paulo, isso não acontece. O `test_seeds_fase4.py` espera os dados do
+> seed demo até ontem: se a data virou desde o último seed, rode o
+> `seed_demo_producao.py` de novo antes.
 
 Saída esperada: uma linha `[OK]` por caso e, no fim, `TODOS OS CASOS PASSARAM`
 (ou `N verificações; TODAS PASSARAM`).
@@ -546,7 +578,36 @@ Para cada loja + produto na data de produção D (decisões D32–D62 do `docs/S
 4. **Estoque na chegada** = contagem válida (desde o fechamento da véspera − 2 h, hora de São Paulo) + trânsito das ordens aprovadas − venda prevista até a chegada, sem o que vence antes.
 5. **Necessidade** = alvo − estoque na chegada, para cima (UN inteiro; KG em 0,1 kg).
 
-Qualquer mudança nesse cálculo (ou nos filtros do `necessidade_service.py`) exige atualizar `VERSAO_METODO_NECESSIDADE` em `app/services/necessidade_calculo.py` no mesmo commit (hoje `2026.10-n1`); a versão vai gravada em cada ordem.
+Qualquer mudança nesse cálculo (ou nos filtros do `necessidade_service.py`) exige atualizar `VERSAO_METODO_NECESSIDADE` em `app/services/necessidade_calculo.py` no mesmo commit (hoje `2026.10-n2`); a versão vai gravada em cada ordem.
+
+Desde a Fase 5 (n2), o trânsito vem do **romaneio** quando a ordem tem um: a entrega com saída entra pela final do romaneio; a confirmada pela loja depois da contagem entra pela recebida; a sem confirmação (ou confirmada com atraso) conta como chegada no dia de entrega, antes da contagem (D89), e aparece com a marca "sem confirmação" / "confirmada com atraso". Sem romaneio, vale a final da ordem, como antes (D52).
+
+### SaaS web — distribuição e romaneio (exigem token do SaaS)
+
+A central vem do token. Erros: **404** fora do escopo; **409** ordem não programada/aprovada (D88), romaneio aprovado (não muda mais) ou rascunho na impressão; **422** regra ferida, em português (soma das lojas acima do produzido, D71; quantidade inválida; loja fora do romaneio no filtro).
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `POST` | `/distribuicao/ordens/{ordem_id}/producao` | `{itens: [{item_id, quantidade}]}`: o produzido de cada produto (ou o disponível, no distribuído). Pode corrigir até o romaneio ser aprovado (D87). |
+| `GET` | `/distribuicao/romaneios?data_entrega=` | Ordens do dia com a produção e o resumo do romaneio (D92). |
+| `POST` | `/distribuicao/romaneios/gerar` | `{ordem_id}`: rateia a produção pela final da ordem (D70) e grava o romaneio em rascunho, substituindo o rascunho anterior. |
+| `GET` | `/distribuicao/romaneios/{id}` | Entregas por loja com os itens, a situação de cada entrega (calculada na leitura) e a produção por produto. |
+| `PATCH` | `/distribuicao/romaneios/{id}/itens/{item_id}` | `{quantidade_final, motivo?}`. Só rascunho. |
+| `POST` | `/distribuicao/romaneios/{id}/aprovar` | Recusa se a soma das lojas passar do produzido. Aprovado fica travado. |
+| `DELETE` | `/distribuicao/romaneios/{id}` | Apaga um rascunho (204). |
+| `POST` | `/distribuicao/romaneios/{id}/saida` | `{entrega_ids?}` (ausente = todas as que aguardam saída): registra a saída da central. |
+| `GET` | `/distribuicao/romaneios/{id}/pdf?lojas=1,2` | PDF do romaneio aprovado: folha de carga e uma folha por loja (vazio = todas). |
+| `GET` | `/distribuicao/divergencias?data_inicio=&data_fim=` | O que as lojas confirmaram diferente do enviado (falta, avaria, a mais, outro), com totais. |
+
+### App — recebimento (exige o token do app)
+
+A loja vem do usuário autenticado; não há loja na URL nem no corpo. Sem token → 403 (D93), como o resto do app.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `GET` | `/recebimentos` | Entregas da loja com saída registrada, ainda não confirmadas e dentro do prazo (até o fim do dia seguinte ao da entrega, D85). |
+| `GET` | `/recebimentos/{entrega_id}` | Uma entrega da loja, com os itens. |
+| `POST` | `/recebimentos/{entrega_id}/confirmar` | `{diferencas: []}` = "Recebi tudo certo"; com diferença, só os itens que vieram diferentes: `{item_id, quantidade_recebida, motivo, observacao?}` (`outro` exige a observação). Uma vez só. |
 
 ---
 

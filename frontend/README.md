@@ -49,7 +49,7 @@ src/
 │   ├── ProdutoItem.jsx        # Linha de produto na lista de contagem
 │   ├── SyncBanner.jsx         # Banner de status de sincronização
 │   ├── BarcodeScanner.jsx     # Leitura de código de barras pela câmera (ZXing)
-│   ├── Drawer.jsx             # Menu lateral (logout)
+│   ├── Drawer.jsx             # Menu lateral (Recebimento e Sair)
 │   └── FiltroClassificacao.jsx # Filtro em cascata pelos níveis de classificação
 ├── hooks/
 │   ├── useSync.js             # Lógica de sincronização automática (debounce)
@@ -57,11 +57,29 @@ src/
 ├── pages/
 │   ├── LoginScreen.jsx      # Tela de login
 │   ├── MainScreen.jsx       # Tela principal de contagem
+│   ├── RecebimentoScreen.jsx # Recebimento das entregas da central (Fase 5)
 │   └── DesktopBlockScreen.jsx # Tela de bloqueio para desktop
+├── recebimento/
+│   ├── regras.js            # Formatos e validações do recebimento (espelham o backend)
+│   └── recebimento.css      # Visual da tela de Recebimento (tokens do Frescor, prefixo .rcb-)
+├── test/                    # Configuração e ajudantes dos testes (Vitest)
 └── services/
     ├── api.js               # Comunicação com a API (fetch + refresh de token)
     └── storage.js            # Armazenamento local (cache + pendentes offline)
 ```
+
+## Testes
+
+```bash
+npm test        # Vitest + Testing Library (jsdom), uma vez
+```
+
+Os testes ficam ao lado do código (`*.test.jsx` / `*.test.js`) e usam o
+`vitest.config.js`, separado do `vite.config.js` (não carregam o PWA nem o
+HTTPS). Hoje cobrem a tela de Recebimento: estado vazio, "Recebi tudo certo",
+diferença com motivo, sem conexão, erros sem código e sem envio duplo. A
+contagem e o leitor de código de barras continuam conferidos à mão, no
+celular.
 
 ## Variáveis de ambiente
 
@@ -101,7 +119,8 @@ dessa pasta em qualquer servidor web estático (Nginx, Netlify, Vercel, etc.).
 - Sincronização automática 1.5s após qualquer alteração
 - Funcionamento offline: salva no localStorage, sincroniza ao voltar online
 - Estatísticas: total de produtos, contados, pendentes de sincronização
-- Menu lateral (Drawer) com opção de logout
+- Menu lateral (Drawer) com Recebimento e logout
+- Recebimento das entregas da central (Fase 5): a loja vê as entregas que saíram, confirma "Recebi tudo certo" ou "Recebi com diferença" (quantidade e motivo por produto: faltou, avaria, veio a mais, outro). Só online; depois de confirmada, a entrega não muda mais
 - Bloqueio de acesso via desktop
 - Refresh automático de token (transparente para o usuário)
 

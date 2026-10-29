@@ -36,8 +36,9 @@ Casos:
      terça) entra como trânsito na ordem C2/terça: 15 contados + 12 − 20
      vendidos na terça = 7 na chegada; alvo 22 -> 15 (sem o trânsito: 22).
      Falha se o trânsito vier vazio havendo ordem aprovada para a loja
-  T2 o provedor ignora rascunho, linha já recebida, entrega antes de D e
-     outro negócio
+  T2 o provedor ignora ordem em rascunho, entrega antes de D e outro
+     negócio; com o romaneio da ordem só em rascunho, vale a final da ordem
+     (o recebimento confirmado é testado no test_recebimento_transito, E5)
   P1 D41: previsão da C2 com referência 31/10 -> atualizada antes de
      calcular (chamada com referência 01/11); a da A, em dia, não
   V1 data que já passou e data além do horizonte -> recusadas
@@ -71,6 +72,9 @@ from app.models.ordem_producao_linha import OrdemProducaoLinha  # noqa: E402
 from app.models.previsao_diaria import EstatisticaBase, MetodoPrevisao, PrevisaoDiaria  # noqa: E402
 from app.models.produto import Produto, TipoAbastecimento, UnidadeMedida  # noqa: E402
 from app.models.produto_loja import ProdutoLoja  # noqa: E402
+from app.models.romaneio import Romaneio, StatusRomaneio  # noqa: E402
+from app.models.romaneio_entrega import RomaneioEntrega  # noqa: E402
+from app.models.romaneio_item import RomaneioItem  # noqa: E402
 from app.models.usuario import TipoUsuario, Usuario  # noqa: E402
 from app.services.necessidade_calculo import VERSAO_METODO_NECESSIDADE, LoteTransito  # noqa: E402
 from app.services.necessidade_service import CentralNaoEncontrada  # noqa: E402
@@ -108,6 +112,7 @@ def _limpar(db, negocio_ids):
     if not negocio_ids:
         return
     lojas = [i for (i,) in db.query(Loja.id).filter(Loja.negocio_id.in_(negocio_ids))]
+    db.query(Romaneio).filter(Romaneio.negocio_id.in_(negocio_ids)).delete(synchronize_session=False)
     db.query(OrdemProducao).filter(OrdemProducao.negocio_id.in_(negocio_ids)).delete(synchronize_session=False)
     for modelo in (OrdemProducaoLinha, OrdemProducaoItem, PrevisaoDiaria, EstoqueAtual, CalendarioProducao):
         db.query(modelo).filter(modelo.negocio_id.in_(negocio_ids)).delete(synchronize_session=False)
@@ -389,16 +394,25 @@ def main():
         rascunho_ignorado = provedor_transito_ordens(db, neg, [c.l4.id], quarta) == {}  # C2/terça é rascunho
         antes_de_d = provedor_transito_ordens(db, neg, [c.l4.id], quarta) == {}  # entrega terça < quarta
         outro_negocio = provedor_transito_ordens(db, c.neg_x.id, [c.l4.id], TER) == {}
-        db.execute(text("UPDATE ordens_producao_linhas SET recebido_em = :t WHERE id = :i"),
-                   {"t": datetime(2026, 11, 3, 12, 0), "i": l4.id})
+        # Romaneio em rascunho (E5): não vale; o trânsito continua pela final da ordem (12), não pela do romaneio (5).
+        rom = Romaneio(negocio_id=neg, central_producao_id=c.c2.id, ordem_id=r_c2.ordem_id, data_entrega=TER,
+                       status=StatusRomaneio.RASCUNHO, gerado_em=datetime(2026, 11, 2, 12, 0))
+        db.add(rom)
+        db.flush()
+        ent = RomaneioEntrega(negocio_id=neg, romaneio_id=rom.id, loja_id=c.l4.id)
+        db.add(ent)
+        db.flush()
+        db.add(RomaneioItem(negocio_id=neg, entrega_id=ent.id, produto_id=p["P5"], ordem_linha_id=l4.id,
+                            unidade=UnidadeMedida.UN, quantidade_sugerida=DEC(5), quantidade_final=DEC(5)))
         db.commit()
-        recebida_ignorada = provedor_transito_ordens(db, neg, [c.l4.id], TER) == {}
-        db.execute(text("UPDATE ordens_producao_linhas SET recebido_em = NULL WHERE id = :i"), {"i": l4.id})
+        pelo_rascunho = provedor_transito_ordens(db, neg, [c.l4.id], TER)
+        romaneio_rascunho_ignorado = pelo_rascunho == {(c.l4.id, p["P5"]): [LoteTransito(TER, DEC(12))]}
+        db.delete(rom)
         db.commit()
         registrar("T2 provedor ignora o que nao e transito",
-                  rascunho_ignorado and antes_de_d and outro_negocio and recebida_ignorada,
+                  rascunho_ignorado and antes_de_d and outro_negocio and romaneio_rascunho_ignorado,
                   f"rascunho={rascunho_ignorado} entrega_antes={antes_de_d} outro_negocio={outro_negocio} "
-                  f"recebida={recebida_ignorada}")
+                  f"romaneio_rascunho_vale_a_ordem={romaneio_rascunho_ignorado}")
 
         # ---- P1 (D41) ----
         so_c2 = chamadas_previsao and all(cid == c.c2.id for cid, _ in chamadas_previsao)

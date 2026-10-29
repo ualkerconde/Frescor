@@ -201,6 +201,10 @@ export interface ContaNecessidade {
   limite_contagem_local: string | null
   estoque_considerado: string
   transito_considerado: string
+  /** Entregas confirmadas no prazo depois da contagem válida (D79 (2), Fase 5). */
+  recebido_apos_contagem?: string
+  /** Entregas sem confirmação presumidas recebidas pela final (D79 (4)); já estão na contagem. */
+  recebimento_presumido?: string
   consumo_ate_chegada: string
   vencido_ate_chegada: string
   estoque_na_chegada: string | null
@@ -275,4 +279,150 @@ export interface SetorProducao {
 export interface OrdensDoDia {
   data_producao: string
   ordens: OrdemResumo[]
+}
+
+// ---- Distribuição e romaneio (Fase 5 / E6) ----
+
+export interface Referencia {
+  id: number
+  codigo: string | null
+  nome: string
+}
+
+/** Situação da entrega, calculada na leitura (D79, D85). */
+export type SituacaoEntrega = 'aguardando_saida' | 'a_caminho' | 'sem_confirmacao' | 'recebida' | 'confirmada_com_atraso'
+
+export interface ItemProducao {
+  item_id: number
+  produto: Referencia
+  unidade: Unidade
+  tipo_abastecimento: 'produzido' | 'distribuido'
+  /** Soma das finais da ordem (D54). */
+  planejado: string
+  /** null = produção ainda não registrada (D69). */
+  produzido: string | null
+  registrado_em: string | null
+}
+
+export interface ResumoRomaneio {
+  id: number
+  status: 'rascunho' | 'aprovado'
+  entregas: number
+  situacoes: Partial<Record<SituacaoEntrega, number>>
+}
+
+export interface OrdemDistribuicao {
+  ordem_id: number
+  data_producao: string
+  data_entrega: string
+  status_ordem: 'rascunho' | 'aprovada'
+  itens: ItemProducao[]
+  romaneio: ResumoRomaneio | null
+}
+
+/** GET /distribuicao/romaneios?data_entrega= */
+export interface DistribuicaoDoDia {
+  data_entrega: string
+  ordens: OrdemDistribuicao[]
+}
+
+/** POST /distribuicao/ordens/{id}/producao */
+export interface ResultadoProducao {
+  itens_registrados: number
+  /** Havia um rascunho do romaneio: ele não foi refeito (D87). */
+  romaneio_desatualizado: boolean
+}
+
+/** POST /distribuicao/romaneios/gerar */
+export interface GeracaoRomaneio {
+  romaneio_id: number
+  ordem_id: number
+  entregas: number
+  itens: number
+  produtos_com_escassez: number[]
+  produtos_com_sobra: number[]
+  substituiu_rascunho: boolean
+}
+
+export interface SituacaoDaEntrega {
+  situacao: SituacaoEntrega
+  pode_confirmar: boolean
+  com_diferenca: boolean
+}
+
+export interface ItemRomaneio {
+  id: number
+  produto: Referencia
+  unidade: Unidade
+  quantidade_sugerida: string
+  /** O que vai para a loja (é a quantidade expedida, D76). */
+  quantidade_final: string
+  quantidade_recebida: string | null
+  motivo_divergencia: MotivoDivergencia | null
+  observacao_divergencia: string | null
+  editado_em: string | null
+  motivo_edicao: string | null
+}
+
+export interface EntregaRomaneio {
+  id: number
+  loja: Referencia
+  situacao: SituacaoDaEntrega
+  expedido_em: string | null
+  recebido_em: string | null
+  itens: ItemRomaneio[]
+}
+
+export interface ProducaoRomaneio {
+  produto: Referencia
+  unidade: Unidade
+  tipo_abastecimento: 'produzido' | 'distribuido'
+  planejado: string
+  produzido: string | null
+  /** Soma das finais das lojas; ao aprovar, não pode passar do produzido (D71). */
+  total_final: string
+}
+
+/** GET /distribuicao/romaneios/{id} */
+export interface RomaneioDetalhe {
+  id: number
+  ordem_id: number
+  data_producao: string
+  data_entrega: string
+  status: 'rascunho' | 'aprovado'
+  gerado_em: string
+  aprovado_em: string | null
+  /** Rascunho com a produção mudada depois de gerado (D87). */
+  desatualizado: boolean
+  producao: ProducaoRomaneio[]
+  entregas: EntregaRomaneio[]
+}
+
+/** POST /distribuicao/romaneios/{id}/saida */
+export interface ResultadoSaida {
+  entregas: number[]
+}
+
+export type MotivoDivergencia = 'falta' | 'avaria' | 'a_mais' | 'outro'
+
+export interface Divergencia {
+  data_entrega: string
+  loja: Referencia
+  produto: Referencia
+  unidade: Unidade
+  quantidade_enviada: string
+  quantidade_recebida: string
+  /** Recebida − enviada (negativa = chegou menos). */
+  diferenca: string
+  motivo: MotivoDivergencia
+  observacao: string | null
+  recebido_em: string
+}
+
+/** GET /distribuicao/divergencias */
+export interface Divergencias {
+  data_inicio: string
+  data_fim: string
+  divergencias: Divergencia[]
+  totais: { unidade: Unidade; enviada: string; recebida: string; diferenca: string }[]
 }

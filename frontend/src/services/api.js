@@ -99,6 +99,43 @@ export async function sincronizarEstoque(contagens) {
   return res.json()
 }
 
+// ---- Recebimento (Fase 5 / E11, D77) ----
+// Só online: a confirmação não entra na fila offline da contagem. Os erros
+// viram mensagens em português (o `detail` do backend); o código HTTP nunca
+// chega à tela. Falha de rede vira o erro 'SEM_CONEXAO'.
+
+async function chamarRecebimento(path, options) {
+  let res
+  try {
+    res = await apiFetch(path, options)
+  } catch (e) {
+    if (e.message === 'SESSION_EXPIRED') throw e
+    throw new Error('SEM_CONEXAO')
+  }
+  if (res.ok) return res.json()
+  const data = await res.json().catch(() => ({}))
+  const erro = new Error(
+    typeof data.detail === 'string'
+      ? data.detail
+      : 'Não foi possível concluir. Confira os dados e tente de novo.'
+  )
+  // 404/409: a entrega sumiu da lista (já confirmada, prazo encerrado ou de outra loja).
+  erro.desatualizado = res.status === 404 || res.status === 409
+  throw erro
+}
+
+export function fetchRecebimentos() {
+  return chamarRecebimento('/recebimentos')
+}
+
+/** `diferencas` vazio = "Recebi tudo certo"; senão, só os itens que chegaram diferentes. */
+export function confirmarRecebimento(entregaId, diferencas = []) {
+  return chamarRecebimento(`/recebimentos/${entregaId}/confirmar`, {
+    method: 'POST',
+    body: JSON.stringify({ diferencas }),
+  })
+}
+
 /**
  * Busca unificada: procura o valor `q` em `codigo` (código interno)
  * e `codigo_barras` (scanner) simultaneamente.
