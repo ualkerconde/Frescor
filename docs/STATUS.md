@@ -696,6 +696,48 @@ Ordem aprovada (Fase 4)
 - **Hipótese não verificada:** que a loja vai confirmar o recebimento todo dia. Se não confirmar, o sistema volta à regra presumida da D43; a Fase 7 deve medir a taxa de confirmação.
 - **Escopo:** E10 e E11 são os passos mais longos. A rota já saiu (D74).
 
+### Fase 6 — plano (proposto em 2026-10-29; decisões D96–D106 adotadas como recomendadas, falta o Ualker confirmar)
+
+Pedido do Ualker (2026-10-29): "continue a programação". Lido como começar a Fase 6, na branch `claude/project-thread-0k6zx4`, feita **a partir da branch da Fase 5** (PR #2, ainda fora do `main`); um commit e um push por passo, sem merge no `main`.
+
+Objetivo (doc §8): painel web cobrindo as Fases 1–5. Critério de aceite do doc: **um gestor consegue, sem acessar o banco, cadastrar um produto, ver a ordem de produção gerada e ajustar/confirmar um romaneio.**
+
+**O que já existe (lido no código em 2026-10-29):** login (W4), importação (W6) e consulta (W7) de vendas/perdas; tela de previsão (F9); ordem de produção com edição, aprovação e impressão por setor (N9, N9b); distribuição com produção real, romaneio, saída e divergências (E10). API mínima de eventos (F3, D24) **sem tela**. Só leitura: `GET /web/produtos` (lista curta), `GET /producao/setores`, `GET /web/me`.
+
+**O que falta das telas mínimas do doc:** cadastro da central; cadastro e edição de produto (vigência, validade, margem, calendário de produção); ativação por loja; cadastro de eventos; e, pela D67 (obrigatório antes do primeiro cliente), cadastro de setores e atribuição do setor ao produto.
+
+| Passo | O que | Verificação | Situação |
+|---|---|---|---|
+| C1 | Backend: central (`GET`/`PATCH /web/central`: nome e prazo de entrega, D103) e setores (`POST /producao/setores`, `PATCH /producao/setores/{id}`: nome, ordem, ativo; D102) | `TestClient`: 401/403, escopo de central e negócio (404 igual), validações em português, nome repetido, sabotagens; regressão | A fazer |
+| C2 | Backend: produto (`GET /web/produtos/{id}`, `POST /web/produtos`, `PATCH /web/produtos/{id}`), com calendário, vigência, validade, margem, setor e tipo de abastecimento (D96–D99) | `TestClient`: criação e edição campo a campo; código repetido; unidade travada com histórico; setor de outra central; vigência; isolamento; sabotagens | A fazer |
+| C3 | Backend: habilitação por loja (`GET /web/produtos/{id}/lojas`, `PUT /web/produtos/{id}/lojas/{loja_id}`), D100–D101; o app passa a esconder produto desativado na loja (D100) | `TestClient`; regressão completa do app (`/produtos`, `/produtos/buscar`, contagem, zeragem) | A fazer |
+| C4 | Tela `/cadastros`: produtos (lista com busca, novo, editar, lojas), setores e central | Vitest + axe; typecheck, lint, build (chunk próprio) | A fazer |
+| C5 | Tela `/eventos`: lista do período, criar, apagar (D104) | Vitest + axe | A fazer |
+| C6 | `test_aceite_fase6.py` (cadastrar produto → importar venda → previsão → ordem → romaneio ajustado e aprovado, só pelas rotas); READMEs; regressão completa; fechamento | aceite + sabotagens; todos os scripts e testes de tela | A fazer |
+
+**Decisões D96–D106 (adotadas como recomendadas em 2026-10-29; falta o Ualker confirmar).**
+
+| ID | Tema | Recomendação adotada | Alternativa |
+|---|---|---|---|
+| D96 | Quem edita o catálogo | O produto é do **negócio** (doc §3.1): qualquer gestor de central do negócio cria e edita produtos. No V1 há uma central por negócio (D14), então não há conflito. | Restringir à central (exige ligar produto a central; fica para quando houver loja com várias centrais, D14). |
+| D97 | Código do produto | **Obrigatório no cadastro novo** (a importação de CSV acha o produto pelo código, D7); na edição, um código existente não pode ser apagado. Único no negócio (banco: `uq_produto_negocio_codigo`), com mensagem clara. Código de barras opcional. | Código opcional (produto sem código não importa venda). |
+| D98 | Troca de unidade (UN ↔ KG) | **Bloqueada quando o produto já tem histórico** (venda, perda, contagem, previsão ou linha de ordem): o histórico ficaria em outra unidade. A mensagem orienta criar outro produto. Sem histórico, pode trocar. Peso médio pode mudar (vale para as próximas contagens). | Permitir sempre (mistura unidades no histórico). |
+| D99 | Apagar produto | **Não apaga:** desativa (`ativo = false`). Inativo sai do app, da previsão e da ordem (regras já existentes) e volta ao reativar, com o histórico. | Apagar quando não há histórico. |
+| D100 | Desativar na loja | Só lojas da central do gestor. Desativar = `produtos_lojas.ativo = false` (**mantém a linha e a data de habilitação**, que o cold start usa); habilitar sem linha cria a linha. **O app passa a esconder o produto desativado na loja** (hoje ele só olha se a linha existe; previsão e ordem já respeitam o `ativo`). Mudança no app em produção: regressão completa no C3. | Apagar a linha (perde a data de habilitação); não mexer no app (desativar não teria efeito na contagem). |
+| D101 | Produto novo nas lojas | O cadastro novo já habilita o produto em **todas as lojas ativas da central** (opção marcada por padrão na tela; o gestor pode desmarcar e escolher depois). | Nascer sem loja. |
+| D102 | Setores | Criar, renomear, mudar a ordem e desativar/reativar; **sem apagar** (produto de setor inativo sai em "Sem setor", N9b). Nome único na central (banco). No produto, só setor **ativo da central do gestor**; produto pode ficar sem setor. | Apagar setor sem produto. |
+| D103 | Cadastro da central | O gestor edita o **nome** e o **prazo de entrega** (0 a 7 dias) da própria central; vale para as ordens geradas depois (a aprovada guarda a data de entrega). **Seção e "ativa" só leitura:** desativar a própria central bloquearia o acesso (D4) e trocar a seção é trabalho futuro (D14). Criar central, loja e usuário fica com o administrador da rede, perfil que ainda não existe (seção 2). | Deixar editar a seção. |
+| D104 | Eventos | Tela sobre a API da F3: lista do período, criar (todas as lojas ou lojas escolhidas; todos os produtos ou alguns; multiplicador ou valor fixo) e apagar. **Editar = apagar e criar de novo** (como a API mínima, D24), sem rota nova. | `PATCH /eventos/{id}`. |
+| D105 | Vigência na tela | Três opções: **permanente** (sem datas), **temporário** (início e/ou fim, `ciclo semanal`) e **sazonal** (repete todo ano: as duas datas, `vigencia_recorrente` e `ciclo sazonal` juntos). A API recusa combinação incoerente (sazonal sem recorrência ou sem as duas datas; fim antes do início). | Expor os três campos soltos. |
+| D106 | Classificação (categoria) no cadastro | **Fora da Fase 6.** Produto novo sem categoria usa no cold start a média dos produtos da mesma unidade (D20, já existe). A categoria continua pelo banco/seed. | Incluir no cadastro a escolha do 1º nível. |
+
+**Faixas de validação adotadas (seguem as do resto do sistema):** nome até 255 caracteres, sem ficar vazio; código até 64; validade de 1 a 365 dias ou vazio; margem de 0 a 500% ou vazio (vazio = 10%, D34); peso médio maior que 0 e até 4 casas, só em KG.
+
+**Riscos e custos:**
+- **Maior risco:** o D100 muda o que o app lista (`/produtos` e `/produtos/buscar`). Hoje nenhuma linha tem `ativo = false` além das criadas à mão; mesmo assim, conferir no banco de produção antes do deploy (`SELECT count(*) FROM produtos_lojas WHERE ativo = false`).
+- Editar um produto muda a próxima previsão e a próxima ordem (vigência, validade, margem, calendário), não as aprovadas. A tela avisa isso.
+- Escopo: C4 é o passo mais longo (formulário com muitos campos).
+
 ### Frontend do SaaS — plano (aprovado em 2026-10-13)
 
 Stack: React + Vite + **TypeScript** + Tailwind + shadcn/ui, **TanStack Query** para dados, Vitest + Testing Library para testes. Porta **3001** em http (desktop; sem câmera, sem HTTPS), proxy `/backend` → `127.0.0.1:8000` (sem CORS). Visual: skill de design **Frescor** a partir do W2 (`.claude/skills/frescor-design-system/SKILL.md`). Versões: as estáveis no momento do scaffold, registradas aqui com os números exatos (Node 22.20, npm 10.9 instalados).
