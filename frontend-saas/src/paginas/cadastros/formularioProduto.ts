@@ -48,7 +48,8 @@ export function camposVazios(): CamposProduto {
   return {
     nome: '', codigo: '', codigo_barras: '', unidade: 'UN', peso_medio_kg: '', ativo: true,
     tipo_abastecimento: 'produzido', dias_validade: '', margem: '', vigencia: 'permanente', inicio: '', fim: '',
-    setor_id: SEM_SETOR, dias: [], habilitar_lojas: true,
+    // Produto novo nasce com todos os dias marcados: sem dia nenhum ele fica sem calendário e a ordem não sugere (D42).
+    setor_id: SEM_SETOR, dias: DIAS.map((d) => d.valor), habilitar_lojas: true,
   }
 }
 
@@ -174,9 +175,10 @@ export function montarEnvio(
   return { ok: true, envio }
 }
 
-/** "segunda, quarta e sexta"; vazio -> "todos os dias". */
+/** "segunda, quarta e sexta"; os 7 -> "todos os dias"; vazio -> "nenhum dia" (sem calendário, D42). */
 export function descreverDias(dias: DiaSemana[]): string {
-  if (dias.length === 0 || dias.length === 7) return 'todos os dias'
+  if (dias.length === 0) return 'nenhum dia'
+  if (dias.length === 7) return 'todos os dias'
   const nomes = DIAS.filter((d) => dias.includes(d.valor)).map((d) => d.rotulo.toLowerCase())
   return nomes.length === 1 ? nomes[0] : `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`
 }

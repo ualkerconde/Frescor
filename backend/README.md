@@ -48,6 +48,7 @@ backend/
 │   ├── api/
 │   │   ├── auth.py            # App: /auth/login, /auth/refresh, /auth/logout
 │   │   ├── auth_web.py        # SaaS: /auth/web/login, /auth/web/refresh
+│   │   ├── cadastros.py       # SaaS: central, setores, produtos e lojas do produto (Fase 6)
 │   │   ├── importacao.py      # SaaS: POST /vendas/importar, /perdas/importar (CSV)
 │   │   ├── consultas.py       # SaaS: GET /vendas, /perdas
 │   │   ├── escopo.py          # SaaS: loja fora do escopo do gestor -> 404
@@ -95,6 +96,7 @@ backend/
 │   │   └── romaneio_item.py           # Um item por produto na entrega: sugerida, final, recebida e motivo da diferença
 │   ├── schemas/
 │   │   ├── auth.py
+│   │   ├── cadastro.py        # Central, setores e produto (Fase 6)
 │   │   ├── estoque.py
 │   │   ├── importacao.py
 │   │   ├── consulta.py
@@ -113,6 +115,8 @@ backend/
 │   │   ├── consulta_service.py      # Consulta de vendas/perdas (filtros, período, paginação)
 │   │   ├── registros_efetivos.py    # D16: com api e manual no mesmo dia, vale o api (único lugar)
 │   │   ├── catalogo_service.py      # Lojas e produtos para as telas do SaaS
+│   │   ├── cadastro_central_service.py # Central (nome, prazo) e setores de produção (D102, D103)
+│   │   ├── cadastro_produto_service.py # Produto (D96–D99, D105) e ativação por loja (D100, D101)
 │   │   ├── sync_vendas_service.py   # STUB da integração com o PDV (não configurada)
 │   │   ├── serie_vendas_service.py  # Série diária de vendas por loja + produto (D16, D17, D28)
 │   │   ├── previsao_calculo.py      # Núcleo do cálculo, funções puras (base, tendência, sazonal, cold start, eventos)
@@ -358,7 +362,7 @@ python scripts/test_web_apoio.py              # /web/me, /web/lojas, /web/produt
 python scripts/test_serie_vendas.py           # série diária de vendas (D16, D17) (21)
 python scripts/test_previsao_calculo.py       # núcleo do cálculo, sem banco: base, tendência (21)
 python scripts/test_previsao_eventos.py       # eventos fora da base e ajuste do dia (24)
-python scripts/test_eventos_rotas.py          # POST/GET/DELETE /eventos, escopo e erros em português (44)
+python scripts/test_eventos_rotas.py          # POST/GET/DELETE /eventos, escopo e erros em português (45)
 python scripts/test_previsao_cold_start.py    # produto novo e loja nova, proxies (15)
 python scripts/test_previsao_sazonal.py       # ramo sazonal e vigência (14)
 python scripts/test_previsao_metricas.py      # WAPE, viés e ingênuo (6)
@@ -386,6 +390,11 @@ python scripts/test_distribuicao_rotas.py     # API da distribuição: 401/403, 
 python scripts/test_recebimentos_rotas.py     # API do app /recebimentos: loja do token, erros (17)
 python scripts/test_romaneio_pdf.py           # PDF do romaneio: carga + folha por loja, filtro, 409, 422 (10)
 python scripts/test_aceite_fase5.py           # aceite da Fase 5 pelas rotas, prazo 1 (12) — ver nota abaixo
+
+# Fase 6 — cadastros do SaaS
+python scripts/test_cadastro_central_rotas.py # central e setores: escopo, validações, nome repetido (33)
+python scripts/test_cadastro_produto_rotas.py # produto e lojas do produto, efeito no app (49)
+python scripts/test_aceite_fase6.py           # aceite da Fase 6: cadastrar -> vender -> prever -> ordem -> romaneio (12)
 ```
 
 > **Nota do `test_aceite_fase5.py`:** ele usa o relógio real e para com aviso
@@ -517,14 +526,29 @@ Quando o mesmo loja + produto + data tem registro `api` (PDV) e `manual` (CSV), 
 | --- | --- | --- |
 | `GET` | `/web/me` | Gestor logado, sua central e seu negócio (cabeçalho). |
 | `GET` | `/web/lojas` | Lojas da central do gestor, ativas e inativas (campo `ativo`). |
-| `GET` | `/web/produtos?busca=&limit=&offset=` | Produtos do negócio (ativos e inativos), busca por código ou nome sem diferenciar maiúsculas nem acentos; `%` e `_` são texto; `limit` até 200. |
+| `GET` | `/web/produtos?busca=&limit=&offset=` | Produtos do negócio (ativos e inativos), busca por código ou nome sem diferenciar maiúsculas nem acentos; `%` e `_` são texto; `limit` até 200. Cada item traz também `tipo_abastecimento`, `setor` e `lojas_ativas` (na central do gestor). |
+
+### SaaS web — cadastros (exigem token do SaaS; Fase 6)
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `GET` / `PATCH` | `/web/central` | A central do gestor. O `PATCH` muda só `nome` e `prazo_entrega_dias` (0 a 7); seção e "ativa" são só leitura (D103). |
+| `POST` | `/producao/setores` | Cria (201) um setor: `nome` (único na central, sem diferenciar maiúsculas), `ordem` opcional (ausente = no fim). |
+| `PATCH` | `/producao/setores/{id}` | Muda `nome`, `ordem` e `ativo` (sem apagar, D102). Setor de outra central → 404. |
+| `GET` | `/web/produtos/{id}` | Produto completo: unidade, peso médio, validade, margem, vigência, setor, `dias_producao` e `tem_historico`. |
+| `POST` | `/web/produtos` | Cria (201). `codigo` obrigatório e único no negócio (D97); `habilitar_lojas` (padrão `true`) já ativa nas lojas ativas da central (D101). `dias_producao` vazio = **sem calendário**: a ordem lista o produto sem sugestão (D42). |
+| `PATCH` | `/web/produtos/{id}` | Muda só os campos enviados. Unidade travada quando há histórico (D98); não apaga produto, desativa (`ativo`, D99). |
+| `GET` | `/web/produtos/{id}/lojas` | Lojas da central com a situação do produto em cada uma. |
+| `PUT` | `/web/produtos/{id}/lojas/{loja_id}` | `{"ativo": true/false}`: ativa ou desativa na loja, mantendo a linha e a data de habilitação (D100). O app deixa de listar o produto desativado na loja. |
+
+Erro de validação → 422 com mensagem em português; produto, setor ou loja fora do escopo → 404.
 
 ### SaaS web — eventos (exigem token do SaaS)
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
 | `POST` | `/eventos` | Cria (201) um evento da central do gestor: `nome`, `data_inicio`, `data_fim` (até 366 dias), `tipo_ajuste` (`multiplicador` ou `valor_fixo`), `valor_ajuste`, `escopo_loja` (`todas` = lojas da central, ou `especificas` com `loja_ids`), `produto_ids` (vazio = todos). Erro de validação → 422 com mensagem em português. |
-| `GET` | `/eventos?data_inicio=&data_fim=` | Eventos que valem para a central (datas opcionais: só os que tocam o período). |
+| `GET` | `/eventos?data_inicio=&data_fim=` | Eventos que valem para a central (datas opcionais: só os que tocam o período). Cada um traz `pode_apagar` (falso quando vale também para loja de outra central). |
 | `DELETE` | `/eventos/{id}` | Apaga (204). Fora do escopo ou inexistente → 404; evento que vale também para outra central → 403. |
 
 Editar = apagar e criar de novo (API mínima, D24). Regras do ajuste: D26 no STATUS.

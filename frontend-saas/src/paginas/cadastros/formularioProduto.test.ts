@@ -78,7 +78,8 @@ describe('modelo do formulário de produto (C4)', () => {
   })
 
   it('descreve os dias de produção', () => {
-    expect(descreverDias([])).toBe('todos os dias')
+    expect(descreverDias([])).toBe('nenhum dia')
+    expect(descreverDias(camposVazios().dias)).toBe('todos os dias')
     expect(descreverDias(['sexta'])).toBe('sexta')
     expect(descreverDias(['sexta', 'segunda', 'quarta'])).toBe('segunda, quarta e sexta')
   })

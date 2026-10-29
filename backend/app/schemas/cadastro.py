@@ -63,7 +63,8 @@ class _CamposProduto(BaseModel):
     ciclo_previsao: Optional[CicloPrevisao] = None
     setor_producao_id: Optional[int] = Field(None, description="Setor ativo da central do gestor; vazio = sem setor.")
     dias_producao: Optional[list[DiaSemana]] = Field(
-        None, description="Dias da semana em que a central produz (ou envia); vazio = todos os dias."
+        None, description="Dias da semana em que a central produz (ou envia); vazio = sem calendário "
+        "(a ordem não sugere quantidade, D42)."
     )
 
 
@@ -99,7 +100,7 @@ class ProdutoDetalheResponse(BaseModel):
     vigencia_recorrente: bool
     ciclo_previsao: CicloPrevisao
     setor: Optional[SetorDoProduto] = None
-    dias_producao: list[DiaSemana] = Field(description="Vazio = todos os dias.")
+    dias_producao: list[DiaSemana] = Field(description="Vazio = sem calendário (D42).")
     tem_historico: bool = Field(description="Com histórico, a unidade não pode mudar (D98).")
 
 

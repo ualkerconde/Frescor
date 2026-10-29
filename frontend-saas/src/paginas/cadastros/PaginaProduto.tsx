@@ -328,7 +328,7 @@ function FormularioProduto({
           </div>
           <p className="text-sm text-muted-foreground" aria-live="polite">
             {c.dias.length === 0
-              ? "Nenhum dia marcado: a central produz todos os dias."
+              ? "Nenhum dia marcado: o produto fica sem calendário e a ordem de produção não sugere quantidade para ele (você informa à mão)."
               : `A central produz ${descreverDias(c.dias)}.`}
           </p>
         </fieldset>

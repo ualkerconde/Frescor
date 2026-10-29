@@ -20,8 +20,9 @@ Regras (docs/STATUS.md, "Fase 6 — plano"):
 - D105: vigência permanente (sem datas), temporária (início e/ou fim) ou
   sazonal (`ciclo sazonal` + `vigencia_recorrente` + as duas datas).
 - Calendário (`calendario_producao`): os dias da semana em que a central
-  produz (ou envia, no distribuído, D39); vazio = todos os dias, como a
-  necessidade já trata. Gravar substitui o calendário inteiro.
+  produz (ou envia, no distribuído, D39); vazio = sem calendário: a ordem
+  lista o produto sem sugestão, com o aviso "sem calendário" (D42; não
+  supor diário). Gravar substitui o calendário inteiro.
 - D100: desativar na loja = `produtos_lojas.ativo = false`, mantendo a
   linha (a data de habilitação é o início do histórico no cold start);
   habilitar uma loja sem linha cria a linha.

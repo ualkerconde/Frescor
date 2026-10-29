@@ -75,6 +75,12 @@ describe('cadastros: produtos (C4)', () => {
 
     await userEvent.type(screen.getByLabelText('Nome do produto'), 'Panetone')
     await userEvent.type(screen.getByLabelText('Código'), 'PAN-01')
+    // Nasce com todos os dias; sem nenhum, avisa que fica sem calendário (D42).
+    expect(screen.getByText('A central produz todos os dias.')).toBeInTheDocument()
+    for (const dia of ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']) {
+      await userEvent.click(screen.getByRole('checkbox', { name: dia }))
+    }
+    expect(screen.getByText(/^Nenhum dia marcado: o produto fica sem calendário/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('checkbox', { name: 'Sexta' }))
     await userEvent.click(screen.getByRole('checkbox', { name: 'Segunda' }))
     expect(screen.getByText('A central produz segunda e sexta.')).toBeInTheDocument()
