@@ -56,7 +56,7 @@ const s = {
   logoutItem: { color: '#DC2626' },
 }
 
-export function Drawer({ aberto, onClose, onLogout }) {
+export function Drawer({ aberto, onClose, onLogout, onAbrirRecebimento }) {
   return (
     <>
       <div
@@ -75,6 +75,17 @@ export function Drawer({ aberto, onClose, onLogout }) {
           <div style={s.sub}>Contagem de estoque</div>
         </div>
         <div style={s.body}>
+          {onAbrirRecebimento && (
+            <button style={s.item} onClick={onAbrirRecebimento}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="1" y="3" width="15" height="13" />
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                <circle cx="5.5" cy="18.5" r="2.5" />
+                <circle cx="18.5" cy="18.5" r="2.5" />
+              </svg>
+              Recebimento
+            </button>
+          )}
           <button style={{ ...s.item, ...s.logoutItem }} onClick={onLogout}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />

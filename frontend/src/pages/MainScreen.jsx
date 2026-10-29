@@ -65,7 +65,7 @@ function formatDate(date) {
   }).format(date)
 }
 
-export function MainScreen({ onLogout }) {
+export function MainScreen({ onLogout, onAbrirRecebimento }) {
   const [produtos, setProdutos] = useState([])
   const [pendentes, setPendentes] = useState({})
   const [busca, setBusca] = useState('')
@@ -271,6 +271,7 @@ export function MainScreen({ onLogout }) {
       <Drawer
         aberto={drawerAberto}
         onClose={() => setDrawerAberto(false)}
+        onAbrirRecebimento={onAbrirRecebimento}
         onLogout={() => { clearTokens(); onLogout() }}
       />
 
