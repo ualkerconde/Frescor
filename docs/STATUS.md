@@ -708,7 +708,7 @@ Objetivo (doc §8): painel web cobrindo as Fases 1–5. Critério de aceite do d
 
 | Passo | O que | Verificação | Situação |
 |---|---|---|---|
-| C1 | Backend: central (`GET`/`PATCH /web/central`: nome e prazo de entrega, D103) e setores (`POST /producao/setores`, `PATCH /producao/setores/{id}`: nome, ordem, ativo; D102) | `TestClient`: 401/403, escopo de central e negócio (404 igual), validações em português, nome repetido, sabotagens; regressão | A fazer |
+| C1 | Backend: central (`GET`/`PATCH /web/central`: nome e prazo de entrega, D103) e setores (`POST /producao/setores`, `PATCH /producao/setores/{id}`: nome, ordem, ativo; D102) | `TestClient`: 401/403, escopo de central e negócio (404 igual), validações em português, nome repetido, sabotagens; regressão | **Feito (2026-10-29)** — ver "C1 — resultado" |
 | C2 | Backend: produto (`GET /web/produtos/{id}`, `POST /web/produtos`, `PATCH /web/produtos/{id}`), com calendário, vigência, validade, margem, setor e tipo de abastecimento (D96–D99) | `TestClient`: criação e edição campo a campo; código repetido; unidade travada com histórico; setor de outra central; vigência; isolamento; sabotagens | A fazer |
 | C3 | Backend: habilitação por loja (`GET /web/produtos/{id}/lojas`, `PUT /web/produtos/{id}/lojas/{loja_id}`), D100–D101; o app passa a esconder produto desativado na loja (D100) | `TestClient`; regressão completa do app (`/produtos`, `/produtos/buscar`, contagem, zeragem) | A fazer |
 | C4 | Tela `/cadastros`: produtos (lista com busca, novo, editar, lojas), setores e central | Vitest + axe; typecheck, lint, build (chunk próprio) | A fazer |
@@ -737,6 +737,12 @@ Objetivo (doc §8): painel web cobrindo as Fases 1–5. Critério de aceite do d
 - **Maior risco:** o D100 muda o que o app lista (`/produtos` e `/produtos/buscar`). Hoje nenhuma linha tem `ativo = false` além das criadas à mão; mesmo assim, conferir no banco de produção antes do deploy (`SELECT count(*) FROM produtos_lojas WHERE ativo = false`).
 - Editar um produto muda a próxima previsão e a próxima ordem (vigência, validade, margem, calendário), não as aprovadas. A tela avisa isso.
 - Escopo: C4 é o passo mais longo (formulário com muitos campos).
+
+**C1 — resultado (2026-10-29):**
+- Código: `app/services/cadastro_central_service.py` (novo: `ler_central`, `editar_central`, `criar_setor`, `editar_setor`; erros `CadastroInvalido` → 422 e `SetorNaoEncontrado` → 404), `app/api/cadastros.py` (novo router, tag "Cadastros (SaaS web)"), `app/schemas/cadastro.py` (novo), registro em `main.py`. Rotas: `GET`/`PATCH /web/central`, `POST /producao/setores` (201), `PATCH /producao/setores/{id}`. No PATCH só mudam os campos enviados; seção e "ativa" no corpo são ignoradas (D103).
+- Setor novo sem ordem vai para o fim (maior ordem da central + 1). Nome repetido é recusado **sem diferenciar maiúsculas** ("PÃES" = "pães"), o que a única do banco não pega.
+- `scripts/test_cadastro_central_rotas.py` (novo): **33 casos, 2 execuções, exit 0**, banco limpo. 3 sabotagens pegas: sem o filtro de central nos setores → S15, S18, S20 (o gestor A1 renomeava o setor da A2); sem a checagem de nome livre ao renomear → S9, S11, S12; sem a faixa do prazo → o teste quebra (o banco recusa o prazo negativo com erro 500).
+- Regressão do que toca setores: `test_ordem_pdf` e `test_web_apoio` ok.
 
 ### Frontend do SaaS — plano (aprovado em 2026-10-13)
 
