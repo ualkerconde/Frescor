@@ -35,10 +35,16 @@ export function SeletorProduto({
   id,
   valor,
   aoMudar,
+  textoVazio = "Todos os produtos",
+  oferecerTodos = true,
 }: {
   id: string
   valor: ProdutoEscolhido | null
   aoMudar: (produto: ProdutoEscolhido | null) => void
+  /** O que o botão mostra sem produto escolhido (o cadastro de eventos usa "Adicionar produto"). */
+  textoVazio?: string
+  /** Mostra a opção "Todos os produtos" na lista. */
+  oferecerTodos?: boolean
 }) {
   const [aberto, setAberto] = useState(false)
   const [busca, setBusca] = useState("")
@@ -68,7 +74,7 @@ export function SeletorProduto({
           aria-expanded={aberto}
           className="w-full justify-between font-normal"
         >
-          <span className="truncate">{valor ? valor.rotulo : "Todos os produtos"}</span>
+          <span className="truncate">{valor ? valor.rotulo : textoVazio}</span>
           <ChevronsUpDown className="text-muted-foreground" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
@@ -86,7 +92,7 @@ export function SeletorProduto({
             </CommandEmpty>
             {data && (
               <CommandGroup>
-                {!buscaAtrasada && (
+                {oferecerTodos && !buscaAtrasada && (
                   <CommandItem value="todos" onSelect={() => escolher(null)} data-checked={valor === null}>
                     Todos os produtos
                   </CommandItem>

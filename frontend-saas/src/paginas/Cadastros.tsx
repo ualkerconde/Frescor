@@ -7,13 +7,15 @@
  *   o formulário (/cadastros/produtos/novo e /cadastros/produtos/:id), com
  *   as lojas da central logo abaixo (ativar e desativar por loja, D100);
  * - /cadastros/setores: setores de produção (D67, D102);
+ * - /cadastros/eventos: datas atípicas que ajustam a previsão (D24, D104);
  * - /cadastros/central: nome e prazo de entrega da central (D103).
  */
 import { cn } from "cn"
-import { Building2, Layers, Package } from "lucide-react"
+import { Building2, CalendarDays, Layers, Package } from "lucide-react"
 import { Navigate, NavLink, Route, Routes } from "react-router"
 import { Toaster } from "@/components/ui/sonner"
 import { Central } from "./cadastros/Central"
+import { Eventos } from "./cadastros/Eventos"
 import { EditarProduto, NovoProduto } from "./cadastros/PaginaProduto"
 import { ListaProdutos } from "./cadastros/ListaProdutos"
 import { Setores } from "./cadastros/Setores"
@@ -21,6 +23,7 @@ import { Setores } from "./cadastros/Setores"
 const PARTES = [
   { para: "/cadastros/produtos", rotulo: "Produtos", Icone: Package },
   { para: "/cadastros/setores", rotulo: "Setores de produção", Icone: Layers },
+  { para: "/cadastros/eventos", rotulo: "Eventos", Icone: CalendarDays },
   { para: "/cadastros/central", rotulo: "Central", Icone: Building2 },
 ]
 
@@ -30,8 +33,8 @@ export function Cadastros() {
       <div>
         <h1 className="text-[28px]">Cadastros</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
-          Produtos, setores de produção e a sua central. O que você muda aqui vale para a próxima previsão e a próxima
-          ordem de produção; as ordens já aprovadas não mudam.
+          Produtos, setores de produção, eventos e a sua central. O que você muda aqui vale para a próxima previsão e a
+          próxima ordem de produção; as ordens já aprovadas não mudam.
         </p>
       </div>
 
@@ -59,6 +62,7 @@ export function Cadastros() {
         <Route path="produtos/novo" element={<NovoProduto />} />
         <Route path="produtos/:produtoId" element={<EditarProduto />} />
         <Route path="setores" element={<Setores />} />
+        <Route path="eventos" element={<Eventos />} />
         <Route path="central" element={<Central />} />
         <Route path="*" element={<Navigate to="produtos" replace />} />
       </Routes>

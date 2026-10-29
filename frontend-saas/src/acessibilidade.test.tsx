@@ -6,7 +6,7 @@
  * (rascunho com lojas, conta e diálogo abertos; aprovada; dia sem ordem) e
  * distribuição (produção, rascunho com aprovação bloqueada, aprovado com
  * itens, saída e diferenças) e cadastros (lista, formulário com erros,
- * produto com lojas, setores com diálogo, central).
+ * produto com lojas, setores com diálogo, eventos com o formulário, central).
  *
  * Limitação: no jsdom o axe não calcula contraste de cor (não há
  * renderização real). Os contrastes são garantidos pelo tema.test.ts, que
@@ -275,6 +275,11 @@ describe('acessibilidade (axe-core, WCAG)', () => {
         'GET /web/produtos/17': resposta(200, produtoDetalhe({ ativo: false })),
         'GET /web/produtos/17/lojas': resposta(200, lojasDoProduto()),
         'GET /web/central': resposta(200, CENTRAL),
+        'GET /web/lojas': resposta(200, LOJAS),
+        'GET /eventos': resposta(200, [{
+          id: 5, nome: 'Natal', data_inicio: '2026-12-24', data_fim: '2026-12-25', tipo_ajuste: 'multiplicador',
+          valor_ajuste: '1.5', escopo_loja: 'todas', loja_ids: [], escopo_produto: 'todos', produto_ids: [], pode_apagar: true,
+        }]),
       })
       let tela = renderizarApp('/cadastros/produtos')
       await screen.findByRole('table', { name: 'Produtos' })
@@ -296,6 +301,17 @@ describe('acessibilidade (axe-core, WCAG)', () => {
       tela = renderizarApp('/cadastros/setores')
       await userEvent.click(await screen.findByRole('button', { name: 'Renomear: Pães' }))
       await screen.findByRole('dialog')
+      expect(await violacoes()).toEqual([])
+      tela.unmount()
+
+      tela = renderizarApp('/cadastros/eventos')
+      await screen.findByRole('table', { name: 'Eventos' })
+      expect(await violacoes()).toEqual([])
+      await userEvent.click(screen.getByRole('button', { name: 'Novo evento' }))
+      await userEvent.click(await screen.findByRole('checkbox', { name: /Todas as lojas da central/ }))
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Todos os produtos' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Cadastrar evento' }))
+      await screen.findByText('Escolha pelo menos uma loja.')
       expect(await violacoes()).toEqual([])
       tela.unmount()
 

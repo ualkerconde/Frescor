@@ -509,4 +509,6 @@ export interface Evento {
   loja_ids: number[]
   escopo_produto: 'todos' | 'especificos'
   produto_ids: number[]
+  /** False: o evento vale também para lojas de outra central (só lá pode ser apagado). */
+  pode_apagar: boolean
 }
