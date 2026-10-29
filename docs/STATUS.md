@@ -2,7 +2,7 @@
 
 > **Nome do produto: Frescor** (decidido em 2026-10-13; "Projeto Bakery" era provisório). Nomes técnicos que ainda usam "bakery" estão listados na seção 3 (D15).
 
-> **Fonte única da verdade sobre o andamento.** Atualizado em: 2026-10-28.
+> **Fonte única da verdade sobre o andamento.** Atualizado em: 2026-10-29.
 > Precedência em caso de conflito: **este arquivo** > `documento-referencia-saas-bakery.md` > qualquer conversa externa (claude.ai, etc.).
 > Toda decisão nova, mudança de escopo ou fase concluída deve ser registrada aqui **na mesma sessão** em que acontece.
 
@@ -18,7 +18,7 @@ Roteiro completo, com tarefas e critérios de aceite: `documento-referencia-saas
 | 2 — Ingestão de vendas e perdas | **Concluída (2026-10-13)** | P1–P8 feitos; critério de aceite atendido no P6 (importar CSV e consultar). Pendências que ficam: ver "Fase 2 — o que fica" abaixo. |
 | 3 — Motor de previsão | **Concluída (2026-10-15)** | F1–F10 feitos; critério de aceite atendido nos 5 cenários (`test_aceite_fase3.py`); tela de previsão e estados "Sem previsão"/"Pouco histórico" conferidos no navegador pelo Ualker. Pendências para antes da produção: seção 5, item 9. |
 | 4 — Necessidade e produção | **Concluída (2026-10-27)** — N1–N10 e N9b, aprovados pelo Ualker | Plano aprovado em 2026-10-15; decisões D32–D67; critério de aceite atendido no N8 (`test_aceite_fase4.py`). Pendências para antes da produção: seção 5, itens 9 e 10. |
-| 5 — Distribuição | **Plano aprovado (2026-10-27)**; em andamento | Passos E1–E12 e decisões D68–D84 em "Fase 5 — plano" abaixo (D74: sem rota no V1). |
+| 5 — Distribuição | **Concluída no código (2026-10-29)**, aguardando a conferência do Ualker | E1–E12 feitos (ver "Fase 5 — plano" abaixo; D74: sem rota no V1). Critério de aceite do doc atendido no E9 (`test_aceite_fase5.py`). Falta o Ualker: confirmar as decisões **D89–D95** (adotadas como recomendadas), o roteiro no navegador das duas telas e o teste no iPhone (recebimento, contagem e leitor). Código na branch `claude/project-thread-f7s8gi` (PR #2), ainda fora do `main`. |
 | 6 — Frontend do SaaS (`frontend-saas/`) | **Telas da Fase 2 concluídas** (W1–W8, 2026-10-13, conferidas no navegador) | Login, importação e consulta. As telas das Fases 3–5 (previsão, ordem de produção, romaneio) entram junto com cada fase, **com o código dividido por tela** (ver observação do W8). |
 | 7 — Validação com dado real | Não iniciada | Depende de cliente piloto (D3) |
 | 8 — Refino V1.5 | Não iniciada | |
@@ -499,7 +499,7 @@ Ordem aprovada (Fase 4)
 | E9 | `test_aceite_fase5.py` (D84): critério do doc + caso de ponta a ponta com prazo 1, pelas rotas reais | Conta à mão em cada número (rateio, saída, recebida, trânsito da ordem seguinte). Inclui **a regra "sem confirmação"** (D79 (4)): uma loja confirma com diferença, a outra não confirma; terminado o dia de entrega, a ordem seguinte trata a segunda como recebida pela final do romaneio, fora do trânsito, com a marca "sem confirmação". **Sabotagens:** rateio pela sugerida; trânsito pela ordem; recebimento ignorado no trânsito; **entrega não confirmada mantida como trânsito depois do dia de entrega (conta em dobro)**; aprovar com Σ > disponível | **Concluído (2026-10-28)**, aguardando a conferência do Ualker. Ver "E9 — resultado" abaixo. |
 | E10 | Tela `/distribuicao` no `frontend-saas` (`React.lazy`, skill Frescor): data de entrega na URL; ordem aprovada sem romaneio → "Registrar produção" e "Gerar romaneio"; rascunho → "Aprovar romaneio" (principal), "Ajustar", "Gerar de novo" (com confirmação, como a D58) e "Apagar"; aprovado → "Imprimir" (escolha de lojas, "todas" por padrão) e "Registrar saída" por loja, com seleção de várias e "todas as que faltam" (com diálogo); acompanhamento por loja, na ordem do código (aguardando saída / a caminho / recebido / recebido com diferença / **sem confirmação**) e lista de divergências | Testes de tela, axe 0 violações, chunk próprio no build, roteiro no navegador pelo Ualker. **Sabotagens:** saída sem confirmação; aprovar com Σ > disponível sem avisar no navegador; código de erro na tela; "Registrar saída" no rascunho; entrega sem confirmação exibida como "recebido" | **Concluído (2026-10-28)**, aguardando a conferência do Ualker. Ver "E10 — resultado" abaixo. |
 | E11 | Tela "Recebimento" no app mobile (`frontend/`, JSX, skill para mobile: botões de 48px, ação principal fixa no rodapé, cards, `aria-live`); Vitest no `frontend/` (D83) | Testes: estado vazio útil, "Recebi tudo certo" confirma, diferença exige motivo, sem conexão mostra mensagem, erro sem código, sem envio duplo. Teste no iPhone pelo Ualker, com a contagem e o leitor de código de barras de novo (compatibilidade). **Sabotagens:** enviar diferença sem motivo; botão sem estado de carregamento | **Concluído (2026-10-29)**, aguardando a conferência do Ualker e o teste no iPhone. Ver "E11 — resultado" abaixo. |
-| E12 | READMEs (backend, frontend-saas, frontend), STATUS, regressão completa | Backend e os dois frontends; uma sabotagem em cada ponta da cadeia (rateio, trânsito, PDF), com a bateria da Fase 5 inteira em cada uma | A fazer |
+| E12 | READMEs (backend, frontend-saas, frontend), STATUS, regressão completa | Backend e os dois frontends; uma sabotagem em cada ponta da cadeia (rateio, trânsito, PDF), com a bateria da Fase 5 inteira em cada uma | **Concluído (2026-10-29)**. Ver "E12 — resultado" abaixo. |
 
 **E1 — resultado (2026-10-27; aprovado pelo Ualker):**
 - Migration `0024_romaneios` e 3 models (um arquivo por tabela, registrados em `app/models/__init__.py`), sem rota (D74) e sem mudar nenhuma tabela do app:
@@ -677,6 +677,19 @@ Ordem aprovada (Fase 4)
 - Falta o teste no iPhone pelo Ualker, com a contagem e o leitor de código de barras (compatibilidade).
 - **Regressão do backend** (sem mudança no backend): `test_seeds_fase4` só passou depois de rodar o `seed_demo_producao.py` de novo, porque a data virou e o seed é relativo a "ontem" (esperado). O `test_aceite_fase5` para de propósito entre 21h e 0h de São Paulo num servidor em UTC (trava do E9); será rodado de novo no E12.
 
+**E12 — resultado (2026-10-29):**
+- **READMEs:** `backend/README.md` (estrutura, migrations 0024/0025, rotas da distribuição e do `/recebimentos`, trânsito pelo romaneio, `VERSAO_METODO_NECESSIDADE` n2, scripts de teste da Fase 5 com a nota do fuso); `frontend-saas/README.md` (tela `/distribuicao`, estrutura, decisões); `frontend/README.md` (tela de Recebimento, `npm test`, estrutura).
+- **Regressão completa:**
+  - backend: **37 scripts, todos exit 0, 708 verificações [OK]**, rodada com `TZ=America/Sao_Paulo` (como no Windows do Ualker);
+  - `frontend-saas`: **16 arquivos, 209 testes**, todos passando;
+  - `frontend`: **2 arquivos, 24 testes**, todos passando.
+- **Fuso dos testes (achado):** num servidor em UTC, entre 21h e 0h de São Paulo, o `test_aceite_fase5` para de propósito (trava do E9). Rodar com `TZ=America/Sao_Paulo` deixa a data do processo igual à de São Paulo e o teste roda normal, o que reproduz o Windows. O `test_seeds_fase4` espera o seed demo até "ontem": o seed precisa rodar no mesmo fuso do teste. Rodar o seed num fuso "à frente" e depois noutro "atrás" deixa um dia de venda a mais (o seed só apaga o que fica antes da janela); foi o que aconteceu aqui, corrigido apagando esse dia do negócio demo. Não acontece no uso normal (a data só anda para a frente).
+- **3 sabotagens de ponta, cada uma contra a bateria inteira da Fase 5** (8 scripts; restauradas, `git status` sem mudança no código):
+  - **rateio pela sugerida da ordem** em vez da final → `test_distribuicao_calculo` (R13), `test_distribuicao_service` (G1, E1, G3 e um erro inesperado) e `test_aceite_fase5` (F3–F6 e seguintes);
+  - **trânsito com a janela do provedor começando em D** em vez de D−1 → só `test_recebimento_transito` (T8: o número não mudou com a confirmação no prazo depois da contagem). O aceite **não** pega (hipótese, não investigada: no cenário dele a recebida que importa não depende desse dia da janela). Fica coberto pelo T8; registrado aqui para não parecer que o aceite cobre;
+  - **folha de carga pela sugerida** em vez da final → `test_romaneio_pdf` (P3). Os outros scripts não leem o PDF.
+- **Divergências (seção 2):** conferidas; duas linhas novas (modelo do romaneio e rotas). A da conferência de recebimento (doc §9) já estava registrada.
+
 **Riscos e custos:**
 - **Maior risco:** a D79 mexe no trânsito, que tem efeito direto na quantidade produzida. Erro para cima = produção a menos (ruptura); erro em dobro = sobra. Por isso os casos T1–T5 e o aceite com prazo 1.
 - **Mudança no app mobile em produção** (E7, E11): só rotas e tela novas, sem tocar em `/produtos`, `/estoque`, `/zeragem` e `/auth`. Mesmo assim, exige a regressão completa e o teste no iPhone.
@@ -803,6 +816,8 @@ O documento é planejamento. Onde o código diverge, **vale o código** (e este 
 | Rotas da ordem de produção (§8, Fase 4) | `GET /producao/ordens?central_id=&data=` | **Sem `central_id` na URL** (aprovado em 2026-10-15): a central vem do usuário autenticado (regra de ouro 1) |
 | Setor de produção (D67, não previsto no doc) | — | **Novo (2026-10-16):** `setores_producao` por central (nome, ordem, ativo) e `produtos.setor_producao_id` opcional (migration 0023); a ordem aprovada imprime em PDF uma folha por setor (`GET /producao/ordens/{id}/pdf`). Diferente da seção da D14 |
 | Conferência de recebimento na loja (§9, fora do V1) | "Não é ponto a tratar agora" | **Trazida para o V1 (D43, 2026-10-15; D77–D79, 2026-10-27):** a loja confirma o recebimento pelo app (tudo certo ou com diferença e motivo); o recebimento alimenta o trânsito da necessidade; sem confirmação até o fim do dia de entrega, a entrega conta como recebida pela final do romaneio e fica marcada "sem confirmação". Roteirização continua fora (D74). Implementação: Fase 5, E5/E7/E11 |
+| Romaneio (§3.10, §3.11) | `romaneio` (central, data, status `planejado`/`expedido`/`entregue`) + `romaneio_item` (loja, produto, sugerida, final) | **Três tabelas (D75, migration 0024):** `romaneios` (um por ordem; `rascunho`/`aprovado`), `romaneios_entregas` (uma por loja: `aguardando_saida`/`expedida`/`recebida`, com quem e quando) e `romaneios_itens` (por produto na entrega: sugerida, final, recebida, motivo da diferença). "Sem confirmação" e "confirmada com atraso" não são gravados: são calculados na leitura (D79, D85). A ordem continua só `rascunho`/`aprovada` (D72) |
+| Rotas do romaneio (§8, Fase 5) | `PATCH /romaneio/{id}/itens/{item_id}`, `POST /romaneio/{id}/confirmar-expedicao` | **`/distribuicao/...` e `/recebimentos` (D82):** gerar, ajustar, aprovar, apagar, saída **por loja** (`POST /distribuicao/romaneios/{id}/saida`), PDF e divergências; no app, a loja confirma o recebimento. Sem central nem loja na URL (regra de ouro 1) |
 | Necessidade (§4.4) | `Σ previsão + estoque_segurança − estoque_atual_calculado` | `alvo − estoque contado − em trânsito` (D34, D43), com cobertura limitada à validade (D36) e estoque que vence antes da chegada contando 0 (D35) |
 
 ### Escopo ampliado — impactos possíveis (D14, 2026-10-13; análise feita antes da decisão)
@@ -1052,6 +1067,7 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
 - **2026-10-28** — **E9 feito** (aceite da Fase 5 pelas rotas, prazo 1; 12 casos; 5 sabotagens pegas, com 2 achados registrados no resultado; 37 scripts e 708 verificações). Sem decisão nova.
 - **2026-10-28** — **E10 feito** (tela `/distribuicao` no SaaS; 209 testes de frontend, eram 193; axe sem violação; chunk próprio de 30 kB; 5 sabotagens pegas; roteiro no navegador com o seed demo). Sem decisão nova. A tela segue o visual do `main`, não o do PR #1 (redesign, ainda fora do `main`).
 - **2026-10-29** — **E11 feito** (tela de Recebimento no app; Vitest no `frontend/`, 24 testes; 4 sabotagens pegas; roteiro no navegador com perfil de iPhone, que achou e corrigiu a unidade em maiúsculas). Decisão nova, a confirmar: **D95** (visual próprio com os tokens do Frescor, sem mexer na contagem; entrada pelo menu).
+- **2026-10-29** — **E12 feito e Fase 5 concluída no código** (READMEs; regressão: 37 scripts e 708 verificações, 209 + 24 testes de tela; 3 sabotagens de ponta pegas, com o achado de que o aceite não cobre a janela do trânsito, coberta pelo T8; duas divergências novas na seção 2). Falta a conferência do Ualker: D89–D95, roteiro no navegador, teste no iPhone e o merge no `main`.
 
 (Decisões anteriores já fechadas: ver `documento-referencia-saas-bakery.md`, seção 10.)
 
@@ -1107,7 +1123,8 @@ Pedido do Ualker: além da padaria, atender outros perecíveis, incluindo itens 
    ~~E9 (`test_aceite_fase5.py`)~~ — feito e commitado em 2026-10-28, aguardando a conferência do Ualker.
    ~~E10 (tela `/distribuicao` no SaaS)~~ — feito e commitado em 2026-10-28, aguardando a conferência do Ualker.
    ~~E11 (tela "Recebimento" no app mobile)~~ — feito e commitado em 2026-10-29 (D95), aguardando a conferência do Ualker e o teste no iPhone.
-   **Próximo: E12 (READMEs, regressão completa e fechamento da Fase 5).**
+   ~~E12 (READMEs, regressão completa e fechamento da Fase 5)~~ — feito em 2026-10-29. **Fase 5 concluída no código**, aguardando a conferência do Ualker.
+   **Próximo:** o Ualker (a) confirma ou troca as decisões D89–D95; (b) faz o roteiro no navegador das telas `/distribuicao` e Recebimento e o teste no iPhone; (c) decide o merge do PR #2 no `main` (e o que fazer com o PR #1, o redesign). Depois, planejar a Fase 6.
 9. **Pendências obrigatórias antes da produção** (não bloqueiam o desenvolvimento):
    - Qualidade da previsão em redes grandes: hoje é calculada na hora (custo cresce com lojas × produtos × dias; ~1 s no seed com 2 lojas e 11 produtos). Precisa de cache ou de cálculo pelo job noturno (D22) antes de cliente real.
    - Job noturno de geração das previsões (D22), depois de validado com dado real.

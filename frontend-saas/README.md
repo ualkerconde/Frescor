@@ -56,7 +56,8 @@ Para apontar para outra API, defina `VITE_API_URL` (ex.: num arquivo
 | `/importar` | Importação de CSV de vendas ou perdas. Resumo grande no topo ("1.232 linhas importadas" ou "Nada foi gravado: 3 erros") e depois as tabelas de erros e avisos. Modelo de CSV para baixar. |
 | `/consultar` | Consulta por período (até 366 dias), loja e produto (busca sem acento). Resumo do período no topo (total vendido e de perda, por unidade), tabela paginada de 50 em 50. Filtros ficam na URL. |
 | `/previsao` | Previsão de vendas por dia (padrão: amanhã), loja e produto; filtros na URL. No topo, o resumo do dia (previsto por unidade contra o mesmo dia da semana passada; produtos sem previsão ou com pouco histórico citados pelo nome). Depois, a tabela: cada linha tem uma frase de como o número foi calculado ("Mediana das últimas 6 quartas × tendência +10%") e "Ver a conta" abre o passo a passo. Por fim, a qualidade (erro médio, sobra/falta, comparação com repetir a semana passada). Ação principal: "Gerar previsão" / "Atualizar previsão". **Carregada só quando aberta** (`React.lazy`). |
-| `/producao` | Ordem de produção por dia de produção (padrão: amanhã; de hoje até 6 dias à frente). Sem ordem: "Gerar ordem". **Rascunho:** ação principal "Aprovar ordem"; "Gerar de novo" (com ajustes, pede confirmação dizendo quantas linhas ajustadas serão perdidas) e "Apagar rascunho". Resumo com o que produzir e distribuir por unidade, linhas sem quantidade e "Confira estes"; tabelas "Produção" e "A distribuir"; cada produto abre as lojas (sugerido, final, perda das 4 semanas em 4 faixas, avisos, "Ajustar" e "Ver a conta"). **Aprovada:** só leitura, com "Imprimir" (escolha de setores, "todos" por padrão; o PDF abre numa aba nova, uma folha por setor). **Carregada só quando aberta** (`React.lazy`). |
+| `/producao` | Ordem de produção por dia de produção (padrão: amanhã; de hoje até 6 dias à frente). Sem ordem: "Gerar ordem". **Rascunho:** ação principal "Aprovar ordem"; "Gerar de novo" (com ajustes, pede confirmação dizendo quantas linhas ajustadas serão perdidas) e "Apagar rascunho". Resumo com o que produzir e distribuir por unidade, linhas sem quantidade e "Confira estes"; tabelas "Produção" e "A distribuir"; cada produto abre as lojas (sugerido, final, perda das 4 semanas em 4 faixas, avisos, "Ajustar" e "Ver a conta"). **Aprovada:** só leitura, com "Imprimir" (escolha de setores, "todos" por padrão; o PDF abre numa aba nova, uma folha por setor). A conta mostra também o que veio do romaneio (recebido depois da contagem, entrega sem confirmação). **Carregada só quando aberta** (`React.lazy`). |
+| `/distribuicao` | Distribuição e romaneio por dia de entrega (padrão: hoje; `?data=` na URL). Um bloco por ordem aprovada, com **uma ação principal por estado**: "Registrar produção" → "Gerar romaneio" → **rascunho:** "Aprovar romaneio" (o diálogo lista e bloqueia produto cuja soma das lojas passa do produzido), "Ajustar" por loja e produto, "Gerar de novo" (avisa quantos ajustes se perdem) e "Apagar romaneio" → **aprovado:** "Imprimir" (todas as lojas ou algumas) e "Registrar saída" ("todas as que faltam" ou escolher lojas). Acompanhamento por loja: aguardando saída, a caminho, recebido (com ou sem diferença), **sem confirmação** (nunca mostrada como recebida) e confirmado com atraso; cada loja abre os itens. Embaixo, "Diferenças no recebimento" (últimos 7 dias). **Carregada só quando aberta** (`React.lazy`). |
 
 Formato do CSV: `data;codigo_loja;codigo_produto;quantidade`, separador `;`,
 vírgula decimal, data `dd/mm/aaaa`, até 5 MB. Arquivos de exemplo em
@@ -80,7 +81,9 @@ src/
 │   ├── modeloCsv.ts            # Modelo de CSV para baixar
 │   ├── perda.ts                # Faixas do indicador de perda (3% / 5% / 8%, constante única, D66)
 │   └── query.ts                # Configuração do TanStack Query
-├── paginas/                    # Entrar, Importar, Consultar, Previsao, Producao (+ componentes de cada uma)
+├── paginas/                    # Entrar, Importar, Consultar, Previsao, Producao, Distribuicao (+ componentes de cada uma)
+│   ├── distribuicao/           # Bloco de cada ordem, tabelas do romaneio, diálogos (produção, saída, imprimir),
+│                               # divergências, situacao.ts (textos da situação de cada entrega)
 │   ├── previsao/               # Resumo, tabela, qualidade e explicacao.ts (frase de cada número)
 │   └── producao/               # Resumo, tabela com as lojas, diálogos (ajustar, confirmar, imprimir),
 │                               # conta.ts ("Ver a conta"), avisos.ts, quantidade.ts (validação)
@@ -102,7 +105,7 @@ src/
   sempre com a unidade.
 - **Código dividido por tela** a partir da Fase 3: telas novas entram com
   `React.lazy` + `import()`. Conferir o tamanho no `npm run build`: o JS
-  principal está em ~487 kB (o Vite avisa acima de 500 kB). Bibliotecas usadas
+  principal está em ~488 kB (o Vite avisa acima de 500 kB). Bibliotecas usadas
   só por uma tela (ex.: os avisos do `sonner`, na previsão) ficam montadas
   nessa tela, para irem no pacote dela.
 - **Previsão na tela:** o número exibido é sempre o do backend (1 casa em UN,
@@ -116,6 +119,10 @@ src/
 - **PDF:** a rota exige o token, então a tela baixa o arquivo e abre o
   endereço local dele numa aba aberta no próprio clique (para o navegador não
   bloquear como pop-up; se bloquear, o PDF é baixado).
+- **Distribuição na tela:** a situação de cada entrega vem calculada do
+  backend; a tela só traduz. "Registrar saída" só existe com o romaneio
+  aprovado e alguma loja aguardando saída. O visual segue o `main` atual; se o
+  redesign do PR #1 entrar, a tela precisa trocar as classes.
 - **Faixas de perda:** limites numa constante única (`lib/perda.ts`);
   configuração por negócio fica para depois (STATUS, seção 5).
 
