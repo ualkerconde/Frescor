@@ -42,6 +42,10 @@ class ProdutoWebResponse(BaseModel):
     nome: str
     unidade: str = Field(description="UN ou KG.")
     ativo: bool
+    # Fase 6 (lista da tela de cadastro):
+    tipo_abastecimento: str = Field("produzido", description="produzido ou distribuido.")
+    setor: Optional[str] = Field(None, description="Nome do setor de produção (vazio = sem setor).")
+    lojas_ativas: int = Field(0, description="Em quantas lojas da central do gestor o produto está ativo.")
 
 
 class ProdutosWebResponse(BaseModel):
