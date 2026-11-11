@@ -137,7 +137,8 @@ def alterar_setor(
 def _produto(d: ProdutoDetalhe) -> ProdutoDetalheResponse:
     p = d.produto
     return ProdutoDetalheResponse(
-        id=p.id, codigo=p.codigo, nome=p.nome, codigo_barras=p.codigo_barras, unidade=p.unidade_medida.value,
+        id=p.id, codigo=p.codigo, nome=p.nome, codigo_barras=p.codigo_barras, codigo_pdv=p.codigo_pdv,
+        unidade=p.unidade_medida.value,
         peso_medio_kg=p.peso_medio_kg, ativo=p.ativo, tipo_abastecimento=p.tipo_abastecimento,
         dias_validade=p.dias_validade, margem_maxima_percentual=p.margem_maxima_percentual,
         data_inicio_vigencia=p.data_inicio_vigencia, data_fim_vigencia=p.data_fim_vigencia,

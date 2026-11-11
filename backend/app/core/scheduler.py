@@ -37,6 +37,23 @@ def _job_verificar_zeragem():
         logger.exception("Erro ao executar a verificação de zeragem de lojas.")
 
 
+def _job_busca_vendas():
+    """Busca de vendas no sistema do cliente (D108), uma vez por dia por negócio, no horário configurado."""
+    from app.db.session import SessionLocal
+    from app.services.sync_vendas_service import executar_agendadas
+
+    db = SessionLocal()
+    try:
+        for ex in executar_agendadas(db):
+            logger.info("Busca de vendas do negócio %s: %s (%s gravadas, %s pendentes, %s inválidas).",
+                        ex.negocio_id, ex.situacao.value, ex.linhas_gravadas, ex.linhas_pendentes,
+                        ex.linhas_invalidas)
+    except Exception:
+        logger.exception("Erro na busca agendada de vendas.")
+    finally:
+        db.close()
+
+
 def iniciar_agendador():
     """Chamado uma única vez, na inicialização da aplicação (ver app/main.py)."""
     if scheduler.running:
@@ -45,8 +62,12 @@ def iniciar_agendador():
     # zeragem. Esse intervalo é o que define a "janela de tolerância"
     # mínima necessária em executar_zeragem_lojas_pendentes.
     scheduler.add_job(_job_verificar_zeragem, "interval", minutes=1, id="verificar_zeragem")
+    # A cada 10 minutos: busca a venda de quem já passou do horário e ainda
+    # não buscou hoje (com várias instâncias, o registro da execução evita a
+    # segunda busca no mesmo dia, salvo corrida no mesmo minuto).
+    scheduler.add_job(_job_busca_vendas, "interval", minutes=10, id="busca_vendas")
     scheduler.start()
-    logger.info("Agendador de zeragem iniciado (verificação a cada 1 minuto).")
+    logger.info("Agendador iniciado (zeragem a cada 1 minuto, busca de vendas a cada 10 minutos).")
 
 
 def parar_agendador():

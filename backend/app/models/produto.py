@@ -76,6 +76,11 @@ class Produto(Base):
     # SQLAlchemy 2.0.36 e Python 3.14 ao processar anotações Union.
     codigo_barras = mapped_column(String(64), nullable=True, index=True)
 
+    # Código do produto no sistema de vendas do cliente (D108, migration
+    # 0027), quando é diferente do `codigo`. A integração casa a venda por
+    # ele e, sem ele, pelo `codigo`. Único por negócio (índice parcial).
+    codigo_pdv = mapped_column(String(60), nullable=True)
+
     # Unidade de medida:
     #   UN -> estoque_atual_calculado = quantidade_inventariada
     #   KG -> estoque_atual_calculado = peso_medio_kg * quantidade_inventariada

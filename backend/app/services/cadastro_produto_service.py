@@ -68,7 +68,7 @@ ORDEM_DIAS = list(DiaSemana)
 
 # Campos que a criação e a edição aceitam (os nomes do model).
 CAMPOS = (
-    "nome", "codigo", "codigo_barras", "unidade_medida", "peso_medio_kg", "ativo", "tipo_abastecimento",
+    "nome", "codigo", "codigo_barras", "codigo_pdv", "unidade_medida", "peso_medio_kg", "ativo", "tipo_abastecimento",
     "dias_validade", "margem_maxima_percentual", "data_inicio_vigencia", "data_fim_vigencia",
     "vigencia_recorrente", "ciclo_previsao", "setor_producao_id", "dias_producao",
 )
@@ -193,6 +193,17 @@ def _validar(db: Session, gestor: GestorCentralAutenticado, p: Produto, dados: d
             if outro is not None:
                 raise CadastroInvalido(f"O código de barras \"{barras}\" já é do produto \"{outro}\".")
         limpo["codigo_barras"] = barras
+
+    if "codigo_pdv" in dados:
+        # D108: código do produto no sistema de vendas do cliente. Vazio = usa o `codigo`.
+        pdv = _texto(dados.get("codigo_pdv"), "o código no sistema de vendas", 60, False)
+        if pdv is not None and pdv != p.codigo_pdv:
+            outro = db.query(Produto.nome).filter(
+                Produto.negocio_id == gestor.negocio_id, Produto.codigo_pdv == pdv, Produto.id != (p.id or 0)
+            ).scalar()
+            if outro is not None:
+                raise CadastroInvalido(f"O código no sistema de vendas \"{pdv}\" já é do produto \"{outro}\".")
+        limpo["codigo_pdv"] = pdv
 
     unidade = dados.get("unidade_medida", p.unidade_medida) or UnidadeMedida.UN
     if "unidade_medida" in dados:

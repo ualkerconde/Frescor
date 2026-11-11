@@ -29,6 +29,7 @@ from app.api import (
     eventos,
     health,
     importacao,
+    integracao_vendas,
     perdas_lancamento,
     previsoes,
     producao,
@@ -93,6 +94,7 @@ app.include_router(recebimentos.router, tags=["Recebimento (app mobile)"])
 app.include_router(cadastros.router, tags=["Cadastros (SaaS web)"])
 app.include_router(perdas_lancamento.router)
 app.include_router(acompanhamento.router)
+app.include_router(integracao_vendas.router)
 
 
 @app.get("/")

@@ -51,6 +51,9 @@ class SetorEditar(BaseModel):
 
 class _CamposProduto(BaseModel):
     codigo_barras: Optional[str] = None
+    codigo_pdv: Optional[str] = Field(
+        None, description="Código no sistema de vendas do cliente, se diferente do código (D108)."
+    )
     unidade_medida: Optional[UnidadeMedida] = None
     peso_medio_kg: Optional[Decimal] = Field(None, description="Só em KG: peso de uma peça, em kg (até 4 casas).")
     ativo: Optional[bool] = None
@@ -89,6 +92,7 @@ class ProdutoDetalheResponse(BaseModel):
     codigo: Optional[str] = None
     nome: str
     codigo_barras: Optional[str] = None
+    codigo_pdv: Optional[str] = None
     unidade: str
     peso_medio_kg: Optional[Decimal] = None
     ativo: bool
