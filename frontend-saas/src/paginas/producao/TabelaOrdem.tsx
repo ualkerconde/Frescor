@@ -91,7 +91,7 @@ function LojasDoProduto({
                   )}
                 </TableCell>
                 <TableCell>
-                  <IndicadorPerda taxa={linha.componentes.taxa_perda} />
+                  <IndicadorPerda taxa={linha.componentes.taxa_perda} perdaRegistrada={linha.componentes.perda_registrada} />
                 </TableCell>
                 <TableCell className="py-2">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

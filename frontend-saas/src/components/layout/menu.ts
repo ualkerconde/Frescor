@@ -4,7 +4,7 @@
  * topo ("PLANEJAMENTO / Produção") e a busca de telas (Ctrl K) leem daqui,
  * para os três nunca divergirem.
  */
-import { ChartLine, ClipboardList, Factory, LayoutDashboard, Search, Truck, Upload } from "lucide-react"
+import { ChartLine, ClipboardList, Factory, LayoutDashboard, Search, Trash2, Truck, Upload } from "lucide-react"
 
 export interface ItemMenu {
   para: string
@@ -53,6 +53,12 @@ export const GRUPOS_MENU: GrupoMenu[] = [
         rotulo: "Distribuição",
         descricao: "Produção real, romaneio, saída e recebimento",
         Icone: Truck,
+      },
+      {
+        para: "/perdas",
+        rotulo: "Perdas",
+        descricao: "Ver, lançar e corrigir as perdas das lojas",
+        Icone: Trash2,
       },
     ],
   },

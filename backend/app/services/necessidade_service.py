@@ -96,6 +96,10 @@ class ItemNecessidade:
     # Perda ÷ venda nas 4 semanas até D−1; None se não houve venda.
     taxa_perda: Decimal | None
     resultado: ResultadoNecessidade
+    # D111: False quando houve venda mas nenhuma perda registrada no período.
+    # Aí a taxa 0 não quer dizer "perda baixa": quer dizer "ninguém lançou".
+    # Só muda o indicador; a necessidade não usa este campo.
+    perda_registrada: bool = True
 
 
 @dataclass(frozen=True)
@@ -113,10 +117,14 @@ def _sem_transito(db: Session, negocio_id: int, lojas: Sequence[int], data_produ
     return {}
 
 
-def _taxas_perda(db: Session, negocio_id: int, lojas: list[int], data_producao: date) -> dict[Par, Decimal | None]:
+def _taxas_perda(
+    db: Session, negocio_id: int, lojas: list[int], data_producao: date
+) -> tuple[dict[Par, Decimal | None], set[Par]]:
+    """Taxa de perda por par e os pares com alguma perda registrada (linha em `perdas_diarias`) no período."""
     inicio = data_producao - timedelta(days=DIAS_INDICADOR_PERDA)
     fim = data_producao - timedelta(days=1)
     somas: dict[Par, list[Decimal]] = defaultdict(lambda: [Decimal(0), Decimal(0)])
+    com_perda: set[Par] = set()
     for indice, modelo in enumerate((VendaDiaria, PerdaDiaria)):
         linhas = (
             db.query(modelo.loja_id, modelo.produto_id, func.sum(modelo.quantidade))
@@ -131,7 +139,10 @@ def _taxas_perda(db: Session, negocio_id: int, lojas: list[int], data_producao: 
         )
         for loja_id, produto_id, total in linhas:
             somas[(loja_id, produto_id)][indice] = Decimal(total)
-    return {par: (perda / venda if venda > 0 else None) for par, (venda, perda) in somas.items()}
+            if modelo is PerdaDiaria:
+                com_perda.add((loja_id, produto_id))
+    taxas = {par: (perda / venda if venda > 0 else None) for par, (venda, perda) in somas.items()}
+    return taxas, com_perda
 
 
 def calcular_necessidades(
@@ -193,7 +204,7 @@ def calcular_necessidades(
             EstoqueAtual.negocio_id == negocio_id, EstoqueAtual.loja_id.in_(ids_lojas)
         )
     }
-    taxas = _taxas_perda(db, negocio_id, ids_lojas, data_producao)
+    taxas, com_perda = _taxas_perda(db, negocio_id, ids_lojas, data_producao)
     transito = (provedor_transito or _sem_transito)(db, negocio_id, ids_lojas, data_producao)
 
     itens: list[ItemNecessidade] = []
@@ -255,6 +266,7 @@ def calcular_necessidades(
             produto_id=produto_id, produto_codigo=produto.codigo, produto_nome=produto.nome,
             unidade=produto.unidade_medida.value, tipo_abastecimento=produto.tipo_abastecimento.value,
             pouco_historico=pouco_historico, taxa_perda=taxas.get((loja_id, produto_id)), resultado=resultado,
+            perda_registrada=(loja_id, produto_id) in com_perda,
         ))
 
     itens.sort(key=lambda i: (i.loja_codigo or "", i.loja_id, i.produto_codigo or "", i.produto_id))

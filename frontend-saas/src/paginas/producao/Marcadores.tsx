@@ -41,9 +41,18 @@ const ESTILO_PERDA: Record<FaixaPerda, string> = {
   muito_alta: "bg-error-bg text-error",
 }
 
-export function IndicadorPerda({ taxa }: { taxa: string | null | undefined }) {
+export function IndicadorPerda({
+  taxa,
+  perdaRegistrada,
+}: {
+  taxa: string | null | undefined
+  /** D111: false quando ninguém lançou perda no período. */
+  perdaRegistrada?: boolean
+}) {
   const faixa = faixaPerda(taxa)
   if (faixa === null) return <span className="text-muted-foreground">sem venda</span>
+  // Sem lançamento, 0% não é "perda baixa": não se sabe se a loja não perdeu ou não anotou.
+  if (perdaRegistrada === false) return <span className="whitespace-nowrap text-muted-foreground">sem perda lançada</span>
   const texto = `${formatarPercentual(taxa as string)} · ${ROTULO_FAIXA[faixa]}`
   if (faixa === "normal") return <span className="whitespace-nowrap numero">{texto}</span>
   const Icone = faixa === "baixa" ? TrendingDown : faixa === "alta" ? TriangleAlert : CircleAlert

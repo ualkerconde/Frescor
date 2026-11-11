@@ -193,6 +193,8 @@ class Cenario:
         self._venda_perda(VendaDiaria, OrigemVenda, D, {"manual": 1000})  # o próprio D: fora
         self._venda_perda(PerdaDiaria, OrigemPerda, dia(-2), {"manual": 10})
         self._venda_perda(PerdaDiaria, OrigemPerda, dia(-1), {"manual": 12})
+        # D111: P2/L1 vendeu e ninguém lançou perda -> taxa 0, mas "sem perda registrada".
+        self._venda_perda(VendaDiaria, OrigemVenda, dia(-3), {"manual": 50}, codigo="P2")
         db.commit()
 
     def _add(self, obj):
@@ -231,9 +233,9 @@ class Cenario:
                                  quantidade_inventariada=int(qtd), estoque_atual_calculado=DEC(qtd),
                                  atualizado_em=quando))
 
-    def _venda_perda(self, modelo, origens, data, por_origem):
+    def _venda_perda(self, modelo, origens, data, por_origem, codigo="P1"):
         for origem, qtd in por_origem.items():
-            self.db.add(modelo(negocio_id=self.neg.id, loja_id=self.l1.id, produto_id=self.p["P1"].id,
+            self.db.add(modelo(negocio_id=self.neg.id, loja_id=self.l1.id, produto_id=self.p[codigo].id,
                                data=data, quantidade=DEC(qtd), origem=origens(origem)))
 
 
@@ -285,7 +287,9 @@ def main():
         conferir("E8 P10 sem previsao de um dia", (c.l1.id, "P10"), None, (AVISO_SEM_CONTAGEM, AVISO_SEM_PREVISAO))
         conferir("E9 P11 pouco historico", (c.l1.id, "P11"), 48, (AVISO_SEM_CONTAGEM,), pouco_historico=True,
                  margem=DEC(20))
-        conferir("E10 indicador de perda", (c.l1.id, "P1"), 44, taxa_perda=DEC("0.11"))
+        conferir("E10 indicador de perda", (c.l1.id, "P1"), 44, taxa_perda=DEC("0.11"), perda_registrada=True)
+        conferir("E10b venda sem perda lancada (D111)", (c.l1.id, "P2"), "30.0", taxa_perda=DEC(0),
+                 perda_registrada=False)
 
         chamadas = []
 

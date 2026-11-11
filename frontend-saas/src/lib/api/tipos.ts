@@ -218,6 +218,8 @@ export interface ContaNecessidade {
   pouco_historico?: boolean
   /** Perda ÷ venda das 4 semanas até a véspera (fração); null = sem venda. */
   taxa_perda?: string | null
+  /** D111: false = vendeu, mas nenhuma perda foi registrada (taxa 0 não é "perda baixa"). Ordens antigas não têm. */
+  perda_registrada?: boolean
 }
 
 export interface TotalOrdem {
@@ -511,4 +513,22 @@ export interface Evento {
   produto_ids: number[]
   /** False: o evento vale também para lojas de outra central (só lá pode ser apagado). */
   pode_apagar: boolean
+}
+
+/** GET /web/perdas/lancamentos (D110) */
+export interface LancamentoPerda {
+  id: number
+  data: string
+  loja: { id: number; codigo: string | null; nome: string }
+  produto: { id: number; codigo: string | null; nome: string }
+  unidade: Unidade
+  quantidade: string
+  motivo: 'vencido' | 'avariado' | 'outro'
+  observacao: string | null
+  lancado_por: string
+  lancado_em: string
+  alterado_por: string | null
+  alterado_em: string | null
+  /** True até o fim do dia seguinte ao da perda; depois só o gestor corrige. */
+  loja_pode_alterar: boolean
 }
