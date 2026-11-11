@@ -164,10 +164,11 @@ describe('visão geral', () => {
     expect(within(painel).getByText(/mais 1 ordem emergencial/)).toBeInTheDocument()
   })
 
-  it('sem vendas na semana: aviso para importar', async () => {
+  it('sem vendas na semana: aviso com o caminho para a integração de vendas', async () => {
     simularApi(rotasCompletas({ 'GET /vendas': resposta(200, consulta([])) }))
     renderizarApp('/inicio')
-    expect(await screen.findByText('Nenhuma venda importada nos últimos 7 dias.')).toBeInTheDocument()
+    expect(await screen.findByText('Nenhuma venda chegou nos últimos 7 dias.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Veja a integração de vendas' })).toHaveAttribute('href', '/integracao')
   })
 
   it('acessibilidade (axe): visão geral carregada e a busca de telas aberta, sem violação', async () => {

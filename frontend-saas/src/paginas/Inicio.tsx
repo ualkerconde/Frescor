@@ -373,8 +373,8 @@ export function Inicio() {
         }
         acoes={
           <>
-            <Link to="/importar" className={cn(buttonVariants({ variant: "secondary" }))}>
-              Importar vendas
+            <Link to="/acompanhamento" className={cn(buttonVariants({ variant: "secondary" }))}>
+              Acompanhamento
             </Link>
             <Link to={`/producao?data=${amanha}`} className={cn(buttonVariants())}>
               <Factory aria-hidden="true" />
@@ -387,9 +387,13 @@ export function Inicio() {
       {semVendas && (
         <Alert variant="aviso">
           <TriangleAlert aria-hidden="true" />
-          <AlertTitle>Nenhuma venda importada nos últimos 7 dias.</AlertTitle>
+          <AlertTitle>Nenhuma venda chegou nos últimos 7 dias.</AlertTitle>
           <AlertDescription className="text-current">
-            A previsão e a ordem de produção usam as vendas importadas. Importe o CSV das lojas para mantê-las em dia.
+            A previsão e a ordem de produção usam a venda diária das lojas.{" "}
+            <Link to="/integracao" className="font-semibold underline underline-offset-2">
+              Veja a integração de vendas
+            </Link>
+            .
           </AlertDescription>
         </Alert>
       )}
@@ -466,7 +470,7 @@ export function Inicio() {
 
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <ChartLine className="size-4" aria-hidden="true" />
-        Vendas e perdas de {formatarData(inicio7)} a {formatarData(ontem)}, pelo que foi importado.
+        Vendas e perdas de {formatarData(inicio7)} a {formatarData(ontem)}, pelo que foi registrado.
       </p>
     </section>
   )

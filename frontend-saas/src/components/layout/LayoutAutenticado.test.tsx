@@ -29,11 +29,11 @@ describe('estrutura das telas autenticadas (W5)', () => {
     expect(within(screen.getByRole('banner')).getByText('Carregando…')).toBeInTheDocument()
   })
 
-  it('navegação: Importar marcado como página atual; clicar em Consultar troca a tela', async () => {
-    simularApi({ 'GET /web/me': resposta(200, ME) })
-    renderizarApp('/importar')
+  it('navegação: Perdas marcado como página atual; clicar em Consultar troca a tela', async () => {
+    simularApi({ 'GET /web/me': resposta(200, ME), 'GET /web/lojas': resposta(200, []), 'GET /web/perdas/lancamentos': resposta(200, []) })
+    renderizarApp('/perdas')
     const nav = screen.getByRole('navigation', { name: 'Principal' })
-    expect(within(nav).getByRole('link', { name: 'Importar' })).toHaveAttribute('aria-current', 'page')
+    expect(await within(nav).findByRole('link', { name: 'Perdas' })).toHaveAttribute('aria-current', 'page')
     expect(within(nav).getByRole('link', { name: 'Consultar' })).not.toHaveAttribute('aria-current')
 
     await userEvent.click(within(nav).getByRole('link', { name: 'Consultar' }))
@@ -78,7 +78,7 @@ describe('estrutura das telas autenticadas (W5)', () => {
     expect(screen.getByRole('main')).toHaveAttribute('id', 'conteudo')
   })
 
-  it('menu por seções (padrão 11/11/2026): rótulos das seções e as 9 telas na ordem', () => {
+  it('menu por seções (padrão 11/11/2026): rótulos das seções e as 9 telas na ordem; a carga de CSV fica fora (D107)', () => {
     simularApi({ 'GET /web/me': resposta(200, ME) })
     renderizarApp('/importar')
     const nav = screen.getByRole('navigation', { name: 'Principal' })
@@ -87,14 +87,18 @@ describe('estrutura das telas autenticadas (W5)', () => {
     expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual([
       'Visão geral',
       'Acompanhamento',
-      'Importar',
       'Consultar',
       'Previsão',
       'Produção',
       'Distribuição',
       'Perdas',
       'Cadastros',
+      'Integração de vendas',
     ])
+    // Fora do menu, a carga de histórico ainda diz onde está na barra do topo.
+    const barra = screen.getByRole('region', { name: 'Barra superior' })
+    expect(within(barra).getByText('Configuração')).toBeInTheDocument()
+    expect(within(barra).getByText('Carga de histórico')).toBeInTheDocument()
   })
 
   it('barra superior mostra a seção e a tela atual', () => {

@@ -454,6 +454,8 @@ export interface ProdutoDetalhe {
   codigo: string | null
   nome: string
   codigo_barras: string | null
+  /** Código no sistema de vendas do cliente, se diferente do código (D108). */
+  codigo_pdv: string | null
   unidade: Unidade
   peso_medio_kg: string | null
   ativo: boolean
@@ -474,6 +476,7 @@ export interface ProdutoEnvio {
   nome: string
   codigo: string | null
   codigo_barras: string | null
+  codigo_pdv: string | null
   unidade_medida: Unidade
   peso_medio_kg: string | null
   ativo: boolean
@@ -531,6 +534,56 @@ export interface LancamentoPerda {
   alterado_em: string | null
   /** True até o fim do dia seguinte ao da perda; depois só o gestor corrige. */
   loja_pode_alterar: boolean
+}
+
+/** Uma execução da integração de vendas (D108). */
+export interface ExecucaoSyncVendas {
+  id: number
+  /** agendada (busca de madrugada), manual ("Buscar agora") ou envio (o sistema do cliente mandou). */
+  origem: 'agendada' | 'manual' | 'envio'
+  situacao: 'sucesso' | 'parcial' | 'falhou'
+  data_inicio: string | null
+  data_fim: string | null
+  iniciada_em: string
+  terminada_em: string | null
+  linhas_recebidas: number
+  linhas_gravadas: number
+  linhas_pendentes: number
+  linhas_invalidas: number
+  mensagem: string | null
+}
+
+/** Um código do sistema de vendas que não casou com o cadastro. */
+export interface PendenciaSyncVendas {
+  motivo: 'produto_desconhecido' | 'loja_desconhecida'
+  /** Código do produto (produto desconhecido) ou da loja (loja desconhecida), como o sistema manda. */
+  codigo: string
+  linhas: number
+  primeira_data: string
+  ultima_data: string
+  lojas: string[]
+}
+
+/** GET /web/integracao/vendas (D108). */
+export interface IntegracaoVendas {
+  configurada: boolean
+  modo: 'envio' | 'busca' | null
+  ativa: boolean | null
+  sistema: string | null
+  /** "HH:MM:SS"; só no modo busca. */
+  horario_busca: string | null
+  dias_rebusca: number | null
+  /** Começo da chave ("frv_ab12"); só no modo envio. */
+  chave_prefixo: string | null
+  execucoes: ExecucaoSyncVendas[]
+  pendencias: PendenciaSyncVendas[]
+}
+
+/** POST /web/integracao/vendas/pendencias/casar */
+export interface ResultadoCasamento {
+  gravadas: number
+  pendentes: number
+  invalidas: string[]
 }
 
 /** GET /web/acompanhamento (D115, D116). Números em texto decimal; null = nenhum registro. */

@@ -92,7 +92,7 @@ Modo escuro ainda não foi definido. Não invente um: só a paleta clara existe 
 - **Estrutura do web (shell), padrão de 11/11/2026** (a partir de uma referência que o sócio do Ualker mandou; só o padrão foi copiado, a marca e o conteúdo são do Frescor). O menu mora em `frontend-saas/src/components/layout/menu.ts`: a barra lateral, a barra do topo e a busca leem de lá.
   - **Barra lateral** `--secondary` lisa, fixa, de 256px (≥ 1024px):
     - no topo, o bloco da marca: logo monocromático e, embaixo, "CENTRAL DE PRODUÇÃO" (12px, maiúsculas, espaçamento 0,08em, `--ink-muted`), separado da navegação por uma linha `--ink-line`;
-    - navegação por seções com rótulo em maiúsculas (12px, 0,08em, `--ink-muted`): **Visão** (Visão geral), **Dados** (Importar, Consultar), **Planejamento** (Previsão, Produção), **Operação** (Distribuição), **Configuração** (Cadastros). Tela nova entra na seção que faz sentido, nunca solta;
+    - navegação por seções com rótulo em maiúsculas (12px, 0,08em, `--ink-muted`): **Visão** (Visão geral, Acompanhamento), **Dados** (Consultar), **Planejamento** (Previsão, Produção), **Operação** (Distribuição, Perdas), **Configuração** (Cadastros, Integração de vendas). Tela nova entra na seção que faz sentido, nunca solta. Tela que não é rotina (a carga de histórico por CSV, D107) fica fora da barra com `foraDoMenu` em `menu.ts`: continua na busca de telas e na barra do topo;
     - itens de 44px, texto 15px 600, ícone 18px, raio 10;
     - item atual: fundo branco a 8%, texto branco e **ícone dourado** (`--accent`, permitido sobre o escuro); os outros em `--ink-muted`;
     - rodapé: avatar redondo `--primary` com as iniciais em branco, nome (14px branco), central · negócio (12px `--ink-muted`) e "Sair" discreto;
@@ -129,7 +129,7 @@ Modo escuro ainda não foi definido. Não invente um: só a paleta clara existe 
 2. **Texto curto em pt-BR, na língua da loja:** "contagem", "perda", "quebra", "romaneio", "ordem de produção". Nada de "sincronizar registro" ou "payload".
 3. **Números grandes e com unidade.** Nunca mostre uma quantidade sem `un` ou `kg`.
 4. **Erro claro:** diga o que deu errado e como resolver ("Código 789… não encontrado. Confira o produto ou digite o código."). Nada de "Erro 422" na tela. Não peça desculpa.
-5. **Estado vazio útil:** diga o que vai aparecer ali e mostre o botão que começa ("Nenhuma venda importada ainda. Importar CSV").
+5. **Estado vazio útil:** diga o que vai aparecer ali e mostre o botão que começa ("Nenhuma perda lançada neste período. Lançar perda").
 6. **Confirmação só para o que não se desfaz** (apagar, enviar romaneio), em diálogo com o verbo no botão ("Enviar romaneio").
 7. **Mobile:**
    - a ação principal fica fixa no rodapé, ao alcance do polegar;

@@ -14,7 +14,7 @@
 import { useId, useMemo, useState, type FormEvent } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
-import { ChevronLeft, ChevronRight, CircleAlert, Search, Upload } from "lucide-react"
+import { ChevronLeft, ChevronRight, CircleAlert, PlugZap, Search, Trash2 } from "lucide-react"
 import { Link, useSearchParams } from "react-router"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -279,12 +279,19 @@ export function Consultar() {
             ) : total === 0 ? (
               <div className="painel-vazio p-6">
                 <p className="text-foreground">
-                  Nenhuma {nomeTipo} importada neste período{aplicados.loja !== TODAS_AS_LOJAS || aplicados.produto ? " com esses filtros" : ""}.
+                  Nenhuma {nomeTipo} registrada neste período{aplicados.loja !== TODAS_AS_LOJAS || aplicados.produto ? " com esses filtros" : ""}.
                 </p>
-                <p className="mt-1 text-muted-foreground">Mude o período ou os filtros, ou importe o arquivo.</p>
-                <Link to="/importar" className={buttonVariants({ variant: "secondary", className: "mt-4" })}>
-                  <Upload aria-hidden="true" />
-                  Importar CSV
+                <p className="mt-1 text-muted-foreground">
+                  {tipo === "vendas"
+                    ? "Mude o período ou os filtros, ou veja se a venda está chegando do sistema do cliente."
+                    : "Mude o período ou os filtros. A perda é lançada pela loja no app ou na tela de perdas."}
+                </p>
+                <Link
+                  to={tipo === "vendas" ? "/integracao" : "/perdas"}
+                  className={buttonVariants({ variant: "secondary", className: "mt-4" })}
+                >
+                  {tipo === "vendas" ? <PlugZap aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
+                  {tipo === "vendas" ? "Integração de vendas" : "Lançar perda"}
                 </Link>
               </div>
             ) : (

@@ -52,7 +52,6 @@ describe('tela de importação (W6)', () => {
     const primarios = within(area).getAllByRole('button').filter((b) => b.className.includes('bg-primary'))
     expect(primarios.map((b) => b.textContent)).toEqual(['Importar vendas'])
     expect(within(area).getByRole('button', { name: 'Baixar modelo de CSV' }).className).toContain('border-primary')
-    expect(screen.getByRole('radio', { name: 'Vendas' })).toBeChecked()
   })
 
   it('sem arquivo: pede para escolher o arquivo e não envia', async () => {
@@ -111,16 +110,13 @@ describe('tela de importação (W6)', () => {
     expect(screen.getByText('É uma linha nova.')).toBeInTheDocument()
   })
 
-  it('perdas: o botão vira "Importar perdas" e envia para /perdas/importar', async () => {
-    fetchSimulado = simularApi({
-      'GET /web/me': resposta(200, ME),
-      'POST /perdas/importar': resposta(200, relatorio({ inseridas: 2 })),
-    })
+  it('D107: só vendas (carga de histórico); perdas não se importam mais, e há o caminho de volta à integração', async () => {
     renderizarApp('/importar')
-    await userEvent.click(screen.getByRole('radio', { name: 'Perdas' }))
-    await escolherEImportar(csv('perdas.csv'), 'Importar perdas')
-    expect(await screen.findByRole('heading', { level: 2, name: '2 linhas importadas' })).toBeInTheDocument()
-    expect(fetchSimulado.mock.calls.some(([url]) => String(url).endsWith('/perdas/importar'))).toBe(true)
+    expect(screen.getByRole('heading', { level: 1, name: 'Carga de histórico de vendas' })).toBeInTheDocument()
+    const conteudo = screen.getByRole('main')
+    expect(within(conteudo).queryByRole('radio')).not.toBeInTheDocument()
+    expect(within(conteudo).queryByText(/perdas/i)).not.toBeInTheDocument()
+    expect(within(conteudo).getByRole('link', { name: 'Integração de vendas' })).toHaveAttribute('href', '/integracao')
   })
 
   it('arquivo com erros (422): "Nada foi gravado: 3 erros", a lista por linha e os avisos', async () => {

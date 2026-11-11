@@ -97,7 +97,7 @@ describe('cadastros: produtos (C4)', () => {
 
     await waitFor(() => expect(chamadas(fetch, 'POST', '/web/produtos')).toHaveLength(1))
     expect(corpo(fetch, 'POST', '/web/produtos')).toEqual({
-      nome: 'Panetone', codigo: 'PAN-01', codigo_barras: null, unidade_medida: 'UN', peso_medio_kg: null, ativo: true,
+      nome: 'Panetone', codigo: 'PAN-01', codigo_barras: null, codigo_pdv: null, unidade_medida: 'UN', peso_medio_kg: null, ativo: true,
       tipo_abastecimento: 'produzido', dias_validade: null, margem_maxima_percentual: '12.5',
       data_inicio_vigencia: '2026-11-01', data_fim_vigencia: '2027-01-06', vigencia_recorrente: true,
       ciclo_previsao: 'sazonal', setor_producao_id: 2, dias_producao: ['segunda', 'sexta'], habilitar_lojas: true,

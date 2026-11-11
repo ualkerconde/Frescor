@@ -24,7 +24,7 @@ describe('modelo do formulário de produto (C4)', () => {
     expect(r).toEqual({
       ok: true,
       envio: {
-        nome: 'Panetone', codigo: 'PAN', codigo_barras: null, unidade_medida: 'KG', peso_medio_kg: '0.5', ativo: true,
+        nome: 'Panetone', codigo: 'PAN', codigo_barras: null, codigo_pdv: null, unidade_medida: 'KG', peso_medio_kg: '0.5', ativo: true,
         tipo_abastecimento: 'produzido', dias_validade: 20, margem_maxima_percentual: '12.5',
         data_inicio_vigencia: '2026-11-01', data_fim_vigencia: '2027-01-06', vigencia_recorrente: true,
         ciclo_previsao: 'sazonal', setor_producao_id: 2, dias_producao: ['segunda', 'sexta'], habilitar_lojas: true,
@@ -36,6 +36,16 @@ describe('modelo do formulário de produto (C4)', () => {
     const r = montarEnvio({ ...camposVazios(), nome: 'x', codigo: 'x', peso_medio_kg: '0,5', inicio: '2026-01-01' }, true)
     expect(r.ok && r.envio.peso_medio_kg).toBe(null)
     expect(r.ok && r.envio.data_inicio_vigencia).toBe(null)
+  })
+
+  it('código no sistema de vendas (D108): opcional, sem espaços nas pontas, até 60 caracteres; volta do produto', () => {
+    const ok = montarEnvio({ ...camposVazios(), nome: 'x', codigo: 'x', codigo_pdv: ' 7890001 ' }, true)
+    expect(ok.ok && ok.envio.codigo_pdv).toBe('7890001')
+    const vazio = montarEnvio({ ...camposVazios(), nome: 'x', codigo: 'x', codigo_pdv: '  ' }, true)
+    expect(vazio.ok && vazio.envio.codigo_pdv).toBe(null)
+    const longo = montarEnvio({ ...camposVazios(), nome: 'x', codigo: 'x', codigo_pdv: '9'.repeat(61) }, true)
+    expect(!longo.ok && longo.erros.codigo_pdv).toBe('Use no máximo 60 caracteres.')
+    expect(camposDoProduto(produtoDetalhe({ codigo_pdv: 'PDV-1' })).codigo_pdv).toBe('PDV-1')
   })
 
   it('confere faixas: validade, margem, peso, datas', () => {

@@ -4,7 +4,18 @@
  * topo ("PLANEJAMENTO / Produção") e a busca de telas (Ctrl K) leem daqui,
  * para os três nunca divergirem.
  */
-import { ChartColumn, ChartLine, ClipboardList, Factory, LayoutDashboard, Search, Trash2, Truck, Upload } from "lucide-react"
+import {
+  ChartColumn,
+  ChartLine,
+  ClipboardList,
+  Factory,
+  LayoutDashboard,
+  PlugZap,
+  Search,
+  Trash2,
+  Truck,
+  Upload,
+} from "lucide-react"
 
 export interface ItemMenu {
   para: string
@@ -12,6 +23,12 @@ export interface ItemMenu {
   /** Frase curta mostrada na busca de telas. */
   descricao: string
   Icone: typeof Upload
+  /**
+   * Fora da barra lateral (só na busca de telas e na barra do topo). É o caso
+   * da carga de histórico por CSV, que deixou de ser rotina (D107) e é aberta
+   * pela tela de integração.
+   */
+  foraDoMenu?: boolean
 }
 
 export interface GrupoMenu {
@@ -40,7 +57,6 @@ export const GRUPOS_MENU: GrupoMenu[] = [
   {
     grupo: "Dados",
     itens: [
-      { para: "/importar", rotulo: "Importar", descricao: "Enviar o CSV de vendas ou de perdas", Icone: Upload },
       { para: "/consultar", rotulo: "Consultar", descricao: "Ver vendas e perdas por período", Icone: Search },
     ],
   },
@@ -76,6 +92,19 @@ export const GRUPOS_MENU: GrupoMenu[] = [
         rotulo: "Cadastros",
         descricao: "Produtos, setores, eventos e a central",
         Icone: ClipboardList,
+      },
+      {
+        para: "/integracao",
+        rotulo: "Integração de vendas",
+        descricao: "Vendas vindas do sistema do cliente: última busca e pendências",
+        Icone: PlugZap,
+      },
+      {
+        para: "/importar",
+        rotulo: "Carga de histórico",
+        descricao: "Enviar um CSV de vendas (histórico ou contingência)",
+        Icone: Upload,
+        foraDoMenu: true,
       },
     ],
   },

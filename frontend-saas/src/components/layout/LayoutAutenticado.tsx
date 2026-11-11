@@ -81,7 +81,7 @@ function Navegacao() {
             <p className="hidden px-3 pb-1.5 text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase lg:block">
               {grupo}
             </p>
-            {itens.map(({ para, rotulo, Icone }) => (
+            {itens.filter((i) => !i.foraDoMenu).map(({ para, rotulo, Icone }) => (
               <NavLink
                 key={para}
                 to={para}
