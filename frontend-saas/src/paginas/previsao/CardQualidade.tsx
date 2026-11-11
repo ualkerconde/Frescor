@@ -41,7 +41,7 @@ function BlocoUnidade({ q }: { q: QualidadeUnidade }) {
   return (
     <div className="rounded-lg bg-surface p-4">
       <p className="text-sm font-semibold text-muted-foreground">{nome}</p>
-      <p className="mt-1 font-heading text-[22px] font-semibold text-heading numero">
+      <p className="mt-1 numero-destaque text-[24px]">
         Errou em média {formatarPercentual(q.wape)} do volume
       </p>
       <p className="mt-1 numero">{textoVies(q.vies)}</p>
@@ -82,7 +82,7 @@ export function CardQualidade({ lojaId, produtoId }: { lojaId: number | null; pr
   })
 
   return (
-    <section aria-labelledby="titulo-qualidade" className="rounded-lg border border-line bg-card p-6">
+    <section aria-labelledby="titulo-qualidade" className="painel p-6">
       <h2 id="titulo-qualidade" className="text-[22px]">
         Qualidade da previsão
       </h2>

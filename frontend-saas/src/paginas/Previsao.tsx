@@ -130,7 +130,7 @@ export function Previsao() {
     <section className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px]">Previsão de vendas</h1>
+          <h1 className="text-[28px] leading-tight">Previsão de vendas</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
             Quanto cada loja deve vender por produto, calculado com as vendas importadas. Use como ponto de partida para
             a produção.
@@ -139,7 +139,7 @@ export function Previsao() {
         {!botaoNoVazio && botaoGerar}
       </div>
 
-      <div className="grid gap-4 rounded-lg border border-line bg-card p-6 md:grid-cols-3">
+      <div className="grid gap-4 painel p-6 md:grid-cols-3">
         <div className="flex flex-col gap-2">
           <Label htmlFor={`${id}-data`}>Dia previsto</Label>
           <Input
@@ -205,7 +205,7 @@ export function Previsao() {
         ) : lista.isPending ? (
           <p className="text-muted-foreground">Carregando…</p>
         ) : !temPrevisao ? (
-          <div className="rounded-lg bg-surface p-6">
+          <div className="painel-vazio p-6">
             {foraDoHorizonte ? (
               <>
                 <p className="text-foreground">A previsão cobre só os próximos {DIAS_HORIZONTE} dias.</p>

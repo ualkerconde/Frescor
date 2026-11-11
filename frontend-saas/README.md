@@ -52,6 +52,7 @@ Para apontar para outra API, defina `VITE_API_URL` (ex.: num arquivo
 
 | Rota | Tela |
 |---|---|
+| `/inicio` | Visão geral (primeira tela depois do login, desde 11/11/2026): saudação, ordem de produção de amanhã num painel escuro e 4 cartões (entregas de hoje, divergências, vendido e perda dos últimos 7 dias). Só lê endpoints existentes. |
 | `/entrar` | Login do gestor. Erros claros: "E-mail ou senha incorretos.", mensagem da API para quem não tem acesso, aviso quando a sessão expira. |
 | `/importar` | Importação de CSV de vendas ou perdas. Resumo grande no topo ("1.232 linhas importadas" ou "Nada foi gravado: 3 erros") e depois as tabelas de erros e avisos. Modelo de CSV para baixar. |
 | `/consultar` | Consulta por período (até 366 dias), loja e produto (busca sem acento). Resumo do período no topo (total vendido e de perda, por unidade), tabela paginada de 50 em 50. Filtros ficam na URL. |
@@ -108,7 +109,8 @@ src/
   sempre com a unidade.
 - **Código dividido por tela** a partir da Fase 3: telas novas entram com
   `React.lazy` + `import()`. Conferir o tamanho no `npm run build`: o JS
-  principal está em ~488 kB (o Vite avisa acima de 500 kB). Bibliotecas usadas
+  principal está em ~493 kB depois do redesenho de 28/10/2026 (o Vite avisa
+  acima de 500 kB; pouca folga: tela nova entra sempre com `React.lazy`). Bibliotecas usadas
   só por uma tela (ex.: os avisos do `sonner`, na previsão) ficam montadas
   nessa tela, para irem no pacote dela.
 - **Previsão na tela:** o número exibido é sempre o do backend (1 casa em UN,

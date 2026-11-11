@@ -11,10 +11,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('estrutura das telas autenticadas (W5)', () => {
-  it('"/" abre a importação, com o cabeçalho mostrando gestor, central e negócio', async () => {
+  it('"/" abre a visão geral, com o cabeçalho mostrando gestor, central e negócio', async () => {
     simularApi({ 'GET /web/me': resposta(200, ME) })
     renderizarApp('/')
-    expect(screen.getByRole('heading', { level: 1, name: 'Importar vendas e perdas' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /^(Bom dia|Boa tarde|Boa noite), Gestor$/ }),
+    ).toBeInTheDocument()
     const cabecalho = screen.getByRole('banner')
     expect(await within(cabecalho).findByText('Gestor Central Teste')).toBeInTheDocument()
     expect(within(cabecalho).getByText('Central Principal · Rede Padaria Teste')).toBeInTheDocument()
@@ -74,6 +76,51 @@ describe('estrutura das telas autenticadas (W5)', () => {
     renderizarApp('/importar')
     expect(screen.getByRole('link', { name: 'Pular para o conteúdo' })).toHaveAttribute('href', '#conteudo')
     expect(screen.getByRole('main')).toHaveAttribute('id', 'conteudo')
+  })
+
+  it('menu por seções (padrão 11/11/2026): rótulos das seções e as 7 telas na ordem', () => {
+    simularApi({ 'GET /web/me': resposta(200, ME) })
+    renderizarApp('/importar')
+    const nav = screen.getByRole('navigation', { name: 'Principal' })
+    for (const secao of ['Visão', 'Dados', 'Planejamento', 'Operação', 'Configuração'])
+      expect(within(nav).getByText(secao)).toBeInTheDocument()
+    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual([
+      'Visão geral',
+      'Importar',
+      'Consultar',
+      'Previsão',
+      'Produção',
+      'Distribuição',
+      'Cadastros',
+    ])
+  })
+
+  it('barra superior mostra a seção e a tela atual', () => {
+    simularApi({ 'GET /web/me': resposta(200, ME) })
+    renderizarApp('/consultar')
+    const barra = screen.getByRole('region', { name: 'Barra superior' })
+    expect(within(barra).getByText('Dados')).toBeInTheDocument()
+    expect(within(barra).getByText('Consultar')).toBeInTheDocument()
+  })
+
+  it('busca de telas: Ctrl K abre, digitar filtra e Enter abre a tela', async () => {
+    simularApi({ 'GET /web/me': resposta(200, ME) })
+    renderizarApp('/importar')
+    const usuario = userEvent.setup()
+    await usuario.keyboard('{Control>}k{/Control}')
+    const dialogo = await screen.findByRole('dialog', { name: 'Buscar tela' })
+    await usuario.type(within(dialogo).getByRole('combobox'), 'consul')
+    expect(within(dialogo).queryByText('Previsão')).not.toBeInTheDocument()
+    await usuario.keyboard('{Enter}')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Consultar vendas e perdas' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('busca de telas também abre pelo botão da barra superior', async () => {
+    simularApi({ 'GET /web/me': resposta(200, ME) })
+    renderizarApp('/importar')
+    await userEvent.click(screen.getByRole('button', { name: /Buscar tela/ }))
+    expect(await screen.findByRole('dialog', { name: 'Buscar tela' })).toBeInTheDocument()
   })
 
   it('"Sair" não é botão primário (a ação principal é da tela)', () => {

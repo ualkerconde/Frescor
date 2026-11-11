@@ -11,8 +11,8 @@ function abrir(rota = '/entrar') {
   renderizarApp(rota)
 }
 
-/** Título da primeira tela depois do login (W6). */
-const TELA_INICIAL = { name: 'Importar vendas e perdas' }
+/** Título da primeira tela depois do login: a visão geral, com a saudação (desde 11/11/2026). */
+const TELA_INICIAL = { level: 1, name: /^(Bom dia|Boa tarde|Boa noite)/ }
 
 async function preencherEEntrar(email: string, senha: string) {
   const usuario = userEvent.setup()
@@ -138,10 +138,10 @@ describe('sessão e rotas', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Entrar' })).toBeInTheDocument()
   })
 
-  it('com sessão, /entrar manda para a área autenticada', () => {
+  it('com sessão, /entrar manda para a área autenticada', async () => {
     salvarTokens('A1', 'R1')
     abrir('/entrar')
-    expect(screen.getByRole('heading', TELA_INICIAL)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', TELA_INICIAL)).toBeInTheDocument()
   })
 
   it('sessão encerrada sozinha: volta ao login mostrando o motivo', () => {

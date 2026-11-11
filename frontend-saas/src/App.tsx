@@ -1,9 +1,10 @@
 /*
  * Rotas do frontend do SaaS.
  * /entrar: login do gestor.
- * Área autenticada (LayoutAutenticado): /importar, /consultar, /previsao, /producao, /distribuicao
- * e /cadastros (produtos, setores e central, com as sub-rotas dentro da própria tela).
- * / e qualquer outra rota -> /importar (ou login, sem sessão).
+ * Área autenticada (LayoutAutenticado): /inicio (visão geral, desde 11/11/2026), /importar, /consultar,
+ * /previsao, /producao, /distribuicao e /cadastros (produtos, setores e central, com as sub-rotas dentro
+ * da própria tela).
+ * / e qualquer outra rota -> /inicio (ou login, sem sessão).
  *
  * Telas novas (a partir da Fase 3) entram com o código dividido por tela:
  * React.lazy + import(), carregadas só quando abertas (regra do W8).
@@ -19,6 +20,7 @@ import { Importar } from "@/paginas/Importar"
 const Previsao = lazy(() => import("@/paginas/Previsao").then((m) => ({ default: m.Previsao })))
 const Producao = lazy(() => import("@/paginas/Producao").then((m) => ({ default: m.Producao })))
 const Distribuicao = lazy(() => import("@/paginas/Distribuicao").then((m) => ({ default: m.Distribuicao })))
+const Inicio = lazy(() => import("@/paginas/Inicio").then((m) => ({ default: m.Inicio })))
 const Cadastros = lazy(() => import("@/paginas/Cadastros").then((m) => ({ default: m.Cadastros })))
 
 function Carregando() {
@@ -36,6 +38,14 @@ function App() {
           </RotaProtegida>
         }
       >
+        <Route
+          path="/inicio"
+          element={
+            <Suspense fallback={<Carregando />}>
+              <Inicio />
+            </Suspense>
+          }
+        />
         <Route path="/importar" element={<Importar />} />
         <Route path="/consultar" element={<Consultar />} />
         <Route
@@ -71,7 +81,7 @@ function App() {
           }
         />
       </Route>
-      <Route path="*" element={<Navigate to="/importar" replace />} />
+      <Route path="*" element={<Navigate to="/inicio" replace />} />
     </Routes>
   )
 }
