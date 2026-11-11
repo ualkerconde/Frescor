@@ -28,6 +28,7 @@ from app.api import (
     eventos,
     health,
     importacao,
+    perdas_lancamento,
     previsoes,
     producao,
     produtos,
@@ -89,6 +90,7 @@ app.include_router(producao.router, tags=["Ordem de produção (SaaS web)"])
 app.include_router(distribuicao.router, tags=["Distribuição e romaneio (SaaS web)"])
 app.include_router(recebimentos.router, tags=["Recebimento (app mobile)"])
 app.include_router(cadastros.router, tags=["Cadastros (SaaS web)"])
+app.include_router(perdas_lancamento.router)
 
 
 @app.get("/")

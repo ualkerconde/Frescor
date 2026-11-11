@@ -34,3 +34,4 @@ from app.models.setor_producao import SetorProducao  # noqa: F401
 from app.models.romaneio import Romaneio, StatusRomaneio  # noqa: F401
 from app.models.romaneio_entrega import RomaneioEntrega, SituacaoEntrega  # noqa: F401
 from app.models.romaneio_item import RomaneioItem, MotivoDivergencia  # noqa: F401
+from app.models.lancamento_perda import LancamentoPerda, MotivoPerda  # noqa: F401
