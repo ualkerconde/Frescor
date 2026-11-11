@@ -21,6 +21,7 @@ const Previsao = lazy(() => import("@/paginas/Previsao").then((m) => ({ default:
 const Producao = lazy(() => import("@/paginas/Producao").then((m) => ({ default: m.Producao })))
 const Distribuicao = lazy(() => import("@/paginas/Distribuicao").then((m) => ({ default: m.Distribuicao })))
 const Inicio = lazy(() => import("@/paginas/Inicio").then((m) => ({ default: m.Inicio })))
+const Acompanhamento = lazy(() => import("@/paginas/Acompanhamento").then((m) => ({ default: m.Acompanhamento })))
 const Perdas = lazy(() => import("@/paginas/Perdas").then((m) => ({ default: m.Perdas })))
 const Cadastros = lazy(() => import("@/paginas/Cadastros").then((m) => ({ default: m.Cadastros })))
 
@@ -70,6 +71,14 @@ function App() {
           element={
             <Suspense fallback={<Carregando />}>
               <Distribuicao />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/acompanhamento"
+          element={
+            <Suspense fallback={<Carregando />}>
+              <Acompanhamento />
             </Suspense>
           }
         />

@@ -78,7 +78,7 @@ describe('estrutura das telas autenticadas (W5)', () => {
     expect(screen.getByRole('main')).toHaveAttribute('id', 'conteudo')
   })
 
-  it('menu por seções (padrão 11/11/2026): rótulos das seções e as 8 telas na ordem', () => {
+  it('menu por seções (padrão 11/11/2026): rótulos das seções e as 9 telas na ordem', () => {
     simularApi({ 'GET /web/me': resposta(200, ME) })
     renderizarApp('/importar')
     const nav = screen.getByRole('navigation', { name: 'Principal' })
@@ -86,6 +86,7 @@ describe('estrutura das telas autenticadas (W5)', () => {
       expect(within(nav).getByText(secao)).toBeInTheDocument()
     expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual([
       'Visão geral',
+      'Acompanhamento',
       'Importar',
       'Consultar',
       'Previsão',

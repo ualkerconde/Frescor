@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
 from app.api import (
+    acompanhamento,
     auth,
     auth_web,
     cadastros,
@@ -91,6 +92,7 @@ app.include_router(distribuicao.router, tags=["Distribuição e romaneio (SaaS w
 app.include_router(recebimentos.router, tags=["Recebimento (app mobile)"])
 app.include_router(cadastros.router, tags=["Cadastros (SaaS web)"])
 app.include_router(perdas_lancamento.router)
+app.include_router(acompanhamento.router)
 
 
 @app.get("/")

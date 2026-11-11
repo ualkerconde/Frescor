@@ -532,3 +532,43 @@ export interface LancamentoPerda {
   /** True até o fim do dia seguinte ao da perda; depois só o gestor corrige. */
   loja_pode_alterar: boolean
 }
+
+/** GET /web/acompanhamento (D115, D116). Números em texto decimal; null = nenhum registro. */
+export interface ValoresAcompanhamento {
+  previsto: string | null
+  sugerido: string | null
+  final: string | null
+  produzido: string | null
+  enviado: string | null
+  vendido: string | null
+  perda: string | null
+}
+
+export interface ErroPrevisao {
+  /** Σ|previsto − vendido| ÷ Σ vendido (fração). */
+  wape: string | null
+  /** (Σ previsto − Σ vendido) ÷ Σ vendido; + = previu a mais. */
+  vies: string | null
+  celulas: number
+}
+
+export interface Acompanhamento {
+  data_inicio: string
+  data_fim: string
+  /** False com filtro de loja: a produção é da central inteira. */
+  produzido_disponivel: boolean
+  unidades: {
+    unidade: Unidade
+    totais: ValoresAcompanhamento
+    erro: ErroPrevisao
+    dias: (ValoresAcompanhamento & { data: string })[]
+  }[]
+  produtos: {
+    produto: { id: number; codigo: string | null; nome: string }
+    unidade: Unidade
+    totais: ValoresAcompanhamento
+    erro: ErroPrevisao
+    /** Enviado − vendido − perda lançada no período (inclui o que está na prateleira). */
+    sobra: string | null
+  }[]
+}
