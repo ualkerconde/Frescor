@@ -75,7 +75,7 @@ function QuemEsta() {
 function Navegacao() {
   return (
     <nav aria-label="Principal" className="-mx-1 overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0">
-      <div className="flex gap-1 lg:flex-col lg:gap-5">
+      <div className="flex gap-1 lg:flex-col lg:gap-4">
         {GRUPOS_MENU.map(({ grupo, itens }) => (
           <div key={grupo} className="flex gap-1 lg:flex-col lg:gap-0.5">
             <p className="hidden px-3 pb-1.5 text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase lg:block">
@@ -112,8 +112,13 @@ function BarraLateral() {
   const { sair } = useSessao()
   return (
     <header className="bg-heading text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 pt-4 pb-3 lg:flex-col lg:items-stretch lg:gap-0 lg:overflow-y-auto lg:px-3 lg:pt-5 lg:pb-4">
-        <div className="flex flex-col gap-1 lg:border-b lg:border-ink-line lg:px-3 lg:pb-5">
+      {/*
+        No desktop esta parte ocupa a altura que sobra e rola sozinha. `lg:flex-nowrap` é obrigatório: com
+        `flex-wrap` + coluna, numa janela baixa (ex.: notebook 1366×768 com a barra do navegador) o menu
+        quebrava numa segunda coluna, cortada pela largura da barra (bug visto pelo Ualker em 11/11/2026).
+      */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 pt-4 pb-3 [scrollbar-color:var(--fr-ink-line)_transparent] [scrollbar-width:thin] lg:min-h-0 lg:flex-1 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-0 lg:overflow-x-hidden lg:overflow-y-auto lg:px-3 lg:pt-5 lg:pb-4">
+        <div className="flex shrink-0 flex-col gap-1 lg:border-b lg:border-ink-line lg:px-3 lg:pb-5">
           <Logo tamanho={28} sobreEscuro className="[&>span:last-child]:text-[21px]" />
           <span className="hidden pl-[38px] text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase lg:block">
             Central de produção
@@ -124,16 +129,15 @@ function BarraLateral() {
         </div>
       </div>
 
-      <div className="hidden flex-1 lg:block" />
-
-      <div className="flex items-center gap-3 border-t border-ink-line px-4 py-3 lg:flex-col lg:items-stretch lg:gap-1 lg:px-3">
-        <div className="min-w-0 flex-1 lg:px-3 lg:py-1.5">
+      {/* Rodapé fixo: usuário e "Sair" numa linha só, para sobrar altura para o menu. */}
+      <div className="flex shrink-0 items-center gap-3 border-t border-ink-line px-4 py-3 lg:gap-2 lg:px-3">
+        <div className="min-w-0 flex-1 lg:pl-3">
           <QuemEsta />
         </div>
         <Button
           variant="ghost"
           onClick={sair}
-          className={cn("text-ink-muted hover:bg-white/[0.04] hover:text-white lg:justify-start lg:px-3", FOCO_ESCURO)}
+          className={cn("text-ink-muted hover:bg-white/[0.04] hover:text-white lg:px-2.5", FOCO_ESCURO)}
         >
           <LogOut aria-hidden="true" />
           Sair
