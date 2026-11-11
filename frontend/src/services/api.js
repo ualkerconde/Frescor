@@ -112,7 +112,7 @@ async function chamarRecebimento(path, options) {
     if (e.message === 'SESSION_EXPIRED') throw e
     throw new Error('SEM_CONEXAO')
   }
-  if (res.ok) return res.json()
+  if (res.ok) return res.status === 204 ? null : res.json()
   const data = await res.json().catch(() => ({}))
   const erro = new Error(
     typeof data.detail === 'string'
@@ -134,6 +134,28 @@ export function confirmarRecebimento(entregaId, diferencas = []) {
     method: 'POST',
     body: JSON.stringify({ diferencas }),
   })
+}
+
+// ---- Perda (D110) ----
+// Também só online, com as mesmas mensagens do Recebimento. 404/409 marcam
+// `desatualizado`: o lançamento sumiu ou o prazo da loja (fim de D+1) acabou.
+
+export function fetchLancamentosPerda() {
+  return chamarRecebimento('/perdas/lancamentos')
+}
+
+/** `dados` = { produto_id, quantidade, motivo, observacao, data } (data: hoje ou ontem). */
+export function lancarPerda(dados) {
+  return chamarRecebimento('/perdas/lancamentos', { method: 'POST', body: JSON.stringify(dados) })
+}
+
+/** `dados` = { quantidade, motivo, observacao }; produto e dia não mudam. */
+export function alterarPerda(id, dados) {
+  return chamarRecebimento(`/perdas/lancamentos/${id}`, { method: 'PUT', body: JSON.stringify(dados) })
+}
+
+export function apagarPerda(id) {
+  return chamarRecebimento(`/perdas/lancamentos/${id}`, { method: 'DELETE' })
 }
 
 /**

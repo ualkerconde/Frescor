@@ -28,7 +28,7 @@ import '../recebimento/recebimento.css'
 
 const SEM_CONEXAO = 'Sem internet. A confirmação do recebimento precisa de conexão: conecte o celular e tente de novo.'
 
-function useOnline() {
+export function useOnline() {
   const [online, setOnline] = useState(() => navigator.onLine)
   useEffect(() => {
     const ligar = () => setOnline(true)
@@ -43,7 +43,7 @@ function useOnline() {
   return online
 }
 
-function Seta() {
+export function Seta() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -52,7 +52,7 @@ function Seta() {
   )
 }
 
-function BotaoEnviar({ enviando, rotulo, rotuloEnviando, ...props }) {
+export function BotaoEnviar({ enviando, rotulo, rotuloEnviando, ...props }) {
   return (
     <button type="button" className="rcb-botao rcb-botao-primario" disabled={enviando || props.disabled}
       aria-busy={enviando || undefined} {...props}>

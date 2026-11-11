@@ -172,6 +172,9 @@ def lancar(db: Session, negocio_id: int, loja_id: int, usuario_id: int, produto_
         negocio_id=negocio_id, loja_id=loja_id, produto_id=produto.id, data=dia,
         quantidade=_quantidade(quantidade, produto.unidade_medida), motivo=m,
         observacao=_observacao(observacao, m), lancado_por_usuario_id=usuario_id,
+        # UTC sem fuso, como alterado_em e o resto do backend; o server_default
+        # dependeria do fuso da sessão do banco.
+        lancado_em=agora_utc or datetime.now(timezone.utc).replace(tzinfo=None),
     )
     try:
         db.add(lanc)
