@@ -126,6 +126,10 @@ class PrevisaoDiaria(Base):
     # Eventos que mexeram no número (F3): [{"id", "nome", "tipo_ajuste", "valor_ajuste"}].
     eventos: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
 
+    # Fatores de calendário (D112–D114, v3): {"ano", "semana_mes", "dia_mes",
+    # "feriado", "nome_feriado"}. NULL nas previsões de versões anteriores.
+    fatores = mapped_column(JSONB, nullable=True)
+
     versao_metodo: Mapped[str] = mapped_column(String(32), nullable=False)
     gerado_em: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     # Quem pediu a geração (NULL quando vier do job noturno).

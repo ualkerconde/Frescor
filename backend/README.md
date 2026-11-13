@@ -355,11 +355,12 @@ python scripts/test_escopo_gestor.py          # escopo do gestor: só a própria
 python scripts/test_importacao_csv.py         # serviço de importação de CSV (45)
 python scripts/test_importacao_rotas.py       # POST /vendas/importar e /perdas/importar (14)
 python scripts/test_consulta_rotas.py         # GET /vendas e /perdas, totais + importar e consultar (40)
-python scripts/test_sync_vendas_stub.py       # stub da integração com o PDV (5)
 python scripts/test_web_apoio.py              # /web/me, /web/lojas, /web/produtos (25)
 
 # Fase 3 — motor de previsão
 python scripts/test_serie_vendas.py           # série diária de vendas (D16, D17) (21)
+python scripts/test_previsao_fatores.py       # fatores de calendário: ano, semana/dia do mês, feriado (10)
+python scripts/backtest_fatores.py            # WAPE com e sem cada fator em séries sintéticas (~2 min)
 python scripts/test_previsao_calculo.py       # núcleo do cálculo, sem banco: base, tendência (21)
 python scripts/test_previsao_eventos.py       # eventos fora da base e ajuste do dia (24)
 python scripts/test_eventos_rotas.py          # POST/GET/DELETE /eventos, escopo e erros em português (45)
@@ -572,10 +573,11 @@ Para cada loja + produto + dia (detalhes e números nas decisões D16–D31 do `
 3. **Tendência** = mediana das razões real ÷ base dos últimos 7 dias, limitada a 0,7–1,3; com menos de 5 dias, fator 1 (D19, D31).
 4. **Sazonal** (`ciclo_previsao = sazonal`) com temporada anterior: base do mesmo período do ano anterior e tendência contra ele; na 1ª temporada, segue o semanal com cold start (F5, versão mínima).
 5. **Cold start**: com menos de 6 semanas de histórico, mistura a própria com um proxy (outras lojas, mesma categoria ou mesma unidade) com peso crescente (D20, D28, D29). Sem nenhuma referência: sem previsão.
-6. **Evento** do dia: multiplicador ou valor fixo (D26).
-7. Sem arredondar (D21); gravada com 4 casas.
+6. **Fatores de calendário** (D112–D114, `previsao_fatores.py`): base × tendência × ano anterior × semana do mês × dia do mês × feriado nacional, aprendidos da própria loja + produto, puxados para 1 com pouco dado e limitados. Feriado nacional sai da base e da tendência. Gravados em `previsoes_diarias.fatores`.
+7. **Evento** do dia: multiplicador ou valor fixo (D26). Evento no dia manda sobre o fator de feriado.
+8. Sem arredondar (D21); gravada com 4 casas.
 
-Qualquer mudança no cálculo exige atualizar `VERSAO_METODO` em `app/services/previsao_gravacao.py` no mesmo commit (hoje `2026.10-v2`); a versão vai gravada em cada previsão.
+Qualquer mudança no cálculo exige atualizar `VERSAO_METODO` em `app/services/previsao_gravacao.py` no mesmo commit (hoje `2026.11-v3`); a versão vai gravada em cada previsão.
 
 ### SaaS web — ordem de produção (exigem token do SaaS)
 

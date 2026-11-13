@@ -59,6 +59,8 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+from sqlalchemy import func  # noqa: E402
+
 from app.db.session import SessionLocal  # noqa: E402
 from app.models.central_producao import CentralProducao  # noqa: E402
 from app.models.evento import EscopoLoja, EscopoProduto, Evento, EventoLoja, EventoProduto, TipoAjuste  # noqa: E402
@@ -306,7 +308,13 @@ def parte_seed():
         if gestor is None:
             registrar("K12 seed", False, "gestor@teste.com não existe -> rode scripts/seed_dev.py e seed_vendas.py")
             return
-        prev = prever_central(db, gestor.negocio_id, gestor.central_producao_id, REF, ALVO)
+        # O seed_vendas grava as últimas semanas até ontem (datas relativas a
+        # hoje): a referência é o último dia com venda no seed, não a REF fixa.
+        ref = db.query(func.max(VendaDiaria.data)).filter(VendaDiaria.negocio_id == gestor.negocio_id).scalar()
+        if ref is None:
+            registrar("K12 seed", False, "o negócio do gestor@teste.com não tem venda -> rode scripts/seed_vendas.py")
+            return
+        prev = prever_central(db, gestor.negocio_id, gestor.central_producao_id, ref, ref + timedelta(days=1))
         ruins = [x for x in prev if x.peso_historico != 1 or x.proxy is not None or x.previsao is None]
         registrar("K12 seed sem cold start", len(prev) == 22 and not ruins,
                   f"{len(prev)} previsões (2 lojas × 11 produtos), {len(ruins)} com cold start ou sem valor")

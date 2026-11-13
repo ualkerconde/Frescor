@@ -124,9 +124,20 @@ export interface ItemPrevisao {
   proxy: string | null
   origem_proxy: 'outras_lojas' | 'categoria' | 'unidade' | null
   eventos: EventoAplicado[]
+  /** Fatores de calendário (D112–D114); null nas previsões de antes da versão 2026.11-v3. */
+  fatores?: FatoresCalendario | null
   data_referencia: string
   gerado_em: string
   versao_metodo: string
+}
+
+/** Multiplicadores de calendário da previsão; "1" ou "1.0000" = sem efeito. */
+export interface FatoresCalendario {
+  ano: string
+  semana_mes: string
+  dia_mes: string
+  feriado: string
+  nome_feriado: string | null
 }
 
 export interface TotalPrevisto {

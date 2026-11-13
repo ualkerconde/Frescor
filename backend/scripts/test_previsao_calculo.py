@@ -52,6 +52,10 @@ FAIL = "[FALHA]"
 TOTAL_CASOS = 21
 D = Decimal
 REF = date(2026, 10, 12)  # segunda
+# 12/10 é feriado nacional: com os fatores de calendário (D112–D114) ele sai
+# da base e da tendência. Os casos do núcleo (base × tendência) rodam com
+# SEM_FATORES; os fatores têm o próprio teste (test_previsao_fatores.py).
+SEM_FATORES = frozenset()
 ALVO = REF + timedelta(days=1)  # terça
 # Fatores do seed_vendas, por weekday() (0 = segunda).
 FATORES = {0: D("0.85"), 1: D("0.85"), 2: D("1"), 3: D("1"), 4: D("1"), 5: D("1.35"), 6: D("1.25")}
@@ -127,9 +131,9 @@ def main():
             alvo = REF + timedelta(days=h)
             esperado = D("100") * FATORES[alvo.weekday()]
             for m in piores:
-                c = prever(s, REF, alvo, metodo_tendencia=m)
+                c = prever(s, REF, alvo, metodo_tendencia=m, fatores=SEM_FATORES)
                 piores[m].append(abs(c.previsao - esperado) / esperado)
-        tend = prever(s, REF, ALVO).tendencia
+        tend = prever(s, REF, ALVO, fatores=SEM_FATORES).tendencia
         pior, pior_soma = max(piores["mediana"]), max(piores["soma"])
         registrar("C06 ruido de 20% -> erro pequeno, tendencia ~1",
                   pior < D("0.12") and pior_soma < D("0.10") and D("0.9") <= tend <= D("1.1"),
@@ -137,7 +141,7 @@ def main():
                   f"tendência {tend:.4f}")
 
         # C07 e C08: pouco histórico.
-        c = prever(serie(14, lambda d: D("10")), REF, ALVO)
+        c = prever(serie(14, lambda d: D("10")), REF, ALVO, fatores=SEM_FATORES)
         registrar("C07 2 semanas", c.semanas_na_base == 2 and c.previsao == D("10") and c.dias_na_tendencia == 7,
                   resumo(c))
         c = prever(serie(7, lambda d: D("10")), REF, ALVO)

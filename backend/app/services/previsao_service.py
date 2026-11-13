@@ -52,6 +52,7 @@ from app.models.produto_classificacao import ProdutoClassificacao
 from app.services.eventos_service import eventos_das_lojas
 from app.services.previsao_calculo import (
     DIAS_ANO_SAZONAL,
+    DIAS_HISTORICO_FATORES,
     DIAS_HISTORICO_NECESSARIOS,
     DIAS_TENDENCIA,
     ESTATISTICA_PADRAO,
@@ -67,6 +68,7 @@ from app.services.previsao_calculo import (
     prever_sazonal,
     vigente,
 )
+from app.services.previsao_fatores import FATORES_PADRAO
 from app.services.serie_vendas_service import datas_habilitacao, inicio_historico, series_da_loja
 
 ORIGEM_PROXY_OUTRAS_LOJAS = "outras_lojas"
@@ -174,6 +176,7 @@ def prever_central(
     data_alvo: date,
     estatistica: str = ESTATISTICA_PADRAO,
     metodo_tendencia: str = TENDENCIA_PADRAO,
+    fatores: frozenset[str] = FATORES_PADRAO,
 ) -> list[PrevisaoProduto]:
     """
     Previsão de `data_alvo` para cada produto de cada loja ativa da central,
@@ -187,7 +190,7 @@ def prever_central(
     if data_alvo <= data_referencia:
         raise ValueError("A data prevista tem de ser depois da data de referência.")
     loja_ids = lojas_ativas_da_central(db, negocio_id, central_producao_id)
-    inicio = data_referencia - timedelta(days=DIAS_HISTORICO_NECESSARIOS)
+    inicio = data_referencia - timedelta(days=DIAS_HISTORICO_FATORES if fatores else DIAS_HISTORICO_NECESSARIOS)
     # Ano anterior (sazonal, F5): os dias em volta do alvo e os 7 dias da
     # tendência, 364 dias antes.
     ano = timedelta(days=DIAS_ANO_SAZONAL)
@@ -247,7 +250,8 @@ def prever_central(
                 _Parcial(
                     loja_id=loja_id,
                     produto_id=produto_id,
-                    componentes=prever(serie, data_referencia, data_alvo, evs, estatistica, metodo_tendencia),
+                    componentes=prever(serie, data_referencia, data_alvo, evs, estatistica, metodo_tendencia,
+                                       fatores),
                     inicio_historico=comeco,
                     peso=peso_historico_proprio(comeco, data_referencia),
                     eventos=evs,

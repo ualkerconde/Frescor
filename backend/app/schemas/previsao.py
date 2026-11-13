@@ -44,6 +44,15 @@ class EventoAplicado(BaseModel):
     valor_ajuste: Decimal
 
 
+class FatoresCalendario(BaseModel):
+    """Multiplicadores de calendário (D112–D114); 1 = sem efeito."""
+    ano: Decimal
+    semana_mes: Decimal
+    dia_mes: Decimal
+    feriado: Decimal
+    nome_feriado: Optional[str] = None
+
+
 class PrevisaoItemResponse(BaseModel):
     data: date
     loja: LojaPrevisao
@@ -68,6 +77,9 @@ class PrevisaoItemResponse(BaseModel):
     proxy: Optional[Decimal]
     origem_proxy: Optional[str] = Field(description="outras_lojas, categoria ou unidade.")
     eventos: list[EventoAplicado]
+    fatores: Optional[FatoresCalendario] = Field(
+        None, description="Fatores de calendário; vazio nas previsões de antes da versão 2026.11-v3."
+    )
     data_referencia: date
     gerado_em: datetime
     versao_metodo: str

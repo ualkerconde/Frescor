@@ -14,6 +14,26 @@ describe('explicação da previsão (F9)', () => {
     ])
   })
 
+  it('fatores de calendário (D112–D114): entram no resumo, num passo e na conta', () => {
+    const e = explicarPrevisao(
+      itemPrevisao({
+        previsao: '38.0160', previsao_propria: '38.0160', previsao_sem_evento: '38.0160',
+        fatores: { ano: '1.0000', semana_mes: '1.0800', dia_mes: '1.0010', feriado: '0.8000', nome_feriado: 'Natal' },
+      }),
+    )
+    expect(e.resumo).toBe('Mediana das últimas 6 quartas × tendência +10% × calendário −14% (Natal)')
+    expect(e.passos[2]).toBe(
+      'Calendário: semana do mês +8%; feriado (Natal) −20%. Vem do histórico desta loja: como este produto costuma vender nesses dias em relação ao normal.',
+    )
+    expect(e.passos[3]).toBe('Conta: 40 kg × 1,1 × 0,86 (calendário) = 38,02 kg.')
+  })
+
+  it('fatores todos 1 ou ausentes (previsão antiga): texto de antes', () => {
+    const neutro = { ano: '1.0000', semana_mes: '1.0000', dia_mes: '1.0030', feriado: '1', nome_feriado: null }
+    expect(explicarPrevisao(itemPrevisao({ fatores: neutro })).passos).toHaveLength(3)
+    expect(explicarPrevisao(itemPrevisao({ fatores: null })).resumo).toBe('Mediana das últimas 6 quartas × tendência +10%')
+  })
+
   it('semanas faltando na base aparecem no texto', () => {
     const e = explicarPrevisao(itemPrevisao({ semanas_na_base: 4 }))
     expect(e.resumo).toBe('Mediana de 4 das últimas 6 quartas × tendência +10%')
