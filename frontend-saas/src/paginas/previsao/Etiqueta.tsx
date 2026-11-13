@@ -7,7 +7,7 @@ import { CalendarClock, CircleHelp, Sprout } from "lucide-react"
 import { cn } from "cn"
 
 const TIPOS = {
-  evento: { classe: "bg-highlight text-foreground", Icone: CalendarClock },
+  evento: { classe: "bg-highlight-bg text-highlight", Icone: CalendarClock },
   pouco_historico: { classe: "bg-warning-bg text-warning", Icone: Sprout },
   sem_previsao: { classe: "bg-error-bg text-error", Icone: CircleHelp },
 } as const

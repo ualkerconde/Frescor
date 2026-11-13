@@ -71,7 +71,7 @@ export function SituacaoOrdem({ status }: { status: "rascunho" | "aprovada" }) {
       Aprovada
     </span>
   ) : (
-    <span className={cn(PILL, "bg-highlight text-foreground")}>
+    <span className={cn(PILL, "bg-highlight-bg text-highlight")}>
       <PencilLine className="size-4" aria-hidden="true" />
       Rascunho
     </span>

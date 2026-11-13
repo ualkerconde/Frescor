@@ -1,34 +1,48 @@
 /*
- * Visão geral (padrão de 11/11/2026, a partir da referência que o sócio do
- * Ualker mandou): a primeira tela depois do login. Saudação com o nome do
- * gestor, uma linha do que está acontecendo agora e os números do dia.
+ * Visão geral: a primeira tela depois do login. Desenho do visual "Comando"
+ * azul-noite e âmbar (D117, escolhido pelo Ualker em 13/11/2026, protótipo
+ * em visual-d117/v3/v2-noite-painel), com SÓ dados reais.
  *
  * Só LÊ endpoints que já existem; nenhuma regra de negócio nova:
- *   - GET /producao/ordens?data=amanhã        -> painel escuro (ordem de amanhã)
- *   - GET /distribuicao/romaneios?data_entrega=hoje -> entregas de hoje
- *   - GET /vendas e /perdas (últimos 7 dias, até ontem; só os totais)
- *   - GET /distribuicao/divergencias (últimos 7 dias, até hoje)
+ *   - GET /producao/ordens?data=amanhã e /producao/ordens/{id}  -> manchete, ordem e produção por setor
+ *   - GET /web/produtos?limit=200                               -> setor de cada produto
+ *   - GET /web/acompanhamento (7 dias até ontem; e por loja)    -> acerto, perda, ruptura, previsto × vendido
+ *   - GET /distribuicao/romaneios?data_entrega=hoje             -> entregas de hoje
+ *   - GET /vendas e /perdas (7 dias, só os totais)              -> aviso de "nenhuma venda chegou"
+ *   - GET /distribuicao/divergencias (7 dias)                   -> "Precisa de você"
+ *
+ * O que o protótipo tinha e ainda NÃO existe no sistema foi trocado por algo
+ * real, sem inventar número:
+ *   - Gantt de horário por setor: o sistema não guarda horário de produção.
+ *     Virou "Produção de amanhã por setor" (quantidade por setor).
+ *   - Mapa de calor loja × dia: o acerto do dia somado mistura os erros dos
+ *     produtos (um a mais compensa outro a menos). Virou "Acerto por loja"
+ *     na semana, com a mesma conta da tela de acompanhamento (1 − WAPE).
  *
  * Cada bloco carrega e falha sozinho: um erro num número não derruba a tela.
  * UN e KG nunca se somam (cada total mostra uma linha por unidade).
  */
 import { useState, type ReactNode } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
-import { ArrowRight, ChartLine, Factory, PackageCheck, ShoppingBasket, Trash2, TriangleAlert, Truck } from "lucide-react"
+import { ArrowRight, CircleAlert, Factory, Info, TriangleAlert } from "lucide-react"
 import { Link } from "react-router"
-import { CabecalhoPagina } from "@/components/layout/CabecalhoPagina"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
 import { apiJson } from "@/lib/api/cliente"
 import type {
+  Acompanhamento,
   ConsultaDiaria,
   DistribuicaoDoDia,
   Divergencias,
+  LojaWeb,
   Me,
+  OrdemDetalhe,
+  OrdemResumo,
   OrdensDoDia,
+  ProdutosWeb,
   SituacaoEntrega,
-  TotalPorUnidade,
+  Unidade,
 } from "@/lib/api/tipos"
 import {
   contar,
@@ -37,11 +51,14 @@ import {
   formatarData,
   formatarPercentual,
   formatarQuantidade,
-  formatarVariacao,
   somarDias,
 } from "@/lib/formato"
+import { COR_VENDIDO, GraficoDias } from "./acompanhamento/GraficoDias"
 
 const dataPorExtenso = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+
+/** Lojas consultadas uma a uma no "Acerto por loja" (o piloto tem poucas). */
+const MAXIMO_LOJAS = 12
 
 function saudacao(hora: number): string {
   if (hora < 12) return "Bom dia"
@@ -53,65 +70,44 @@ function saudacao(hora: number): string {
 const SITUACOES: { chave: SituacaoEntrega; rotulo: string; cor: string }[] = [
   { chave: "recebida", rotulo: "Recebidas", cor: "bg-success" },
   { chave: "confirmada_com_atraso", rotulo: "Confirmadas com atraso", cor: "bg-primary" },
-  { chave: "a_caminho", rotulo: "A caminho", cor: "bg-highlight" },
+  { chave: "a_caminho", rotulo: "A caminho", cor: "bg-azul" },
   { chave: "aguardando_saida", rotulo: "Aguardando saída", cor: "bg-input-border" },
   { chave: "sem_confirmacao", rotulo: "Sem confirmação", cor: "bg-warning" },
 ]
 
-function totaisDa(consulta: { data?: ConsultaDiaria }): TotalPorUnidade[] {
-  return (consulta.data?.totais ?? []).filter((t) => Number(t.quantidade) !== 0)
+type UnidadeAcomp = Acompanhamento["unidades"][number]
+
+/** UN primeiro (é a unidade da maioria dos itens de padaria); KG em seguida. */
+function principal<T extends { unidade: Unidade }>(lista: T[]): T | undefined {
+  return lista.find((u) => u.unidade === "UN") ?? lista[0]
 }
 
-/* ------------------------------------------------------------------ blocos */
+function acertoDe(u: UnidadeAcomp | undefined): number | null {
+  if (!u?.erro.wape) return null
+  return Math.max(0, 1 - Number(u.erro.wape))
+}
 
-function CartaoKpi({
+/* ------------------------------------------------------------ peças visuais */
+
+function Cartao({
   titulo,
-  Icone,
-  link,
+  detalhe,
+  className,
   children,
 }: {
   titulo: string
-  Icone: typeof Truck
-  link?: { para: string; rotulo: string }
+  detalhe?: ReactNode
+  className?: string
   children: ReactNode
 }) {
   return (
-    <section aria-label={titulo} className="painel-kpi flex flex-col p-5">
-      <div className="flex items-start justify-between gap-3">
+    <section aria-label={titulo} className={cn("painel flex h-full min-w-0 flex-col rounded-2xl px-5 py-4", className)}>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="font-sans text-[15px] font-semibold text-foreground">{titulo}</h2>
-        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-md bg-surface text-primary">
-          <Icone className="size-[18px]" />
-        </span>
+        {detalhe && <span className="text-right text-[13px] text-muted-foreground">{detalhe}</span>}
       </div>
-      <div className="mt-2 flex flex-1 flex-col">{children}</div>
-      {link && (
-        <Link
-          to={link.para}
-          className="mt-4 inline-flex items-center gap-1 self-start text-sm font-semibold text-primary hover:underline"
-        >
-          {link.rotulo}
-          <ArrowRight className="size-4" aria-hidden="true" />
-        </Link>
-      )}
+      {children}
     </section>
-  )
-}
-
-function Totais({ totais, tamanho = "text-[30px]" }: { totais: TotalPorUnidade[]; tamanho?: string }) {
-  return (
-    <ul>
-      {totais.map((t, i) => (
-        <li
-          key={t.unidade}
-          className={cn(
-            "numero-destaque leading-tight whitespace-nowrap",
-            i === 0 ? tamanho : "text-lg text-muted-foreground",
-          )}
-        >
-          {formatarQuantidade(t.quantidade, t.unidade)}
-        </li>
-      ))}
-    </ul>
   )
 }
 
@@ -119,150 +115,136 @@ function Estado({ children }: { children: ReactNode }) {
   return <p className="text-muted-foreground">{children}</p>
 }
 
-/* ------------------------------------------------------- painel da ordem */
-
-function PainelOrdem({ amanha }: { amanha: string }) {
-  const consulta = useQuery({
-    queryKey: ["inicio", "ordens", amanha],
-    queryFn: () => apiJson<OrdensDoDia>(`/producao/ordens?data=${amanha}`),
-  })
-  const ordens = consulta.data?.ordens ?? []
-  const ordem = ordens.find((o) => o.tipo === "programada") ?? null
-  const emergenciais = ordens.filter((o) => o.tipo === "emergencial").length
-  const totais = (ordem?.totais ?? []).filter((t) => Number(t.final) !== 0)
-
+/** Linha curta (sparkline) só para dar a forma da semana; o número exato está no cartão e nas telas. */
+function Faisca({ valores, cor = "var(--fr-primary)" }: { valores: (number | null)[]; cor?: string }) {
+  const pontos = valores.map((v, i) => ({ v, i })).filter((p): p is { v: number; i: number } => p.v !== null)
+  if (pontos.length < 2) return null
+  const max = Math.max(...pontos.map((p) => p.v))
+  const min = Math.min(...pontos.map((p) => p.v))
+  const faixa = max - min || 1
+  const n = valores.length - 1 || 1
+  const linha = pontos.map((p) => `${(p.i / n) * 220},${40 - ((p.v - min) / faixa) * 32}`).join(" ")
   return (
-    <section
-      aria-label="Ordem de produção de amanhã"
-      className="flex flex-col overflow-hidden rounded-xl bg-heading text-white lg:col-span-3"
-    >
-      <div className="flex flex-1 flex-col p-6">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <h2 className="flex items-center gap-2 font-sans text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase">
-            <Factory className="size-4 text-highlight" aria-hidden="true" />
-            Ordem de produção · {diaDaSemana(amanha)}, {formatarData(amanha).slice(0, 5)}
-          </h2>
-          <Link
-            to={`/producao?data=${amanha}`}
-            className="inline-flex items-center gap-1 text-sm font-semibold whitespace-nowrap text-highlight hover:underline focus-visible:outline-white"
-          >
-            Abrir produção
-            <ArrowRight className="size-4" aria-hidden="true" />
-          </Link>
-        </div>
-
-        {consulta.isPending ? (
-          <p className="mt-6 text-ink-muted">Carregando a ordem…</p>
-        ) : consulta.isError ? (
-          <p className="mt-6 text-ink-muted">Não foi possível carregar a ordem de amanhã.</p>
-        ) : !ordem ? (
-          <div className="mt-6">
-            <p className="font-heading text-[32px] leading-tight font-semibold">Ainda não gerada</p>
-            <p className="mt-2 max-w-md text-ink-muted">
-              A ordem de amanhã sai da previsão, da contagem das lojas e do que está a caminho. Gere e confira na tela de
-              produção.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-5">
-            <span
-              className={cn(
-                "inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-semibold",
-                ordem.status === "aprovada" ? "bg-success-bg text-success" : "bg-highlight text-foreground",
-              )}
-            >
-              {ordem.status === "aprovada" ? "Aprovada" : "Em rascunho"}
-            </span>
-            {totais.length === 0 ? (
-              <p className="mt-3 font-heading text-[32px] leading-tight font-semibold">Nada a produzir</p>
-            ) : (
-              <ul className="mt-3">
-                {totais.map((t, i) => (
-                  <li
-                    key={t.unidade}
-                    className={cn(
-                      "font-heading leading-tight font-semibold tracking-[-0.02em] whitespace-nowrap tabular-nums",
-                      i === 0 ? "text-[44px]" : "text-2xl text-ink-muted",
-                    )}
-                  >
-                    {formatarQuantidade(t.final, t.unidade)}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-2 text-sm text-ink-muted">
-              Total a produzir para entregar em {formatarData(ordem.data_entrega)}
-              {emergenciais > 0 && ` · mais ${contar(emergenciais, "ordem emergencial", "ordens emergenciais")}`}
-            </p>
-          </div>
-        )}
-
-        {/* Sugerido pelo sistema x final do gestor, por unidade (só leitura dos totais da ordem). */}
-        {ordem && totais.length > 0 && (
-          <div className="mt-auto pt-8">
-            <h3 className="font-sans text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase">
-              Sugerido pelo sistema × final
-            </h3>
-            <ul className="mt-3 flex flex-col gap-3">
-              {totais.map((t) => {
-                const sugerido = Number(t.sugerido)
-                const final = Number(t.final)
-                const maior = Math.max(sugerido, final) || 1
-                return (
-                  <li key={t.unidade} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5">
-                    <div aria-hidden="true" className="flex flex-col gap-1">
-                      <span className="h-1.5 rounded-full bg-white/20" style={{ width: `${(sugerido / maior) * 100}%` }} />
-                      <span className="h-1.5 rounded-full bg-highlight" style={{ width: `${(final / maior) * 100}%` }} />
-                    </div>
-                    <p className="text-sm text-ink-muted tabular-nums">
-                      {formatarQuantidade(sugerido, t.unidade)} →{" "}
-                      <span className="font-semibold text-white">{formatarQuantidade(final, t.unidade)}</span>
-                      {sugerido > 0 && final !== sugerido && (
-                        <span> ({formatarVariacao(final / sugerido)})</span>
-                      )}
-                    </p>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {ordem && (
-        <dl className="grid grid-cols-3 border-t border-ink-line">
-          {[
-            { rotulo: "Linhas (loja × produto)", valor: ordem.linhas },
-            { rotulo: "Ajustadas pelo gestor", valor: ordem.linhas_editadas },
-            { rotulo: "Sem sugestão", valor: ordem.linhas_sem_quantidade },
-          ].map(({ rotulo, valor }, i) => (
-            <div key={rotulo} className={cn("px-6 py-4", i > 0 && "border-l border-ink-line")}>
-              <dt className="text-xs text-ink-muted">{rotulo}</dt>
-              <dd className="mt-0.5 font-heading text-xl font-semibold tabular-nums">{valor}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </section>
+    <svg aria-hidden="true" className="mt-3 h-9 w-full" viewBox="0 0 220 44" preserveAspectRatio="none">
+      <polyline fill="none" stroke={cor} strokeWidth="2" vectorEffect="non-scaling-stroke" points={linha} />
+    </svg>
   )
 }
 
-/* ------------------------------------------------------- entregas de hoje */
+function Valor({ children, className }: { children: ReactNode; className?: string }) {
+  return <p className={cn("numero-destaque text-[34px] leading-tight", className)}>{children}</p>
+}
 
-function CartaoEntregas({ hoje }: { hoje: string }) {
-  const consulta = useQuery({
-    queryKey: ["inicio", "romaneios", hoje],
-    queryFn: () => apiJson<DistribuicaoDoDia>(`/distribuicao/romaneios?data_entrega=${hoje}`),
-  })
+/* ------------------------------------------------------------------ cartões */
+
+function CartaoAcerto({ consulta }: { consulta: { data?: Acompanhamento; isPending: boolean; isError: boolean } }) {
+  const u = principal(consulta.data?.unidades ?? [])
+  const acerto = acertoDe(u)
+  const vies = u?.erro.vies ? Number(u.erro.vies) : null
+  return (
+    <Cartao titulo="Acerto da previsão" detalhe="7 dias" className="lg:col-span-3">
+      {consulta.isPending ? (
+        <Estado>Carregando…</Estado>
+      ) : consulta.isError ? (
+        <Estado>Não foi possível carregar.</Estado>
+      ) : acerto === null || !u ? (
+        <Estado>Sem previsão com venda na semana.</Estado>
+      ) : (
+        <>
+          <Valor>{formatarPercentual(acerto)}</Valor>
+          <p className="text-[13px] text-muted-foreground">
+            {vies === null || Math.abs(vies) < 0.005
+              ? "sem viés: não previu a mais nem a menos"
+              : `previu ${formatarPercentual(Math.abs(vies))} a ${vies > 0 ? "mais" : "menos"}`}{" "}
+            · em {u.unidade === "KG" ? "kg" : "un"}
+          </p>
+          {/* Barra de acerto: 0 a 100%, sem cor de status (o número é que fala). */}
+          <div aria-hidden="true" className="mt-4 h-2 overflow-hidden rounded-full bg-surface">
+            <span className="block h-full rounded-full bg-primary" style={{ width: `${acerto * 100}%` }} />
+          </div>
+        </>
+      )}
+    </Cartao>
+  )
+}
+
+function CartaoPerda({ consulta }: { consulta: { data?: Acompanhamento; isPending: boolean; isError: boolean } }) {
+  const u = principal(consulta.data?.unidades ?? [])
+  const perda = u?.totais.perda ? Number(u.totais.perda) : null
+  const vendido = u?.totais.vendido ? Number(u.totais.vendido) : null
+  return (
+    <Cartao titulo="Perda" detalhe="% do vendido" className="lg:col-span-3">
+      {consulta.isPending ? (
+        <Estado>Carregando…</Estado>
+      ) : consulta.isError ? (
+        <Estado>Não foi possível carregar.</Estado>
+      ) : perda === null || !u ? (
+        <Estado>Nenhuma perda lançada na semana.</Estado>
+      ) : (
+        <>
+          <Valor>{vendido ? formatarPercentual(perda / vendido) : formatarQuantidade(perda, u.unidade)}</Valor>
+          <p className="text-[13px] text-muted-foreground">
+            {formatarQuantidade(perda, u.unidade)} perdidos em 7 dias
+          </p>
+          <Faisca valores={u.dias.map((d) => (d.perda === null ? null : Number(d.perda)))} cor={COR_VENDIDO} />
+        </>
+      )}
+    </Cartao>
+  )
+}
+
+function CartaoRuptura({ consulta }: { consulta: { data?: Acompanhamento; isPending: boolean; isError: boolean } }) {
+  const unidades = consulta.data?.unidades ?? []
+  const rupturas = unidades.reduce((s, u) => s + u.rupturas, 0)
+  const balancos = unidades.reduce((s, u) => s + u.balancos, 0)
+  const produtos = (consulta.data?.produtos ?? [])
+    .filter((p) => p.rupturas > 0)
+    .sort((a, b) => b.rupturas - a.rupturas)
+    .slice(0, 2)
+  return (
+    <Cartao titulo="Ruptura" detalhe="produto acabou na loja" className="lg:col-span-3">
+      {consulta.isPending ? (
+        <Estado>Carregando…</Estado>
+      ) : consulta.isError ? (
+        <Estado>Não foi possível carregar.</Estado>
+      ) : balancos === 0 ? (
+        <Estado>Sem contagem para medir na semana.</Estado>
+      ) : (
+        <>
+          <Valor>{rupturas}</Valor>
+          <p className="text-[13px] text-muted-foreground">
+            {rupturas === 0
+              ? `nenhuma em ${contar(balancos, "contagem", "contagens")}`
+              : produtos.map((p, i) => (
+                  <span key={p.produto.id}>
+                    {i > 0 && " · "}
+                    <span className="font-semibold text-error">{p.produto.nome}</span> {contar(p.rupturas, "vez", "vezes")}
+                  </span>
+                ))}
+          </p>
+          <div aria-hidden="true" className="mt-4 flex h-2 gap-1">
+            <span className="rounded-full bg-error" style={{ flexGrow: rupturas }} />
+            <span className="rounded-full bg-surface" style={{ flexGrow: balancos - rupturas }} />
+          </div>
+        </>
+      )}
+    </Cartao>
+  )
+}
+
+function CartaoEntregas({ consulta }: { consulta: { data?: DistribuicaoDoDia; isPending: boolean; isError: boolean } }) {
   const romaneios = (consulta.data?.ordens ?? []).flatMap((o) => (o.romaneio ? [o.romaneio] : []))
   const total = romaneios.reduce((s, r) => s + r.entregas, 0)
   const contagem = SITUACOES.map((s) => ({
     ...s,
     quantidade: romaneios.reduce((soma, r) => soma + (r.situacoes[s.chave] ?? 0), 0),
   })).filter((s) => s.quantidade > 0)
+  const recebidas = contagem
+    .filter((s) => s.chave === "recebida" || s.chave === "confirmada_com_atraso")
+    .reduce((soma, s) => soma + s.quantidade, 0)
 
   return (
-    <CartaoKpi titulo="Entregas de hoje" Icone={Truck} link={{ para: "/distribuicao", rotulo: "Ver distribuição" }}>
+    <Cartao titulo="Entregas de hoje" detalhe="romaneios" className="lg:col-span-3">
       {consulta.isPending ? (
         <Estado>Carregando…</Estado>
       ) : consulta.isError ? (
@@ -271,15 +253,17 @@ function CartaoEntregas({ hoje }: { hoje: string }) {
         <Estado>Nenhum romaneio com entrega para hoje.</Estado>
       ) : (
         <>
-          <p className="numero-destaque text-[30px] leading-tight">
-            {total} <span className="font-sans text-base font-normal text-muted-foreground">{total === 1 ? "loja" : "lojas"}</span>
-          </p>
-          <div aria-hidden="true" className="mt-3 flex h-2 gap-1 overflow-hidden rounded-full">
+          <Valor>
+            {recebidas}
+            <span className="text-2xl text-muted-foreground">/{total}</span>
+            <span className="sr-only"> lojas receberam</span>
+          </Valor>
+          <div aria-hidden="true" className="mt-2 flex h-2 gap-1">
             {contagem.map((s) => (
-              <span key={s.chave} className={cn("h-full rounded-full", s.cor)} style={{ flexGrow: s.quantidade }} />
+              <span key={s.chave} className={cn("rounded-full", s.cor)} style={{ flexGrow: s.quantidade }} />
             ))}
           </div>
-          <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
+          <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-muted-foreground">
             {contagem.map((s) => (
               <li key={s.chave} className="inline-flex items-center gap-1.5">
                 <span aria-hidden="true" className={cn("size-2 rounded-full", s.cor)} />
@@ -289,7 +273,208 @@ function CartaoEntregas({ hoje }: { hoje: string }) {
           </ul>
         </>
       )}
-    </CartaoKpi>
+    </Cartao>
+  )
+}
+
+/* ----------------------------------------------- produção de amanhã por setor */
+
+interface Setor {
+  nome: string
+  totais: Map<Unidade, number>
+  produtos: { nome: string; quantidade: number; unidade: Unidade }[]
+}
+
+function porSetor(ordem: OrdemDetalhe, setorDe: Map<number, string | null>): Setor[] {
+  const setores = new Map<string, Setor>()
+  for (const item of ordem.itens) {
+    const final = Number(item.total_final)
+    if (!final) continue
+    const nome = setorDe.get(item.produto.id) ?? "Sem setor"
+    const s: Setor = setores.get(nome) ?? { nome, totais: new Map(), produtos: [] }
+    s.totais.set(item.unidade, (s.totais.get(item.unidade) ?? 0) + final)
+    s.produtos.push({ nome: item.produto.nome, quantidade: final, unidade: item.unidade })
+    setores.set(nome, s)
+  }
+  return [...setores.values()].sort((a, b) => (b.totais.get("UN") ?? 0) - (a.totais.get("UN") ?? 0))
+}
+
+function ProducaoPorSetor({ ordem, amanha }: { ordem: OrdemResumo | null | undefined; amanha: string }) {
+  const detalhe = useQuery({
+    queryKey: ["inicio", "ordem", ordem?.id],
+    queryFn: () => apiJson<OrdemDetalhe>(`/producao/ordens/${ordem?.id}`),
+    enabled: !!ordem,
+  })
+  const produtos = useQuery({
+    queryKey: ["inicio", "produtos"],
+    queryFn: () => apiJson<ProdutosWeb>("/web/produtos?limit=200&offset=0"),
+    enabled: !!ordem,
+  })
+  const setorDe = new Map((produtos.data?.itens ?? []).map((p) => [p.id, p.setor ?? null]))
+  const setores = detalhe.data ? porSetor(detalhe.data, setorDe) : []
+  const maiorPor = (u: Unidade) => Math.max(1, ...setores.map((s) => s.totais.get(u) ?? 0))
+
+  return (
+    <Cartao
+      titulo={`Produção de ${diaDaSemana(amanha)} por setor`}
+      detalhe={
+        ordem ? (
+          <Link to={`/producao?data=${amanha}`} className="inline-flex items-center gap-1 font-semibold text-primary hover:underline">
+            Abrir produção
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        ) : undefined
+      }
+      className="lg:col-span-7"
+    >
+      {ordem === undefined ? (
+        <Estado>Carregando…</Estado>
+      ) : ordem === null ? (
+        <Estado>Sem ordem gerada para amanhã.</Estado>
+      ) : detalhe.isPending || produtos.isPending ? (
+        <Estado>Carregando…</Estado>
+      ) : detalhe.isError ? (
+        <Estado>Não foi possível carregar a ordem.</Estado>
+      ) : setores.length === 0 ? (
+        <Estado>Nada a produzir.</Estado>
+      ) : (
+        <ul className="flex flex-col">
+          {setores.map((s) => {
+            const u: Unidade = s.totais.has("UN") ? "UN" : "KG"
+            const destaque = [...s.produtos].sort((a, b) => b.quantidade - a.quantidade).slice(0, 3)
+            return (
+              <li
+                key={s.nome}
+                className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_auto] items-center gap-3 border-t border-line py-2 first:border-t-0"
+              >
+                <span className="truncate font-semibold">{s.nome}</span>
+                <span className="relative h-7 min-w-0 rounded-md bg-background">
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-0 left-0 rounded-md bg-primary/20 shadow-[inset_3px_0_0_var(--fr-primary)]"
+                    style={{ width: `${Math.max(6, ((s.totais.get(u) ?? 0) / maiorPor(u)) * 100)}%` }}
+                  />
+                  <span className="relative block truncate px-2.5 text-[13px] leading-7 text-foreground">
+                    {destaque.map((p) => `${p.nome} ${formatarQuantidade(p.quantidade, p.unidade)}`).join(" · ")}
+                  </span>
+                </span>
+                <span className="text-right font-mono text-sm font-semibold whitespace-nowrap tabular-nums">
+                  {[...s.totais.entries()].map(([un, q]) => formatarQuantidade(q, un)).join(" · ")}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Cartao>
+  )
+}
+
+/* --------------------------------------------------------- acerto por loja */
+
+function AcertoPorLoja({ inicio, fim }: { inicio: string; fim: string }) {
+  const lojas = useQuery({ queryKey: ["lojas"], queryFn: () => apiJson<LojaWeb[]>("/web/lojas") })
+  const ativas = (lojas.data ?? []).filter((l) => l.ativo).slice(0, MAXIMO_LOJAS)
+  const porLoja = useQueries({
+    queries: ativas.map((l) => ({
+      queryKey: ["inicio", "acompanhamento", inicio, fim, l.id],
+      queryFn: () =>
+        apiJson<Acompanhamento>(`/web/acompanhamento?data_inicio=${inicio}&data_fim=${fim}&loja_id=${l.id}`),
+    })),
+  })
+
+  return (
+    <Cartao titulo="Acerto por loja" detalhe="7 dias · 1 − erro da previsão" className="lg:col-span-7">
+      {lojas.isPending ? (
+        <Estado>Carregando…</Estado>
+      ) : lojas.isError ? (
+        <Estado>Não foi possível carregar as lojas.</Estado>
+      ) : ativas.length === 0 ? (
+        <Estado>Nenhuma loja ativa.</Estado>
+      ) : (
+        <ul className="flex flex-col">
+          {ativas.map((l, i) => {
+            const c = porLoja[i]
+            const acerto = acertoDe(principal(c?.data?.unidades ?? []))
+            return (
+              <li
+                key={l.id}
+                className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_4.5rem] items-center gap-3 border-t border-line py-2 first:border-t-0"
+              >
+                <span className="truncate text-sm">
+                  {l.codigo && <span className="font-mono text-muted-foreground">{l.codigo} </span>}
+                  {l.nome}
+                </span>
+                <span aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-surface">
+                  {acerto !== null && (
+                    <span className="block h-full rounded-full bg-azul" style={{ width: `${acerto * 100}%` }} />
+                  )}
+                </span>
+                <span className="text-right font-mono text-sm font-semibold tabular-nums">
+                  {c?.isPending ? "…" : c?.isError ? "—" : acerto === null ? "sem dado" : formatarPercentual(acerto)}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Cartao>
+  )
+}
+
+/* ------------------------------------------------------- precisa de você */
+
+interface Pendencia {
+  chave: string
+  gravidade: "erro" | "aviso" | "info"
+  etiqueta: string
+  titulo: ReactNode
+  detalhe: string
+  para: string
+}
+
+const ESTILO_PENDENCIA = {
+  erro: { classe: "bg-error-bg text-error", Icone: CircleAlert },
+  aviso: { classe: "bg-warning-bg text-warning", Icone: TriangleAlert },
+  info: { classe: "bg-highlight-bg text-highlight", Icone: Info },
+} as const
+
+function PrecisaDeVoce({ pendencias, carregando }: { pendencias: Pendencia[]; carregando: boolean }) {
+  return (
+    <Cartao
+      titulo="Precisa de você"
+      detalhe={carregando ? "carregando…" : contar(pendencias.length, "item", "itens")}
+      className="lg:col-span-5"
+    >
+      {pendencias.length === 0 ? (
+        <Estado>{carregando ? "Conferindo a central…" : "Nada pendente agora."}</Estado>
+      ) : (
+        <ul className="flex flex-col">
+          {pendencias.map((p) => {
+            const { classe, Icone } = ESTILO_PENDENCIA[p.gravidade]
+            return (
+              <li key={p.chave} className="flex items-start gap-3 border-t border-line py-2.5 first:border-t-0">
+                <span
+                  className={cn(
+                    "mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold",
+                    classe,
+                  )}
+                >
+                  <Icone className="size-3.5" aria-hidden="true" />
+                  {p.etiqueta}
+                </span>
+                <div className="min-w-0">
+                  <Link to={p.para} className="font-semibold hover:underline">
+                    {p.titulo}
+                  </Link>
+                  <p className="text-[13px] text-muted-foreground">{p.detalhe}</p>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Cartao>
   )
 }
 
@@ -304,85 +489,163 @@ export function Inicio() {
   const ontem = somarDias(hoje, -1)
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => apiJson<Me>("/web/me") })
+  const ordens = useQuery({
+    queryKey: ["inicio", "ordens", amanha],
+    queryFn: () => apiJson<OrdensDoDia>(`/producao/ordens?data=${amanha}`),
+  })
+  const acompanhamento = useQuery({
+    queryKey: ["inicio", "acompanhamento", inicio7, ontem],
+    queryFn: () => apiJson<Acompanhamento>(`/web/acompanhamento?data_inicio=${inicio7}&data_fim=${ontem}`),
+  })
+  const romaneios = useQuery({
+    queryKey: ["inicio", "romaneios", hoje],
+    queryFn: () => apiJson<DistribuicaoDoDia>(`/distribuicao/romaneios?data_entrega=${hoje}`),
+  })
   const vendas = useQuery({
     queryKey: ["inicio", "vendas", inicio7, ontem],
     queryFn: () => apiJson<ConsultaDiaria>(`/vendas?data_inicio=${inicio7}&data_fim=${ontem}&limit=1&offset=0`),
-  })
-  const perdas = useQuery({
-    queryKey: ["inicio", "perdas", inicio7, ontem],
-    queryFn: () => apiJson<ConsultaDiaria>(`/perdas?data_inicio=${inicio7}&data_fim=${ontem}&limit=1&offset=0`),
   })
   const divergencias = useQuery({
     queryKey: ["inicio", "divergencias", inicio7, hoje],
     queryFn: () => apiJson<Divergencias>(`/distribuicao/divergencias?data_inicio=${inicio7}&data_fim=${hoje}`),
   })
-  const ordens = useQuery({
-    queryKey: ["inicio", "ordens", amanha],
-    queryFn: () => apiJson<OrdensDoDia>(`/producao/ordens?data=${amanha}`),
-  })
 
   const primeiroNome = me.data?.usuario.nome.trim().split(/\s+/)[0]
-  const totaisVendas = totaisDa(vendas)
-  const totaisPerdas = totaisDa(perdas)
-  const qtdDivergencias = divergencias.data?.divergencias.length
+  const lista = ordens.data?.ordens ?? []
+  // undefined = carregando ou erro; null = não gerada.
+  const ordem = ordens.data ? (lista.find((o) => o.tipo === "programada") ?? null) : undefined
+  const emergenciais = lista.filter((o) => o.tipo === "emergencial").length
+  const totais = (ordem?.totais ?? []).filter((t) => Number(t.final) !== 0)
+  const semVendas = vendas.isSuccess && vendas.data.totais.every((t) => Number(t.quantidade) === 0)
+  const diaAmanha = `${diaDaSemana(amanha)}, ${formatarData(amanha).slice(0, 5)}`
 
-  // "Agora: ..." só com o que já carregou; nada inventado.
-  const resumo: ReactNode[] = []
-  if (ordens.data) {
-    const ordem = ordens.data.ordens.find((o) => o.tipo === "programada")
-    resumo.push(
-      <span key="ordem">
-        a ordem de amanhã{" "}
-        <strong className="text-foreground">
-          {!ordem ? "ainda não foi gerada" : ordem.status === "aprovada" ? "está aprovada" : "está em rascunho"}
-        </strong>
-      </span>,
-    )
-  }
-  if (qtdDivergencias !== undefined) {
-    resumo.push(
-      <span key="div">
-        <strong className="text-foreground">{contar(qtdDivergencias, "divergência", "divergências")}</strong> de
-        recebimento nos últimos 7 dias
-      </span>,
-    )
-  }
+  // "Precisa de você": só o que já carregou; nada inventado.
+  const pendencias: Pendencia[] = []
+  if (ordem === null)
+    pendencias.push({
+      chave: "ordem",
+      gravidade: "aviso",
+      etiqueta: "Ordem",
+      titulo: `Gerar a ordem de ${diaAmanha}`,
+      detalhe: "Ela sai da previsão, da contagem das lojas e do que está a caminho.",
+      para: `/producao?data=${amanha}`,
+    })
+  else if (ordem?.status === "rascunho")
+    pendencias.push({
+      chave: "ordem",
+      gravidade: "info",
+      etiqueta: "Ordem",
+      titulo: `Aprovar a ordem de ${diaAmanha}`,
+      detalhe:
+        ordem.linhas_sem_quantidade > 0
+          ? `Está em rascunho, com ${contar(ordem.linhas_sem_quantidade, "linha", "linhas")} sem sugestão.`
+          : "Está em rascunho. Confira e aprove para liberar o romaneio.",
+      para: `/producao?data=${amanha}`,
+    })
+  const semConfirmacao = (romaneios.data?.ordens ?? []).reduce(
+    (s, o) => s + (o.romaneio?.situacoes.sem_confirmacao ?? 0),
+    0,
+  )
+  if (semConfirmacao > 0)
+    pendencias.push({
+      chave: "confirmacao",
+      gravidade: "aviso",
+      etiqueta: "Entrega",
+      titulo: `${contar(semConfirmacao, "loja", "lojas")} sem confirmar o recebimento`,
+      detalhe: "A loja confirma no app. Sem a confirmação, a entrega conta como chegada no dia.",
+      para: "/distribuicao",
+    })
+  const qtdDivergencias = divergencias.data?.divergencias.length ?? 0
+  if (qtdDivergencias > 0)
+    pendencias.push({
+      chave: "divergencias",
+      gravidade: "aviso",
+      etiqueta: "Recebimento",
+      titulo: `${contar(qtdDivergencias, "divergência", "divergências")} de recebimento`,
+      detalhe: "Itens recebidos diferente do enviado, nos últimos 7 dias.",
+      para: "/distribuicao",
+    })
+  const rupturas = (acompanhamento.data?.unidades ?? []).reduce((s, u) => s + u.rupturas, 0)
+  if (rupturas > 0)
+    pendencias.push({
+      chave: "rupturas",
+      gravidade: "erro",
+      etiqueta: "Ruptura",
+      titulo: `Produto acabou na loja ${contar(rupturas, "vez", "vezes")}`,
+      detalhe: "Na semana, pela contagem de fechamento. Veja quais no acompanhamento.",
+      para: "/acompanhamento",
+    })
+  if (semVendas)
+    pendencias.push({
+      chave: "vendas",
+      gravidade: "erro",
+      etiqueta: "Vendas",
+      titulo: "Nenhuma venda chegou nos últimos 7 dias",
+      detalhe: "A previsão e a ordem usam a venda diária. Veja a integração de vendas.",
+      para: "/integracao",
+    })
+  const carregando = ordens.isPending || romaneios.isPending || divergencias.isPending || acompanhamento.isPending
 
-  const semVendas = vendas.isSuccess && totaisVendas.length === 0
+  const uGrafico = principal(acompanhamento.data?.unidades ?? [])
 
   return (
-    <section className="flex flex-col gap-6">
-      <CabecalhoPagina
-        sobretitulo={dataPorExtenso.format(agora)}
-        titulo={primeiroNome ? `${saudacao(agora.getHours())}, ${primeiroNome}` : saudacao(agora.getHours())}
-        descricao={
-          resumo.length > 0 ? (
-            <>
-              Agora:{" "}
-              {resumo.map((parte, i) => (
-                <span key={i}>
-                  {i > 0 && (i === resumo.length - 1 ? " e " : ", ")}
-                  {parte}
-                </span>
-              ))}
-              .
-            </>
-          ) : (
-            "O resumo da central para hoje."
-          )
-        }
-        acoes={
-          <>
-            <Link to="/acompanhamento" className={cn(buttonVariants({ variant: "secondary" }))}>
-              Acompanhamento
-            </Link>
-            <Link to={`/producao?data=${amanha}`} className={cn(buttonVariants())}>
-              <Factory aria-hidden="true" />
-              Ver ordem de amanhã
-            </Link>
-          </>
-        }
-      />
+    <section className="flex flex-col gap-5">
+      {/* Manchete: saudação e o que a central produz amanhã (números em âmbar). */}
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs tracking-[0.14em] text-muted-foreground uppercase">
+            {dataPorExtenso.format(agora)}
+            {me.data && ` · ${me.data.central.nome}`}
+          </p>
+          <h1 className="mt-1 text-[28px] leading-tight font-semibold tracking-[-0.03em] sm:text-[34px]">
+            {primeiroNome ? `${saudacao(agora.getHours())}, ${primeiroNome}` : saudacao(agora.getHours())}
+          </h1>
+          <p className="text-[22px] leading-tight font-semibold tracking-[-0.03em] text-muted-foreground sm:text-[28px]">
+            {ordem === undefined ? (
+              ordens.isError ? (
+                "Não foi possível carregar a ordem de amanhã."
+              ) : (
+                "Carregando a ordem de amanhã…"
+              )
+            ) : ordem === null ? (
+              "A ordem de amanhã ainda não foi gerada."
+            ) : totais.length === 0 ? (
+              "Amanhã a central não tem nada a produzir."
+            ) : (
+              <>
+                Amanhã a central produz{" "}
+                {totais.map((t, i) => (
+                  <span key={t.unidade}>
+                    {i > 0 && " e "}
+                    <b className="font-mono font-semibold text-primary">{formatarQuantidade(t.final, t.unidade)}</b>
+                  </span>
+                ))}
+                .
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {ordem !== undefined && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-line px-3.5 py-2 text-[13px] text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className={cn("size-2 rounded-full", ordem?.status === "aprovada" ? "bg-success" : "bg-primary")}
+              />
+              {ordem === null
+                ? "Ordem não gerada"
+                : ordem.status === "aprovada"
+                  ? "Ordem aprovada"
+                  : "Ordem em rascunho"}
+              {emergenciais > 0 && ` · mais ${contar(emergenciais, "emergencial", "emergenciais")}`}
+            </span>
+          )}
+          <Link to={`/producao?data=${amanha}`} className={cn(buttonVariants())}>
+            <Factory aria-hidden="true" />
+            {ordem?.status === "rascunho" ? `Revisar ordem de ${diaDaSemana(amanha)}` : "Ver ordem de amanhã"}
+          </Link>
+        </div>
+      </div>
 
       {semVendas && (
         <Alert variant="aviso">
@@ -398,80 +661,54 @@ export function Inicio() {
         </Alert>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <PainelOrdem amanha={amanha} />
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-12">
+        <CartaoAcerto consulta={acompanhamento} />
+        <CartaoPerda consulta={acompanhamento} />
+        <CartaoRuptura consulta={acompanhamento} />
+        <CartaoEntregas consulta={romaneios} />
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
-          <CartaoEntregas hoje={hoje} />
+        <div className="sm:col-span-2 lg:col-span-7">
+          <ProducaoPorSetor ordem={ordem} amanha={amanha} />
+        </div>
 
-          <CartaoKpi titulo="Divergências" Icone={PackageCheck} link={{ para: "/distribuicao", rotulo: "Ver recebimentos" }}>
-            {divergencias.isPending ? (
-              <Estado>Carregando…</Estado>
-            ) : divergencias.isError ? (
-              <Estado>Não foi possível carregar.</Estado>
-            ) : (
-              <>
-                <p className="numero-destaque text-[30px] leading-tight">{qtdDivergencias}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {qtdDivergencias === 0
-                    ? "Nos últimos 7 dias, tudo chegou como enviado."
-                    : "Itens recebidos diferente do enviado, nos últimos 7 dias."}
-                </p>
-              </>
-            )}
-          </CartaoKpi>
+        <Cartao titulo="Previsto × vendido" detalhe="7 dias" className="sm:col-span-2 lg:col-span-5">
+          {acompanhamento.isPending ? (
+            <Estado>Carregando…</Estado>
+          ) : acompanhamento.isError ? (
+            <Estado>Não foi possível carregar.</Estado>
+          ) : !uGrafico ? (
+            <Estado>Sem previsão nem venda na semana.</Estado>
+          ) : (
+            <>
+              <GraficoDias
+                titulo={`Por dia, em ${uGrafico.unidade === "KG" ? "kg" : "un"}`}
+                ondeEstaATabela="Valores dia a dia na tela de acompanhamento."
+                largura={460}
+                unidade={uGrafico.unidade}
+                pontos={uGrafico.dias.map((d) => ({
+                  data: d.data,
+                  previsto: d.previsto === null ? null : Number(d.previsto),
+                  vendido: d.vendido === null ? null : Number(d.vendido),
+                }))}
+              />
+              <Link
+                to="/acompanhamento"
+                className="mt-2 inline-flex items-center gap-1 self-start text-sm font-semibold text-primary hover:underline"
+              >
+                Abrir acompanhamento
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+            </>
+          )}
+        </Cartao>
 
-          <CartaoKpi titulo="Vendido" Icone={ShoppingBasket} link={{ para: "/consultar", rotulo: "Consultar vendas" }}>
-            {vendas.isPending ? (
-              <Estado>Carregando…</Estado>
-            ) : vendas.isError ? (
-              <Estado>Não foi possível carregar.</Estado>
-            ) : totaisVendas.length === 0 ? (
-              <Estado>Nenhuma venda no período.</Estado>
-            ) : (
-              <>
-                <Totais totais={totaisVendas} />
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Últimos 7 dias ({formatarData(inicio7).slice(0, 5)} a {formatarData(ontem).slice(0, 5)})
-                </p>
-              </>
-            )}
-          </CartaoKpi>
-
-          <CartaoKpi titulo="Perda" Icone={Trash2} link={{ para: "/consultar?tipo=perdas", rotulo: "Consultar perdas" }}>
-            {perdas.isPending ? (
-              <Estado>Carregando…</Estado>
-            ) : perdas.isError ? (
-              <Estado>Não foi possível carregar.</Estado>
-            ) : totaisPerdas.length === 0 ? (
-              <Estado>Nenhuma perda no período.</Estado>
-            ) : (
-              <>
-                <Totais totais={totaisPerdas} />
-                <ul className="mt-1 text-sm text-muted-foreground">
-                  {totaisPerdas.map((p) => {
-                    const venda = totaisVendas.find((v) => v.unidade === p.unidade)
-                    if (!venda) return null
-                    return (
-                      <li key={p.unidade}>
-                        <span className="font-semibold text-foreground tabular-nums">
-                          {formatarPercentual(Number(p.quantidade) / Number(venda.quantidade))}
-                        </span>{" "}
-                        do vendido em {p.unidade === "KG" ? "kg" : "un"}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </>
-            )}
-          </CartaoKpi>
+        <div className="sm:col-span-2 lg:col-span-7">
+          <AcertoPorLoja inicio={inicio7} fim={ontem} />
+        </div>
+        <div className="sm:col-span-2 lg:col-span-5">
+          <PrecisaDeVoce pendencias={pendencias} carregando={carregando} />
         </div>
       </div>
-
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <ChartLine className="size-4" aria-hidden="true" />
-        Vendas e perdas de {formatarData(inicio7)} a {formatarData(ontem)}, pelo que foi registrado.
-      </p>
     </section>
   )
 }

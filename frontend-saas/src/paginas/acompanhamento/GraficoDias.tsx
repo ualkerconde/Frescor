@@ -3,9 +3,11 @@
  * biblioteca de gráfico).
  *
  * Regras da skill de dataviz:
- * - Duas séries de identidade: previsto (azul) e vendido (laranja), par
- *   validado com o validate_palette (CVD ΔE 24,7, contraste ≥ 3:1 no branco).
- *   A marca (#0E6B5C) reprova no piso de croma para série: fica para a UI.
+ * - Duas séries de identidade: previsto (azul) e vendido (âmbar), par
+ *   validado com o validate_palette no modo escuro, sobre o card #121A2E
+ *   (faixa de luminosidade 0,48–0,67, CVD ΔE 24,8, normal 27,1, contraste
+ *   ≥ 3:1). O âmbar da interface (#F5B83D) é claro demais para série no
+ *   escuro (L≈0,80): o da série é um tom abaixo.
  * - Um eixo só (mesma unidade), linhas de 2px, marcadores de 8px, grade
  *   recessiva, legenda sempre presente e rótulo direto no último ponto.
  * - Passar o mouse (ou o dedo) mostra a linha vertical e o valor do dia.
@@ -16,8 +18,8 @@ import { useId, useState } from "react"
 import { diaDaSemana, formatarData, formatarPrevisao } from "@/lib/formato"
 import type { Unidade } from "@/lib/api/tipos"
 
-export const COR_PREVISTO = "#2a78d6"
-export const COR_VENDIDO = "#eb6834"
+export const COR_PREVISTO = "#3b8fd9"
+export const COR_VENDIDO = "#c2801a"
 
 interface Ponto {
   data: string
@@ -25,7 +27,7 @@ interface Ponto {
   vendido: number | null
 }
 
-const LARGURA = 720
+const LARGURA_PADRAO = 720
 const ALTURA = 240
 const M = { topo: 16, direita: 72, base: 32, esquerda: 48 }
 
@@ -37,7 +39,21 @@ function passo(maximo: number): number {
   return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * potencia
 }
 
-export function GraficoDias({ pontos, unidade, titulo }: { pontos: Ponto[]; unidade: Unidade; titulo: string }) {
+export function GraficoDias({
+  pontos,
+  unidade,
+  titulo,
+  ondeEstaATabela = "Valores dia a dia na tabela abaixo.",
+  largura: LARGURA = LARGURA_PADRAO,
+}: {
+  pontos: Ponto[]
+  unidade: Unidade
+  titulo: string
+  /** Largura do desenho (viewBox). Num cartão estreito, menor = letras maiores. */
+  largura?: number
+  /** Frase para o leitor de tela dizendo onde está a visão em tabela (na visão geral, é outra tela). */
+  ondeEstaATabela?: string
+}) {
   const id = useId()
   const [ativo, setAtivo] = useState<number | null>(null)
   const valores = pontos.flatMap((p) => [p.previsto, p.vendido]).filter((v): v is number => v !== null)
@@ -96,7 +112,7 @@ export function GraficoDias({ pontos, unidade, titulo }: { pontos: Ponto[]; unid
   }
 
   const pontoAtivo = ativo === null ? null : pontos[ativo]
-  const resumo = `${titulo}: ${pontos.length} dias. Valores dia a dia na tabela abaixo.`
+  const resumo = `${titulo}: ${pontos.length} dias. ${ondeEstaATabela}`
   const cada = Math.max(1, Math.ceil(pontos.length / 8))
 
   return (
@@ -153,7 +169,7 @@ export function GraficoDias({ pontos, unidade, titulo }: { pontos: Ponto[]; unid
                   if (v === null) return null
                   const grande = ativo === i
                   return (
-                    <circle key={p.data} cx={x(i)} cy={y(v)} r={grande ? 5 : 4} fill={cor} stroke="#fff" strokeWidth={2} />
+                    <circle key={p.data} cx={x(i)} cy={y(v)} r={grande ? 5 : 4} fill={cor} stroke="var(--fr-card)" strokeWidth={2} />
                   )
                 })}
               </g>

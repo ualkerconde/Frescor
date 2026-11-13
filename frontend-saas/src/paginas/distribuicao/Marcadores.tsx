@@ -12,7 +12,7 @@ const PILL = "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm 
 const ESTILO: Record<GravidadeSituacao, string> = {
   sucesso: "bg-success-bg text-success",
   aviso: "bg-warning-bg text-warning",
-  andamento: "bg-highlight text-foreground",
+  andamento: "bg-highlight-bg text-highlight",
   neutra: "bg-surface text-foreground",
 }
 
@@ -43,7 +43,7 @@ export function SituacaoRomaneio({ status }: { status: "rascunho" | "aprovado" }
       Aprovado
     </span>
   ) : (
-    <span className={cn(PILL, "bg-highlight text-foreground")}>
+    <span className={cn(PILL, "bg-highlight-bg text-highlight")}>
       <PencilLine className="size-4" aria-hidden="true" />
       Rascunho
     </span>

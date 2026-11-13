@@ -1,38 +1,47 @@
 /*
  * Estrutura das telas autenticadas do SaaS (passo W5; redesenhada em
- * 28/10/2026 e de novo em 11/11/2026 no padrão da referência que o sócio do
- * Ualker mandou), pela skill Frescor:
+ * 28/10/2026, em 11/11/2026 no padrão da referência do sócio do Ualker e em
+ * 13/11/2026 no visual "Comando" azul-noite e âmbar, D117).
  *
- * - Barra lateral em --secondary, lisa (é o <header> da página, papel
- *   "banner"): bloco da marca (logo + "Central de produção"), navegação por
- *   seções com rótulo em maiúsculas (Visão, Dados, Planejamento, Operação,
- *   Configuração), item atual com fundo branco a 8% e ícone dourado, e no
- *   rodapé o cartão de quem está logado (gestor · central · negócio, de
- *   GET /web/me) com "Sair". Abaixo de 1024px vira uma faixa no topo, com a
- *   navegação rolando de lado.
- * - Barra do topo, branca e fixa: seção em maiúsculas e o nome da tela
- *   ("PLANEJAMENTO / Produção"), a busca de telas (Ctrl K). A data fica no cabeçalho de cada tela.
- *   O título da tela (h1) continua no conteúdo.
+ * - Barra lateral de ícones (76px, --rail), lisa, é o <header> da página
+ *   (papel "banner"): selo do Frescor no topo, um ícone por tela, separados
+ *   por seção, e no pé "Trocar senha", "Sair" e o avatar de quem está logado.
+ *   Item atual: fundo --primary-soft, ícone âmbar e um traço âmbar de 2px à
+ *   esquerda.
+ * - Ícone nunca fica sem nome (skill): cada ícone tem o rótulo em texto, que
+ *   aparece como dica ao lado ao passar o mouse ou focar pelo teclado, e é o
+ *   nome que o leitor de tela lê. O nome da seção fica para o leitor de tela.
+ * - Abaixo de 1024px a barra vira uma faixa no topo, com ícone + rótulo
+ *   visíveis e a navegação rolando de lado.
+ * - Barra do topo (fixa): seção em maiúsculas e o nome da tela
+ *   ("PLANEJAMENTO / Produção") e a busca de telas (Ctrl K). O título da
+ *   tela (h1) continua no conteúdo.
  *
- * "Sair" é um botão discreto (ghost): a ação principal de cada tela fica
- * com o conteúdo, não com a navegação (skill: uma ação principal por tela).
- * Ícones sempre com texto. Link "Pular para o conteúdo" para teclado.
+ * "Sair" é discreto: a ação principal de cada tela fica com o conteúdo, não
+ * com a navegação (skill: uma ação principal por tela). Link "Pular para o
+ * conteúdo" para teclado.
  */
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
-import { LogOut } from "lucide-react"
+import { KeyRound, LogOut } from "lucide-react"
 import { NavLink, Outlet, useLocation } from "react-router"
 import { Logo } from "@/components/marca/Logo"
-import { Button } from "@/components/ui/button"
 import { apiJson } from "@/lib/api/cliente"
 import type { Me } from "@/lib/api/tipos"
 import { useSessao } from "@/lib/sessao/contexto"
 import { BuscaTelas } from "./BuscaTelas"
 import { GRUPOS_MENU, localizar } from "./menu"
 
+/** Quadrado de 44px do ícone na barra (área de toque da skill). */
+const ITEM =
+  "group relative inline-flex h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-ink-muted transition-colors duration-150 hover:bg-surface hover:text-foreground lg:w-11 lg:justify-center lg:px-0"
 
-/** Foco visível sobre a barra escura: anel branco no lugar do --primary (que some no escuro). */
-const FOCO_ESCURO = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+/**
+ * Dica com o nome do ícone: no desktop flutua à direita da barra e aparece
+ * no hover e no foco; no celular é o rótulo visível ao lado do ícone.
+ */
+const DICA =
+  "text-sm font-semibold whitespace-nowrap lg:pointer-events-none lg:absolute lg:top-1/2 lg:left-full lg:z-50 lg:ml-3 lg:-translate-y-1/2 lg:rounded-lg lg:border lg:border-line lg:bg-surface lg:px-2.5 lg:py-1.5 lg:text-foreground lg:opacity-0 lg:shadow-elevado lg:transition-opacity lg:duration-150 lg:group-hover:opacity-100 lg:group-focus-visible:opacity-100"
 
 /** Iniciais para o avatar: "Gestor Central Teste" -> "GC". */
 function iniciais(nome: string): string {
@@ -51,22 +60,35 @@ function QuemEsta() {
     queryFn: () => apiJson<Me>("/web/me"),
   })
 
-  if (isPending) return <span className="text-sm text-ink-muted">Carregando…</span>
-  if (isError || !data) return <span className="text-sm text-ink-muted">Não foi possível carregar seus dados.</span>
+  const detalhe = isPending ? (
+    <span className="text-sm text-ink-muted">Carregando…</span>
+  ) : isError || !data ? (
+    <span className="text-sm text-ink-muted">Não foi possível carregar seus dados.</span>
+  ) : (
+    <span className="flex flex-col leading-tight">
+      <span className="text-sm font-semibold text-foreground">{data.usuario.nome}</span>
+      <span className="text-xs text-ink-muted">
+        {data.central.nome} · {data.negocio.nome}
+      </span>
+    </span>
+  )
 
   return (
-    <span className="flex min-w-0 items-center gap-3">
+    // tabIndex 0: dá para ver no teclado quem está logado (a dica abre no foco).
+    <span tabIndex={0} className="group relative inline-flex shrink-0 items-center rounded-full">
       <span
         aria-hidden="true"
-        className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-white"
+        className="grid size-10 place-items-center rounded-full border border-line bg-primary-soft text-[13px] font-semibold text-foreground"
       >
-        {iniciais(data.usuario.nome)}
+        {data ? iniciais(data.usuario.nome) : "··"}
       </span>
-      <span className="flex min-w-0 flex-col leading-tight">
-        <span className="truncate text-sm font-semibold text-white">{data.usuario.nome}</span>
-        <span className="truncate text-xs text-ink-muted">
-          {data.central.nome} · {data.negocio.nome}
-        </span>
+      <span
+        className={cn(
+          "pointer-events-none absolute top-full right-0 z-50 mt-2 rounded-lg border border-line bg-surface px-3 py-2 whitespace-nowrap opacity-0 shadow-elevado transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100",
+          "lg:top-auto lg:right-auto lg:bottom-0 lg:left-full lg:mt-0 lg:ml-3",
+        )}
+      >
+        {detalhe}
       </span>
     </span>
   )
@@ -74,31 +96,24 @@ function QuemEsta() {
 
 function Navegacao() {
   return (
-    <nav aria-label="Principal" className="-mx-1 overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0">
-      <div className="flex gap-1 lg:flex-col lg:gap-4">
-        {GRUPOS_MENU.map(({ grupo, itens }) => (
-          <div key={grupo} className="flex gap-1 lg:flex-col lg:gap-0.5">
-            <p className="hidden px-3 pb-1.5 text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase lg:block">
-              {grupo}
-            </p>
-            {itens.filter((i) => !i.foraDoMenu).map(({ para, rotulo, Icone }) => (
+    <nav aria-label="Principal" className="-mx-1 min-w-0 overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0">
+      <div className="flex gap-1 lg:flex-col lg:items-center lg:gap-0">
+        {GRUPOS_MENU.map(({ grupo, itens }, i) => (
+          <div
+            key={grupo}
+            className={cn("flex gap-1 lg:flex-col lg:items-center", i > 0 && "lg:mt-2 lg:border-t lg:border-ink-line lg:pt-2")}
+          >
+            <p className="sr-only">{grupo}</p>
+            {itens.filter((it) => !it.foraDoMenu).map(({ para, rotulo, Icone }) => (
               <NavLink
                 key={para}
                 to={para}
                 className={({ isActive }) =>
-                  cn(
-                    "group inline-flex h-11 shrink-0 items-center gap-3 rounded-lg px-3 text-[15px] font-semibold transition-colors duration-150",
-                    FOCO_ESCURO,
-                    isActive ? "bg-white/[0.08] text-white" : "text-ink-muted hover:bg-white/[0.04] hover:text-white",
-                  )
+                  cn(ITEM, isActive && "bg-primary-soft text-primary shadow-[inset_2px_0_0_var(--fr-primary)] hover:text-primary")
                 }
               >
-                {({ isActive }) => (
-                  <>
-                    <Icone className={cn("size-[18px]", isActive && "text-highlight")} aria-hidden="true" />
-                    {rotulo}
-                  </>
-                )}
+                <Icone className="size-5" aria-hidden="true" />
+                <span className={DICA}>{rotulo}</span>
               </NavLink>
             ))}
           </div>
@@ -111,43 +126,27 @@ function Navegacao() {
 function BarraLateral() {
   const { sair } = useSessao()
   return (
-    <header className="bg-heading text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-      {/*
-        No desktop esta parte ocupa a altura que sobra e rola sozinha. `lg:flex-nowrap` é obrigatório: com
-        `flex-wrap` + coluna, numa janela baixa (ex.: notebook 1366×768 com a barra do navegador) o menu
-        quebrava numa segunda coluna, cortada pela largura da barra (bug visto pelo Ualker em 11/11/2026).
-      */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 pt-4 pb-3 [scrollbar-color:var(--fr-ink-line)_transparent] [scrollbar-width:thin] lg:min-h-0 lg:flex-1 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-0 lg:overflow-x-hidden lg:overflow-y-auto lg:px-3 lg:pt-5 lg:pb-4">
-        <div className="flex shrink-0 flex-col gap-1 lg:border-b lg:border-ink-line lg:px-3 lg:pb-5">
-          <Logo tamanho={28} sobreEscuro className="[&>span:last-child]:text-[21px]" />
-          <span className="hidden pl-[38px] text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase lg:block">
-            Central de produção
-          </span>
-        </div>
-        <div className="order-3 w-full lg:order-none lg:mt-6">
-          <Navegacao />
-        </div>
+    // No celular: selo e conta numa linha, a navegação inteira na linha de baixo (rolando de lado).
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-rail px-3 py-2 lg:sticky lg:top-0 lg:z-40 lg:h-screen lg:flex-col lg:flex-nowrap lg:border-r lg:border-b-0 lg:px-0 lg:py-5">
+      <Logo comNome={false} tamanho={40} className="shrink-0 lg:mb-4" />
+      <div className="order-last w-full min-w-0 lg:order-none">
+        <Navegacao />
       </div>
-
-      {/* Rodapé fixo: usuário e "Sair" numa linha só, para sobrar altura para o menu. */}
-      <div className="flex shrink-0 items-center gap-3 border-t border-ink-line px-4 py-3 lg:gap-2 lg:px-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1 lg:pl-3">
-          <QuemEsta />
-          <NavLink
-            to="/senha"
-            className={cn("self-start rounded pl-12 text-xs text-ink-muted hover:text-white hover:underline", FOCO_ESCURO)}
-          >
-            Trocar senha
-          </NavLink>
-        </div>
-        <Button
-          variant="ghost"
-          onClick={sair}
-          className={cn("text-ink-muted hover:bg-white/[0.04] hover:text-white lg:px-2.5", FOCO_ESCURO)}
+      <div className="ml-auto flex shrink-0 items-center gap-1 lg:mt-auto lg:ml-0 lg:flex-col lg:gap-1">
+        <NavLink
+          to="/senha"
+          className={({ isActive }) => cn(ITEM, isActive && "bg-primary-soft text-primary hover:text-primary")}
         >
-          <LogOut aria-hidden="true" />
-          Sair
-        </Button>
+          <KeyRound className="size-5" aria-hidden="true" />
+          <span className={cn(DICA, "max-lg:sr-only")}>Trocar senha</span>
+        </NavLink>
+        <button type="button" onClick={sair} className={ITEM}>
+          <LogOut className="size-5" aria-hidden="true" />
+          <span className={cn(DICA, "max-lg:sr-only")}>Sair</span>
+        </button>
+        <span className="ml-1 lg:mt-2 lg:ml-0">
+          <QuemEsta />
+        </span>
       </div>
     </header>
   )
@@ -158,16 +157,20 @@ function BarraTopo() {
   const onde = localizar(pathname)
 
   return (
-    <section aria-label="Barra superior" className="sticky top-0 z-30 border-b border-line bg-card">
+    <section
+      aria-label="Barra superior"
+      className="sticky top-0 z-30 border-b border-line bg-background"
+    >
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="min-w-0">
           {onde && (
-            <>
-              <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">{onde.grupo}</p>
-              <p className="truncate font-heading text-lg leading-tight font-semibold text-heading">
-                {onde.item.rotulo}
-              </p>
-            </>
+            <p className="flex min-w-0 items-baseline gap-2 truncate">
+              <span className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">{onde.grupo}</span>
+              <span aria-hidden="true" className="text-muted-foreground">
+                /
+              </span>
+              <span className="truncate font-heading text-base font-semibold text-heading">{onde.item.rotulo}</span>
+            </p>
           )}
         </div>
         <BuscaTelas />
@@ -178,7 +181,7 @@ function BarraTopo() {
 
 export function LayoutAutenticado() {
   return (
-    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
+    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[76px_minmax(0,1fr)]">
       <a
         href="#conteudo"
         className="sr-only z-50 rounded-lg bg-card px-4 py-2 font-semibold text-primary focus:not-sr-only focus:absolute focus:top-2 focus:left-2"

@@ -7,9 +7,9 @@ import { Slot } from "radix-ui"
 /*
  * Botão do shadcn ajustado à skill Frescor:
  * - altura mínima 44px (área de toque), texto 16px 600, raio 10px;
- * - primário (default): fundo --primary, texto branco, hover --primary-hover;
+ * - primário (default): fundo --primary, texto na tinta escura (--on-color), hover --primary-hover;
  * - secundário (secondary): borda 2px --primary, texto --primary, fundo transparente;
- * - perigo (destructive): fundo --error, texto branco;
+ * - perigo (destructive): fundo --error, texto --on-color;
  * - foco visível: anel de 2px --primary com 2px de afastamento;
  * - `carregando`: spinner + texto (ex.: "Enviando…") e clique bloqueado.
  * Ícones lucide em 20px. Rótulo sempre um verbo ("Importar vendas").
@@ -20,9 +20,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // Cor lisa e um traço de sombra; sem degradê nem brilho.
-        default: "bg-primary text-primary-foreground shadow-[0_1px_2px_rgb(21_33_43/0.12)] hover:bg-primary-hover",
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         secondary: "border-2 border-primary bg-transparent text-primary hover:bg-surface",
-        destructive: "bg-error text-white shadow-[0_1px_2px_rgb(21_33_43/0.12)] hover:bg-error/90",
+        destructive: "bg-error text-on-color hover:bg-error/90",
         outline: "border-input-border bg-card text-foreground hover:bg-surface",
         ghost: "text-foreground hover:bg-surface",
         link: "text-primary underline-offset-4 hover:underline",
