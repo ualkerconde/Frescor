@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
 from app.api import (
+    acompanhamento,
     auth,
     auth_web,
     cadastros,
@@ -28,6 +29,8 @@ from app.api import (
     eventos,
     health,
     importacao,
+    integracao_vendas,
+    perdas_lancamento,
     previsoes,
     producao,
     produtos,
@@ -35,6 +38,7 @@ from app.api import (
     web,
     zeragem,
 )
+from app.core.config import settings
 from app.core.erros_validacao import tratar_erro_de_validacao
 from app.core.scheduler import iniciar_agendador, parar_agendador
 from fastapi.middleware.cors import CORSMiddleware
@@ -60,14 +64,19 @@ app = FastAPI(
 # Erros de validação da entrada em português, num só lugar.
 app.add_exception_handler(RequestValidationError, tratar_erro_de_validacao)
 
+# Em produção, CORS_ORIGINS no .env (vírgula entre as origens) substitui a
+# lista de desenvolvimento; sem ela, vale a lista de sempre.
+ORIGENS_DESENVOLVIMENTO = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://192.168.100.8:3000",
+    "http://192.168.0.65:3000",
+]
+ORIGENS_CORS = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()] or ORIGENS_DESENVOLVIMENTO
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://192.168.100.8:3000",
-        "http://192.168.0.65:3000",
-    ],
+    allow_origins=ORIGENS_CORS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,6 +98,9 @@ app.include_router(producao.router, tags=["Ordem de produção (SaaS web)"])
 app.include_router(distribuicao.router, tags=["Distribuição e romaneio (SaaS web)"])
 app.include_router(recebimentos.router, tags=["Recebimento (app mobile)"])
 app.include_router(cadastros.router, tags=["Cadastros (SaaS web)"])
+app.include_router(perdas_lancamento.router)
+app.include_router(acompanhamento.router)
+app.include_router(integracao_vendas.router)
 
 
 @app.get("/")

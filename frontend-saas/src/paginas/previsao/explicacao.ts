@@ -2,7 +2,7 @@
  * Explicação de cada previsão em português simples, montada só com os
  * componentes que o backend grava (F7/F8). Nenhuma conta nova é feita aqui:
  * o número exibido é sempre o do backend; este arquivo só descreve como ele
- * foi formado (base × tendência, cold start, eventos).
+ * foi formado (base × tendência × calendário, cold start, eventos).
  *
  * - `resumo`: uma frase curta, sempre visível na linha da tabela.
  * - `passos`: a conta passo a passo, para quem abre a linha.
@@ -88,8 +88,46 @@ function passoTendencia(item: ItemPrevisao): string {
     : `Tendência: ${descricao} (${formatarVariacao(item.tendencia)}).`
 }
 
+/**
+ * Fatores de calendário que mexeram no número (D112–D114), na ordem da
+ * conta. Fator que arredonda para 0% fica de fora.
+ */
+function fatoresAtivos(item: ItemPrevisao): { texto: string; valor: number }[] {
+  const f = item.fatores
+  if (!f) return []
+  const lista = [
+    { texto: "mesmo período do ano passado", valor: Number(f.ano) },
+    { texto: "semana do mês", valor: Number(f.semana_mes) },
+    { texto: "dia do mês", valor: Number(f.dia_mes) },
+    { texto: `feriado (${f.nome_feriado ?? "feriado"})`, valor: Number(f.feriado) },
+  ]
+  return lista.filter((x) => formatarVariacao(x.valor) !== "0%")
+}
+
+/** Produto de todos os fatores (inclusive os que arredondam para 0%), como no backend. */
+function produtoCalendario(item: ItemPrevisao): number {
+  const f = item.fatores
+  if (!f) return 1
+  return Number(f.ano) * Number(f.semana_mes) * Number(f.dia_mes) * Number(f.feriado)
+}
+
+function calendarioCurto(item: ItemPrevisao): string {
+  const ativos = fatoresAtivos(item)
+  if (ativos.length === 0) return ""
+  const nome = item.fatores?.nome_feriado
+  return ` × calendário ${formatarVariacao(produtoCalendario(item))}${nome && ativos.some((x) => x.texto.startsWith("feriado")) ? ` (${nome})` : ""}`
+}
+
+function passoCalendario(item: ItemPrevisao): string | null {
+  const ativos = fatoresAtivos(item)
+  if (ativos.length === 0) return null
+  const partes = ativos.map((x) => `${x.texto} ${formatarVariacao(x.valor)}`).join("; ")
+  return `Calendário: ${partes}. Vem do histórico desta loja: como este produto costuma vender nesses dias em relação ao normal.`
+}
+
 function passoConta(item: ItemPrevisao): string {
-  return `Conta: ${qtd(item, item.base)} × ${fator.format(Number(item.tendencia))} = ${qtd(item, item.previsao_propria)}.`
+  const calendario = fatoresAtivos(item).length > 0 ? ` × ${fator.format(produtoCalendario(item))} (calendário)` : ""
+  return `Conta: ${qtd(item, item.base)} × ${fator.format(Number(item.tendencia))}${calendario} = ${qtd(item, item.previsao_propria)}.`
 }
 
 function semanasDeHistorico(item: ItemPrevisao): number {
@@ -131,7 +169,10 @@ export function explicarPrevisao(item: ItemPrevisao): Explicacao {
   const temPropria = item.previsao_propria !== null && item.base !== null
 
   if (temPropria) {
-    passos.push(passoBase(item), passoTendencia(item), passoConta(item))
+    passos.push(passoBase(item), passoTendencia(item))
+    const calendario = passoCalendario(item)
+    if (calendario) passos.push(calendario)
+    passos.push(passoConta(item))
   }
 
   const usaProxy = item.pouco_historico && item.proxy !== null && item.origem_proxy !== null
@@ -151,7 +192,7 @@ export function explicarPrevisao(item: ItemPrevisao): Explicacao {
       resumo = `Pouco histórico: média de ${ORIGEM_PROXY_CURTA[item.origem_proxy!]}`
     }
   } else {
-    resumo = `${nomeBase(item)}${tendenciaCurta(item)}`
+    resumo = `${nomeBase(item)}${tendenciaCurta(item)}${calendarioCurto(item)}`
     if (item.pouco_historico) {
       passos.push(
         `Pouco histórico: ${semanasDeHistorico(item)} de ${SEMANAS_BASE} semanas de vendas próprias${desde(item)} e nenhum produto parecido para comparar. Vale só a conta acima; confira o número.`,

@@ -13,7 +13,10 @@ const raiz = fileURLToPath(new URL('..', import.meta.url))
 const css = readFileSync(resolve(raiz, 'src/index.css'), 'utf8')
 const skill = readFileSync(resolve(raiz, '../.claude/skills/frescor-design-system/SKILL.md'), 'utf8')
 
-/** Tokens da tabela "Cores (hex)" da skill: { primary: '#0E6B5C', 'success-bg': ... } */
+/**
+ * Tokens da tabela "Cores do web" da skill: { primary: '#F5B83D', 'success-bg': ... }.
+ * Só as linhas que começam com "| `--"; a tabela do app mobile escreve os nomes sem "--".
+ */
 function tokensDaSkill(): Record<string, string> {
   const tokens: Record<string, string> = {}
   for (const linha of skill.split('\n')) {
@@ -46,36 +49,46 @@ function contraste(a: string, b: string): number {
 describe('tema x skill Frescor', () => {
   const skillTokens = tokensDaSkill()
 
-  it('a tabela da skill foi lida (17 cores)', () => {
-    expect(Object.keys(skillTokens)).toHaveLength(17)
+  it('a tabela de cores do web foi lida (24 cores do visual Comando, D117)', () => {
+    expect(Object.keys(skillTokens)).toHaveLength(24)
   })
 
   it.each(Object.entries(tokensDaSkill()))('--fr-%s tem o valor da skill (%s)', (nome, valor) => {
     expect(tokenDoCss(nome)).toBe(valor)
   })
 
-  const branco = '#ffffff'
+  // Tema escuro único (visual Comando): os pares são os que aparecem nas telas.
   const pares: [string, string, string, number][] = [
     ['texto sobre o fundo', 'text', 'bg', 4.5],
+    ['texto sobre o card', 'text', 'card', 4.5],
+    ['texto sobre surface', 'text', 'surface', 4.5],
     ['texto secundário sobre o fundo', 'muted', 'bg', 4.5],
+    ['texto secundário sobre o card', 'muted', 'card', 4.5],
     ['texto secundário sobre surface', 'muted', 'surface', 4.5],
-    ['branco sobre o primário', 'branco', 'primary', 4.5],
-    ['branco sobre o primário (hover)', 'branco', 'primary-hover', 4.5],
-    ['primário sobre o fundo', 'primary', 'bg', 4.5],
-    ['texto sobre o âmbar (highlight)', 'text', 'accent', 4.5],
+    ['texto secundário sobre a barra lateral', 'ink-muted', 'rail', 4.5],
+    ['tinta sobre o primário (botão)', 'on-color', 'primary', 4.5],
+    ['tinta sobre o primário (hover)', 'on-color', 'primary-hover', 4.5],
+    ['tinta sobre o erro (botão perigo)', 'on-color', 'error', 4.5],
+    ['primário (link, número) sobre o fundo', 'primary', 'bg', 4.5],
+    ['primário sobre o card', 'primary', 'card', 4.5],
+    ['âmbar sobre highlight-bg (badge)', 'accent', 'highlight-bg', 4.5],
     ['sucesso sobre sucesso-bg', 'success', 'success-bg', 4.5],
     ['atenção sobre atenção-bg', 'warning', 'warning-bg', 4.5],
     ['erro sobre erro-bg', 'error', 'error-bg', 4.5],
-    ['branco sobre o erro (botão perigo)', 'branco', 'error', 4.5],
+    ['erro como texto sobre o card', 'error', 'card', 4.5],
     ['título (heading) sobre o fundo', 'secondary', 'bg', 4.5],
+    ['azul (dado) sobre o card', 'blue', 'card', 3],
     ['borda de controle sobre o card', 'input-border', 'card', 3],
+    ['borda de controle sobre o fundo (campo)', 'input-border', 'bg', 3],
+    ['texto sobre primary-soft (item ativo, hover de linha)', 'text', 'primary-soft', 4.5],
+    ['texto secundário sobre primary-soft', 'muted', 'primary-soft', 4.5],
+    ['primário sobre primary-soft (ícone ativo)', 'primary', 'primary-soft', 4.5],
   ]
   it.each(pares)('contraste: %s', (_rotulo, a, b, minimo) => {
-    const cor = (n: string) => (n === 'branco' ? branco : skillTokens[n])
-    expect(contraste(cor(a), cor(b))).toBeGreaterThanOrEqual(minimo)
+    expect(contraste(skillTokens[a], skillTokens[b])).toBeGreaterThanOrEqual(minimo)
   })
 
-  it('não há bloco de modo escuro (a skill ainda não define)', () => {
+  it('tema escuro único: não há bloco .dark (não há alternância claro/escuro)', () => {
     expect(css).not.toMatch(/\.dark\s*\{/)
   })
 })

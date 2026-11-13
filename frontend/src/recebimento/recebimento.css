@@ -371,6 +371,26 @@ button.rcb-card {
   .rcb-girando { animation: none; }
 }
 
+/* Tela de Perda (D110): reaproveita o visual do Recebimento. */
+.rcb-botao-perigo {
+  border: 2px solid var(--error);
+  background: transparent;
+  color: var(--error);
+}
+
+.rcb-secao {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.rcb-motivos-opcoes-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
 .rcb-so-leitor {
   position: absolute;
   width: 1px;

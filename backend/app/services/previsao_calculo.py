@@ -45,6 +45,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from app.models.evento import TipoAjuste
+from app.services import previsao_fatores
+from app.services.previsao_fatores import FATOR_FERIADO, FATORES_PADRAO, Fatores
 
 JANELA_BASE_SEMANAS = 6  # D18
 DIAS_TENDENCIA = 7  # D19
@@ -54,6 +56,9 @@ TENDENCIA_MAXIMA = Decimal("1.3")  # D19
 # Quantos dias antes da referência a série precisa ter: a base de cada um
 # dos 7 dias da tendência olha 6 semanas para trás.
 DIAS_HISTORICO_NECESSARIOS = 7 * JANELA_BASE_SEMANAS + DIAS_TENDENCIA - 1
+# Com os fatores de calendário (D112–D114): um ano de razões, e a base de
+# cada uma olha 6 semanas para trás.
+DIAS_HISTORICO_FATORES = 371 + 7 * JANELA_BASE_SEMANAS
 # Cold start (doc §4.2, D20): o peso do histórico próprio vai de 0% (1ª
 # semana) a 100% depois de 6 semanas completas.
 SEMANAS_COLD_START = 6
@@ -128,6 +133,8 @@ class ComponentesPrevisao:
     previsao: Decimal | None
     # "semanal" (últimas 6 semanas) ou "sazonal" (mesmo período do ano anterior).
     metodo: str = METODO_SEMANAL
+    # Fatores de calendário (D112–D114; só no semanal). Todos 1 = sem efeito.
+    fatores: Fatores = Fatores()
 
 
 def resumir(valores: list[Decimal], estatistica: str = ESTATISTICA_PADRAO) -> Decimal:
@@ -237,6 +244,7 @@ def prever(
     eventos: Sequence[EventoAplicavel] = (),
     estatistica: str = ESTATISTICA_PADRAO,
     metodo_tendencia: str = TENDENCIA_PADRAO,
+    fatores: frozenset[str] = FATORES_PADRAO,
 ) -> ComponentesPrevisao:
     """
     Previsão de venda para `data_alvo`, usando só o que se sabe até
@@ -246,16 +254,28 @@ def prever(
     `eventos` são os do produto nesta loja: os dias que eles cobrem saem
     da base e da tendência. O ajuste no alvo NÃO é aplicado aqui (ver
     `aplicar_eventos`).
+
+    `fatores`: os fatores de calendário ligados (`previsao_fatores`, D112–
+    D114). Com o de feriado ligado, dia de feriado nacional também sai da
+    base e da tendência. Vazio = o cálculo de antes (v2), para o backtest.
     """
     if data_alvo <= data_referencia:
         raise ValueError("A data prevista tem de ser depois da data de referência.")
-    conhecida = {
+    sem_evento = {
         dia: None if any(e.cobre(dia) for e in eventos) else valor
         for dia, valor in serie.items()
         if dia <= data_referencia
     }
+    tira_feriado = FATOR_FERIADO in fatores
+    conhecida = (
+        {d: None if previsao_fatores.feriado(d) else v for d, v in sem_evento.items()} if tira_feriado else sem_evento
+    )
     base, semanas = base_dia_semana(conhecida, data_referencia, data_alvo, estatistica)
     fator, bruta, dias = tendencia(conhecida, data_referencia, estatistica, metodo_tendencia)
+    calendario = Fatores()
+    if fatores and base is not None:
+        calendario = _fatores_calendario(conhecida, sem_evento, data_referencia, data_alvo, eventos, estatistica,
+                                         fatores)
     return ComponentesPrevisao(
         data_alvo=data_alvo,
         base=base,
@@ -263,7 +283,45 @@ def prever(
         tendencia=fator,
         tendencia_bruta=bruta,
         dias_na_tendencia=dias,
-        previsao=None if base is None else base * fator,
+        previsao=None if base is None else base * fator * calendario.produto,
+        fatores=calendario,
+    )
+
+
+def _fatores_calendario(
+    conhecida: Serie,
+    sem_evento: Serie,
+    data_referencia: date,
+    data_alvo: date,
+    eventos: Sequence[EventoAplicavel],
+    estatistica: str,
+    ligados: frozenset[str],
+) -> Fatores:
+    """Monta as razões venda ÷ base do passado e chama `previsao_fatores.calcular`."""
+    cache: dict[date, float | None] = {}
+
+    def base_do_dia(d: date) -> float | None:
+        if d not in cache:
+            b, _ = base_dia_semana(conhecida, d - timedelta(days=1), d, estatistica)
+            cache[d] = None if b is None else float(b)
+        return cache[d]
+
+    serie_float = {d: (None if v is None else float(v)) for d, v in conhecida.items()}
+    razoes = previsao_fatores.razoes(serie_float, data_referencia, previsao_fatores.DIAS_RAZOES, base_do_dia)
+    razoes_feriado = []
+    for d, v in sem_evento.items():
+        if v is None or not previsao_fatores.feriado(d) or (data_referencia - d).days > previsao_fatores.DIAS_RAZOES:
+            continue
+        b = base_do_dia(d)
+        if b:
+            razoes_feriado.append(float(v) / b)
+    dias_tendencia = [
+        data_referencia - timedelta(days=k) for k in range(DIAS_TENDENCIA)
+        if data_referencia - timedelta(days=k) in razoes
+    ]
+    return previsao_fatores.calcular(
+        razoes, razoes_feriado, data_referencia, data_alvo, dias_tendencia,
+        tem_evento_no_alvo=any(e.cobre(data_alvo) for e in eventos), ligados=ligados,
     )
 
 

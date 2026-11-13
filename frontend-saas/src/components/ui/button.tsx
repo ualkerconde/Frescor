@@ -7,21 +7,22 @@ import { Slot } from "radix-ui"
 /*
  * Botão do shadcn ajustado à skill Frescor:
  * - altura mínima 44px (área de toque), texto 16px 600, raio 10px;
- * - primário (default): fundo --primary, texto branco, hover --primary-hover;
+ * - primário (default): fundo --primary, texto na tinta escura (--on-color), hover --primary-hover;
  * - secundário (secondary): borda 2px --primary, texto --primary, fundo transparente;
- * - perigo (destructive): fundo --error, texto branco;
+ * - perigo (destructive): fundo --error, texto --on-color;
  * - foco visível: anel de 2px --primary com 2px de afastamento;
  * - `carregando`: spinner + texto (ex.: "Enviando…") e clique bloqueado.
  * Ícones lucide em 20px. Rótulo sempre um verbo ("Importar vendas").
  */
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-transparent text-base font-semibold whitespace-nowrap transition-colors select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-60 aria-invalid:border-error [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-transparent text-base font-semibold whitespace-nowrap transition-colors duration-150 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-60 aria-invalid:border-error [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
+        // Cor lisa e um traço de sombra; sem degradê nem brilho.
         default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         secondary: "border-2 border-primary bg-transparent text-primary hover:bg-surface",
-        destructive: "bg-error text-white hover:bg-error/90",
+        destructive: "bg-error text-on-color hover:bg-error/90",
         outline: "border-input-border bg-card text-foreground hover:bg-surface",
         ghost: "text-foreground hover:bg-surface",
         link: "text-primary underline-offset-4 hover:underline",

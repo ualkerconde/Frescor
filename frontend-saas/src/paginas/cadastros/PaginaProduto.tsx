@@ -207,8 +207,19 @@ function FormularioProduto({
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-codigo`}>Código</Label>
             <Input {...campo("codigo")} value={c.codigo} onChange={(e) => mudar("codigo", e.target.value)} maxLength={64} />
-            <p className="text-sm text-muted-foreground">O mesmo código dos arquivos de vendas e perdas.</p>
+            <p className="text-sm text-muted-foreground">É por ele que a venda do sistema do cliente acha o produto.</p>
             <Erro id={`${id}-codigo-erro`} texto={erros.codigo} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-codigo_pdv`}>Código no sistema de vendas (opcional)</Label>
+            <Input
+              {...campo("codigo_pdv")}
+              value={c.codigo_pdv}
+              onChange={(e) => mudar("codigo_pdv", e.target.value)}
+              maxLength={60}
+            />
+            <p className="text-sm text-muted-foreground">Só se o sistema do cliente usar outro código para este produto.</p>
+            <Erro id={`${id}-codigo_pdv-erro`} texto={erros.codigo_pdv} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-codigo_barras`}>Código de barras (opcional)</Label>

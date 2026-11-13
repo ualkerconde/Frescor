@@ -21,7 +21,7 @@ export const LISTA: ProdutosWeb = {
 
 export function produtoDetalhe(extra: Partial<ProdutoDetalhe> = {}): ProdutoDetalhe {
   return {
-    id: 17, codigo: 'INT-007', nome: 'Pão Francês', codigo_barras: null, unidade: 'KG', peso_medio_kg: '0.0500',
+    id: 17, codigo: 'INT-007', nome: 'Pão Francês', codigo_barras: null, codigo_pdv: null, unidade: 'KG', peso_medio_kg: '0.0500',
     ativo: true, tipo_abastecimento: 'produzido', dias_validade: 1, margem_maxima_percentual: null,
     data_inicio_vigencia: null, data_fim_vigencia: null, vigencia_recorrente: false, ciclo_previsao: 'semanal',
     setor: { id: 1, nome: 'Pães' }, dias_producao: ['segunda', 'quarta'], tem_historico: true,

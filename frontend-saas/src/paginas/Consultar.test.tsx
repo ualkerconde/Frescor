@@ -231,14 +231,17 @@ describe('tela de consulta (W7)', () => {
     expect(screen.getByText(/Período de 01\/09\/2026 a 30\/09\/2026/)).toBeInTheDocument()
   })
 
-  it('sem dados: estado vazio útil com o caminho para importar', async () => {
+  it('sem dados: estado vazio útil com o caminho para a integração de vendas', async () => {
     api({
       'GET /vendas': resposta(200, consulta({ total: 0, itens: [], totais: [] })),
       'GET /perdas': resposta(200, consulta({ total: 0, itens: [], totais: [] })),
     })
     renderizarApp('/consultar')
-    expect(await screen.findByText('Nenhuma venda importada neste período.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Importar CSV' })).toHaveAttribute('href', '/importar')
+    expect(await screen.findByText('Nenhuma venda registrada neste período.')).toBeInTheDocument()
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Integração de vendas' })).toHaveAttribute(
+      'href',
+      '/integracao',
+    )
     expect(screen.getByText('Nenhuma venda no período.')).toBeInTheDocument()
     expect(screen.getByText('Nenhuma perda no período.')).toBeInTheDocument()
   })

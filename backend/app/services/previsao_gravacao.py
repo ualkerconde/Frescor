@@ -35,7 +35,10 @@ HORIZONTE_DIAS = 7  # D22
 # tendência, cold start, eventos, sazonal), muda a versão.
 # v1: base mediana (D25), tendência pela soma (D19).
 # v2 (2026-10-14): tendência pela mediana das razões diárias (D31).
-VERSAO_METODO = "2026.10-v2"
+# v3 (2026-11-13): fatores de calendário (ano anterior, semana do mês, dia do
+#     mês, feriado nacional) multiplicando base × tendência; feriado sai da
+#     base e da tendência (D112–D114, `previsao_fatores.py`).
+VERSAO_METODO = "2026.11-v3"
 # Primeiro inteiro da trava: separa as travas deste serviço de outras que
 # venham a usar pg_advisory_xact_lock(int, int) com o id da central.
 _TRAVA_GERACAO = 3001
@@ -79,6 +82,10 @@ def _linha(x: PrevisaoProduto, negocio_id: int, central_producao_id: int, data_r
             {"id": e.id, "nome": e.nome, "tipo_ajuste": e.tipo_ajuste.value, "valor_ajuste": str(e.valor_ajuste)}
             for e in x.eventos
         ],
+        fatores={
+            "ano": str(c.fatores.ano), "semana_mes": str(c.fatores.semana_mes), "dia_mes": str(c.fatores.dia_mes),
+            "feriado": str(c.fatores.feriado), "nome_feriado": c.fatores.nome_feriado,
+        },
         versao_metodo=VERSAO_METODO,
         gerado_por_usuario_id=usuario_id,
     )

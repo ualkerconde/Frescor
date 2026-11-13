@@ -143,6 +143,10 @@ backend/
 │   ├── seed_demo_previsao.py           # Negócio separado para ver "Sem previsão" e "Pouco histórico"
 │   ├── seed_demo_producao.py           # Negócio separado para a ordem de produção (contagens, setores)
 │   ├── backtest_previsao.py            # Teste no passado do motor (WAPE, viés, contra o ingênuo)
+│   ├── backtest_fatores.py             # WAPE com e sem cada fator de calendário (séries sintéticas)
+│   ├── implantar_cliente.py            # Cliente novo a partir de um JSON (simula; grava com --aplicar)
+│   ├── exemplo_implantacao.json        # Modelo do arquivo do implantar_cliente.py
+│   ├── verificar_pre_deploy.py         # Conferência só leitura antes do upgrade em produção
 │   ├── test_*.py                       # Scripts de teste (ver seção 3.3)
 │   └── _check_enums.py                 # Utilitário: lista os tipos enum do PostgreSQL
 ├── .env.example
@@ -350,16 +354,19 @@ as contagens das lojas do seed não são tocadas.
 python scripts/test_constraint_usuario.py     # check constraint de tipo de usuário (4 casos)
 python scripts/test_obter_gestor_central.py   # dependency de acesso ao SaaS (11 casos)
 python scripts/test_auth_web.py               # login/refresh do SaaS + regressão completa do app (38)
+python scripts/test_trocar_senha.py           # POST /auth/senha e /auth/web/senha (7)
+python scripts/test_implantar_cliente.py      # script de implantação de cliente (7)
 python scripts/test_vendas_perdas_modelo.py   # regras de banco de vendas/perdas e códigos (23)
 python scripts/test_escopo_gestor.py          # escopo do gestor: só a própria central (13)
 python scripts/test_importacao_csv.py         # serviço de importação de CSV (45)
 python scripts/test_importacao_rotas.py       # POST /vendas/importar e /perdas/importar (14)
 python scripts/test_consulta_rotas.py         # GET /vendas e /perdas, totais + importar e consultar (40)
-python scripts/test_sync_vendas_stub.py       # stub da integração com o PDV (5)
 python scripts/test_web_apoio.py              # /web/me, /web/lojas, /web/produtos (25)
 
 # Fase 3 — motor de previsão
 python scripts/test_serie_vendas.py           # série diária de vendas (D16, D17) (21)
+python scripts/test_previsao_fatores.py       # fatores de calendário: ano, semana/dia do mês, feriado (10)
+python scripts/backtest_fatores.py            # WAPE com e sem cada fator em séries sintéticas (~2 min)
 python scripts/test_previsao_calculo.py       # núcleo do cálculo, sem banco: base, tendência (21)
 python scripts/test_previsao_eventos.py       # eventos fora da base e ajuste do dia (24)
 python scripts/test_eventos_rotas.py          # POST/GET/DELETE /eventos, escopo e erros em português (45)
@@ -572,10 +579,11 @@ Para cada loja + produto + dia (detalhes e números nas decisões D16–D31 do `
 3. **Tendência** = mediana das razões real ÷ base dos últimos 7 dias, limitada a 0,7–1,3; com menos de 5 dias, fator 1 (D19, D31).
 4. **Sazonal** (`ciclo_previsao = sazonal`) com temporada anterior: base do mesmo período do ano anterior e tendência contra ele; na 1ª temporada, segue o semanal com cold start (F5, versão mínima).
 5. **Cold start**: com menos de 6 semanas de histórico, mistura a própria com um proxy (outras lojas, mesma categoria ou mesma unidade) com peso crescente (D20, D28, D29). Sem nenhuma referência: sem previsão.
-6. **Evento** do dia: multiplicador ou valor fixo (D26).
-7. Sem arredondar (D21); gravada com 4 casas.
+6. **Fatores de calendário** (D112–D114, `previsao_fatores.py`): base × tendência × ano anterior × semana do mês × dia do mês × feriado nacional, aprendidos da própria loja + produto, puxados para 1 com pouco dado e limitados. Feriado nacional sai da base e da tendência. Gravados em `previsoes_diarias.fatores`.
+7. **Evento** do dia: multiplicador ou valor fixo (D26). Evento no dia manda sobre o fator de feriado.
+8. Sem arredondar (D21); gravada com 4 casas.
 
-Qualquer mudança no cálculo exige atualizar `VERSAO_METODO` em `app/services/previsao_gravacao.py` no mesmo commit (hoje `2026.10-v2`); a versão vai gravada em cada previsão.
+Qualquer mudança no cálculo exige atualizar `VERSAO_METODO` em `app/services/previsao_gravacao.py` no mesmo commit (hoje `2026.11-v3`); a versão vai gravada em cada previsão.
 
 ### SaaS web — ordem de produção (exigem token do SaaS)
 
@@ -691,9 +699,11 @@ aquela loja no dia corrente antes de executar.
 
 ## 10. CORS
 
-O backend está configurado para aceitar requisições do frontend em
-`http://localhost:3000` e `http://127.0.0.1:3000`. Para produção, atualize
-a lista de origens em `app/main.py`.
+Sem configuração, o backend aceita as origens de desenvolvimento listadas
+em `app/main.py` (`http://localhost:3000` e afins). Em produção, defina no
+`.env` `CORS_ORIGINS=https://app.exemplo.com,https://web.exemplo.com`
+(vírgula entre as origens): a lista substitui a de desenvolvimento.
+Roteiro completo do deploy: `docs/implantacao-piloto.md`.
 
 ---
 

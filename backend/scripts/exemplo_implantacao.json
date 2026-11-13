@@ -1,0 +1,24 @@
+{
+  "negocio": "Supermercado Exemplo",
+  "centrais": [
+    {
+      "nome": "Padaria Central",
+      "secao": "padaria",
+      "prazo_entrega_dias": 0,
+      "gestores": [
+        {"nome": "Gestora da Padaria", "email": "gestora.padaria@exemplo.com.br"}
+      ],
+      "lojas": [
+        {
+          "nome": "Loja Centro",
+          "codigo": "001",
+          "horario_fechamento": "21:00",
+          "horario_zeragem": "06:00",
+          "operadores": [
+            {"nome": "Operador da Loja Centro", "email": "operador.centro@exemplo.com.br"}
+          ]
+        }
+      ]
+    }
+  ]
+}

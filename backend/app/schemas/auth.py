@@ -27,3 +27,9 @@ class RefreshRequest(BaseModel):
 class AccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class TrocarSenhaRequest(BaseModel):
+    """Troca da própria senha (app e SaaS). Regras em app/services/senha_service.py."""
+    senha_atual: str
+    senha_nova: str

@@ -3,6 +3,8 @@ import { clearTokens, getTokens } from './services/api'
 import { LoginScreen } from './pages/LoginScreen'
 import { MainScreen } from './pages/MainScreen'
 import { RecebimentoScreen } from './pages/RecebimentoScreen'
+import { PerdaScreen } from './pages/PerdaScreen'
+import { SenhaScreen } from './pages/SenhaScreen'
 import { DesktopBlockScreen } from './pages/DesktopBlockScreen'
 import { useIsDesktop } from './hooks/useIsDesktop'
 
@@ -10,7 +12,7 @@ export default function App() {
   const isDesktop = useIsDesktop()
   const [autenticado, setAutenticado] = useState(false)
   const [verificando, setVerificando] = useState(true)
-  const [tela, setTela] = useState('contagem') // contagem | recebimento
+  const [tela, setTela] = useState('contagem') // contagem | recebimento | perda | senha
 
   useEffect(() => {
     // Verifica se já tem tokens salvos (sessão persistente)
@@ -39,10 +41,32 @@ export default function App() {
     )
   }
 
+  // Perda (D110): também tela separada, aberta pelo menu.
+  if (tela === 'perda') {
+    return (
+      <PerdaScreen
+        onVoltar={() => setTela('contagem')}
+        onLogout={() => { clearTokens(); setTela('contagem'); setAutenticado(false) }}
+      />
+    )
+  }
+
+  // Troca da própria senha: tela separada, aberta pelo menu.
+  if (tela === 'senha') {
+    return (
+      <SenhaScreen
+        onVoltar={() => setTela('contagem')}
+        onLogout={() => { clearTokens(); setTela('contagem'); setAutenticado(false) }}
+      />
+    )
+  }
+
   return (
     <MainScreen
       onLogout={() => setAutenticado(false)}
       onAbrirRecebimento={() => setTela('recebimento')}
+      onAbrirPerda={() => setTela('perda')}
+      onAbrirSenha={() => setTela('senha')}
     />
   )
 }

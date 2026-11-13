@@ -313,7 +313,7 @@ def gerar_ordem(
             avisos.extend(a for a in _ORDEM_MARCAS if a in marcas_par)
             componentes = _json(asdict(x.resultado))
             componentes.update(pouco_historico=x.pouco_historico, taxa_perda=_json(x.taxa_perda),
-                               recebimento_presumido=_json(presumido))
+                               perda_registrada=x.perda_registrada, recebimento_presumido=_json(presumido))
             db.add(OrdemProducaoLinha(
                 negocio_id=negocio_id, item_id=item.id, loja_id=x.loja_id,
                 quantidade_sugerida=x.resultado.necessidade, quantidade_final=x.resultado.necessidade,

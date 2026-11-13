@@ -24,6 +24,7 @@ from app.core.dependencies import GestorCentralAutenticado, obter_gestor_central
 from app.db.session import get_db
 from app.schemas.previsao import (
     EventoAplicado,
+    FatoresCalendario,
     GeracaoResponse,
     GerarPrevisoesRequest,
     LojaPrevisao,
@@ -110,6 +111,7 @@ def consultar(
             proxy=r.proxy,
             origem_proxy=r.origem_proxy.value if r.origem_proxy else None,
             eventos=[EventoAplicado(**e) for e in r.eventos],
+            fatores=FatoresCalendario(**r.fatores) if r.fatores else None,
             data_referencia=r.data_referencia,
             gerado_em=r.gerado_em,
             versao_metodo=r.versao_metodo,

@@ -1,9 +1,10 @@
 /*
- * Tema do Frescor (skill frescor-design-system, direção B).
+ * Tema do Frescor (skill frescor-design-system, visual "Comando" azul-noite
+ * e âmbar, D117, 13/11/2026).
  *
  * Tailwind 4: os tokens são mapeados aqui no CSS (@theme), não em
- * tailwind.config. Só existe a paleta clara (a skill ainda não define modo
- * escuro), por isso não há bloco .dark.
+ * tailwind.config. Tema escuro ÚNICO: não há alternância claro/escuro, por
+ * isso não há bloco .dark; os valores de :root já são os escuros.
  *
  * Conflito de nomes resolvido: a skill e o shadcn usam --secondary,
  * --accent e --muted com significados diferentes. Os tokens da skill ficam
@@ -35,33 +36,56 @@
 @import "shadcn/tailwind.css";
 
 /* Fontes servidas pelo próprio projeto (@fontsource), só os pesos da skill. */
-@import "@fontsource/sora/600.css";
-@import "@fontsource/sora/700.css";
-@import "@fontsource/source-sans-3/400.css";
-@import "@fontsource/source-sans-3/600.css";
+@import "@fontsource/inter-tight/400.css";
+@import "@fontsource/inter-tight/500.css";
+@import "@fontsource/inter-tight/600.css";
+@import "@fontsource/inter-tight/700.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
   /* ---- tokens da skill (valores exatos) ---- */
-  --fr-primary: #0e6b5c;
-  --fr-primary-hover: #0a5549;
-  --fr-secondary: #1b2b3a;
-  --fr-accent: #e3a62f;
-  --fr-bg: #fafbfa;
-  --fr-surface: #eef3f1;
-  --fr-card: #ffffff;
-  --fr-text: #15212b;
-  --fr-muted: #56636d;
-  --fr-line: #d3deda;
-  --fr-input-border: #7d8a93;
-  --fr-success: #1f7a3e;
-  --fr-success-bg: #e8f4ec;
-  --fr-warning: #9a5b00;
-  --fr-warning-bg: #fdf3e1;
-  --fr-error: #b42318;
-  --fr-error-bg: #fdecea;
-  --fr-shadow-elevado: 0 1px 2px rgb(21 33 43 / 0.06), 0 4px 12px rgb(21 33 43 / 0.06);
+  /*
+   * Visual "Comando", variação azul-noite e âmbar (D117, escolhida pelo
+   * Ualker em 13/11/2026). Tema escuro único. Contrastes (WCAG 2.1):
+   * text/bg 16,9 · text/card 15,3 · muted/card 6,8 · muted/surface 6,3 ·
+   * âmbar/card 9,7 · tinta/âmbar 10,4 · input-border/card 3,9 ·
+   * success/card 9,3 · success/success-bg 7,6 · warning/warning-bg 8,0 ·
+   * error/card 7,6 · error/error-bg 6,8 · âmbar/highlight-bg 7,6 ·
+   * azul/card 9,2. Todos AA.
+   */
+  --fr-primary: #f5b83d; /* âmbar: ação principal, link, foco */
+  --fr-primary-hover: #e0a52e;
+  --fr-on-color: #1a1200; /* texto sobre âmbar, verde e coral */
+  --fr-secondary: #eef1f8; /* títulos */
+  --fr-accent: #f5b83d; /* destaque (traço, ícone ativo) */
+  --fr-highlight-bg: #3a2c10; /* fundo de badge âmbar */
+  --fr-blue: #7cc4ff; /* segunda cor de dado (previsto) */
+  --fr-bg: #0a0f1e;
+  --fr-rail: #0d1326; /* barra lateral */
+  --fr-surface: #172038;
+  --fr-card: #121a2e;
+  --fr-text: #eef1f8;
+  --fr-muted: #98a2bd;
+  --fr-line: #222c47;
+  --fr-input-border: #6b779c;
+  --fr-success: #5fd39a;
+  --fr-success-bg: #12302a;
+  --fr-warning: #ffb65c;
+  --fr-warning-bg: #3a2a10;
+  --fr-error: #ff8a7a;
+  --fr-error-bg: #3a1a1c;
+  /* Barra lateral: texto secundário e divisória. */
+  --fr-ink-muted: #98a2bd;
+  --fr-ink-line: #222c47;
+  /* Fundo de hover/seleção em linhas de tabela e itens de lista. */
+  --fr-primary-soft: #1a2442;
+  --fr-shadow-elevado: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.3);
+  /* Painel: quem separa é a borda de 1px. */
+  --fr-shadow-painel: none;
+  color-scheme: dark;
 
   /* ---- variáveis que os componentes do shadcn leem ---- */
   --background: var(--fr-bg);
@@ -71,7 +95,7 @@
   --popover: var(--fr-card);
   --popover-foreground: var(--fr-text);
   --primary: var(--fr-primary);
-  --primary-foreground: #ffffff;
+  --primary-foreground: var(--fr-on-color);
   --secondary: var(--fr-surface);
   --secondary-foreground: var(--fr-text);
   --muted: var(--fr-surface);
@@ -83,12 +107,13 @@
   --input: var(--fr-input-border);
   --ring: var(--fr-primary);
   /* Raio da skill: 10px (botão, input, card). radius-sm = 6px (badge). */
-  --radius: 10px;
+  --radius: 12px;
 }
 
 @theme inline {
-  --font-sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-heading: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -122,6 +147,13 @@
   --color-warning-bg: var(--fr-warning-bg);
   --color-error: var(--fr-error);
   --color-error-bg: var(--fr-error-bg);
+  --color-ink-muted: var(--fr-ink-muted);
+  --color-ink-line: var(--fr-ink-line);
+  --color-primary-soft: var(--fr-primary-soft);
+  --color-on-color: var(--fr-on-color);
+  --color-highlight-bg: var(--fr-highlight-bg);
+  --color-rail: var(--fr-rail);
+  --color-azul: var(--fr-blue);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -130,6 +162,7 @@
   --radius-2xl: 18px;
 
   --shadow-elevado: var(--fr-shadow-elevado);
+  --shadow-painel: var(--fr-shadow-painel);
 }
 
 @layer base {
@@ -149,6 +182,15 @@
   h3 {
     @apply font-heading text-heading;
     font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: var(--fr-primary-soft);
+    color: var(--fr-text);
   }
   /* Foco visível da skill: anel de 2px --primary com 2px de afastamento. */
   :focus-visible {
@@ -160,6 +202,42 @@
 /* Números sempre com algarismos de largura fixa (skill). */
 @utility numero {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Painel: o bloco branco padrão das telas (filtros, formulários, tabelas).
+ * Plano: borda de 1px --line, raio 12px e um traço de sombra. Sem
+ * degradê, brilho ou faixa colorida: a hierarquia vem do texto e do espaço.
+ */
+@utility painel {
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  background: var(--fr-card);
+  box-shadow: var(--fr-shadow-painel);
+}
+
+/* Número de dashboard (KPI): o mesmo painel, sem efeito de hover (não é clicável). */
+@utility painel-kpi {
+  border: 1px solid var(--fr-line);
+  border-radius: 12px;
+  background: var(--fr-card);
+  box-shadow: var(--fr-shadow-painel);
+}
+
+/* Estado vazio: fundo surface com borda tracejada. */
+@utility painel-vazio {
+  border: 1px dashed color-mix(in srgb, var(--fr-input-border) 55%, transparent);
+  border-radius: 12px;
+  background: var(--fr-card);
+}
+
+/* Número grande do dashboard: JetBrains Mono 600, levemente apertado (visual Comando). */
+@utility numero-destaque {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fr-secondary);
 }
 
 /* Animações curtas e respeito a quem pede menos movimento (skill). */

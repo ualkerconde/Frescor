@@ -1,9 +1,11 @@
 /*
  * Rotas do frontend do SaaS.
  * /entrar: login do gestor.
- * Área autenticada (LayoutAutenticado): /importar, /consultar, /previsao, /producao, /distribuicao
- * e /cadastros (produtos, setores e central, com as sub-rotas dentro da própria tela).
- * / e qualquer outra rota -> /importar (ou login, sem sessão).
+ * Área autenticada (LayoutAutenticado): /inicio (visão geral, desde 11/11/2026), /acompanhamento, /consultar,
+ * /previsao, /producao, /distribuicao, /perdas, /cadastros (produtos, setores e central, com as sub-rotas
+ * dentro da própria tela), /integracao (vendas do sistema do cliente) e /importar (carga de histórico por
+ * CSV, fora do menu desde a D107) e /senha (trocar a própria senha, fora do menu; link no rodapé da barra).
+ * / e qualquer outra rota -> /inicio (ou login, sem sessão).
  *
  * Telas novas (a partir da Fase 3) entram com o código dividido por tela:
  * React.lazy + import(), carregadas só quando abertas (regra do W8).
@@ -19,6 +21,11 @@ import { Importar } from "@/paginas/Importar"
 const Previsao = lazy(() => import("@/paginas/Previsao").then((m) => ({ default: m.Previsao })))
 const Producao = lazy(() => import("@/paginas/Producao").then((m) => ({ default: m.Producao })))
 const Distribuicao = lazy(() => import("@/paginas/Distribuicao").then((m) => ({ default: m.Distribuicao })))
+const Inicio = lazy(() => import("@/paginas/Inicio").then((m) => ({ default: m.Inicio })))
+const Acompanhamento = lazy(() => import("@/paginas/Acompanhamento").then((m) => ({ default: m.Acompanhamento })))
+const Perdas = lazy(() => import("@/paginas/Perdas").then((m) => ({ default: m.Perdas })))
+const Integracao = lazy(() => import("@/paginas/Integracao").then((m) => ({ default: m.Integracao })))
+const Senha = lazy(() => import("@/paginas/Senha"))
 const Cadastros = lazy(() => import("@/paginas/Cadastros").then((m) => ({ default: m.Cadastros })))
 
 function Carregando() {
@@ -36,6 +43,14 @@ function App() {
           </RotaProtegida>
         }
       >
+        <Route
+          path="/inicio"
+          element={
+            <Suspense fallback={<Carregando />}>
+              <Inicio />
+            </Suspense>
+          }
+        />
         <Route path="/importar" element={<Importar />} />
         <Route path="/consultar" element={<Consultar />} />
         <Route
@@ -63,6 +78,30 @@ function App() {
           }
         />
         <Route
+          path="/acompanhamento"
+          element={
+            <Suspense fallback={<Carregando />}>
+              <Acompanhamento />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/perdas"
+          element={
+            <Suspense fallback={<Carregando />}>
+              <Perdas />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/integracao"
+          element={
+            <Suspense fallback={<Carregando />}>
+              <Integracao />
+            </Suspense>
+          }
+        />
+        <Route
           path="/cadastros/*"
           element={
             <Suspense fallback={<Carregando />}>
@@ -70,8 +109,16 @@ function App() {
             </Suspense>
           }
         />
+        <Route
+          path="/senha"
+          element={
+            <Suspense fallback={<Carregando />}>
+              <Senha />
+            </Suspense>
+          }
+        />
       </Route>
-      <Route path="*" element={<Navigate to="/importar" replace />} />
+      <Route path="*" element={<Navigate to="/inicio" replace />} />
     </Routes>
   )
 }

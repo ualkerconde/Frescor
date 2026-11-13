@@ -3,15 +3,24 @@ import { cn } from "cn"
 
 /*
  * Tabela do shadcn ajustada à skill Frescor: cabeçalho 12px maiúsculo
- * --muted, linhas de 48px, zebra com --surface, texto 16px. Números à
- * direita: passe className="text-right numero" na célula.
+ * --muted sobre --surface, linhas de 48px, zebra suave, realce verde ao
+ * passar o mouse, texto 16px. Números à direita: passe
+ * className="text-right numero" na célula.
+ *
+ * Por padrão a tabela vem dentro de um painel (raio 16px, contorno e
+ * sombra). Tabela dentro de outra (as lojas de um produto) usa
+ * `contorno={false}` para não virar um cartão dentro do cartão.
  */
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  contorno = true,
+  ...props
+}: React.ComponentProps<"table"> & { contorno?: boolean }) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-x-auto", contorno && "painel")}
     >
       <table
         data-slot="table"
@@ -26,7 +35,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      className={cn("bg-surface/80 [&_tr]:border-b [&_tr]:border-line", className)}
       {...props}
     />
   )
@@ -60,7 +69,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b border-line [tbody_&]:even:bg-surface",
+        "border-b border-line/70 transition-colors [tbody_&]:even:bg-surface/55 [tbody_&]:hover:bg-primary-soft/70",
         className
       )}
       {...props}
@@ -73,7 +82,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-3 text-left align-middle text-xs font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase",
+        "h-11 px-4 text-left align-middle text-xs font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase",
         className
       )}
       {...props}
@@ -86,7 +95,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "h-12 px-3 py-2 align-middle",
+        "h-12 px-4 py-2 align-middle",
         className
       )}
       {...props}

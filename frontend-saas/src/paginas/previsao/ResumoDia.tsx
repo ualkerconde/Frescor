@@ -69,11 +69,11 @@ export function ResumoDia({
         {totais.map((t) => {
           const semNumero = semPrevisao.filter((i) => i.unidade === t.unidade).length
           return (
-            <div key={t.unidade} className="rounded-lg border border-line bg-card p-4">
+            <div key={t.unidade} className="painel-kpi p-5">
               <p className="text-sm text-muted-foreground">
                 Previsto em {t.unidade === "KG" ? "quilos" : "unidades"}
               </p>
-              <p className="font-heading text-[40px] leading-tight font-semibold text-heading numero">
+              <p className="mt-1 numero-destaque text-[32px] leading-tight whitespace-nowrap">
                 {formatarPrevisao(t.previsto, t.unidade)}
               </p>
               <Variacao previsto={Number(t.previsto)} vendido={Number(t.vendido_semana_passada)} unidade={t.unidade} />
@@ -90,12 +90,12 @@ export function ResumoDia({
             </div>
           )
         })}
-        <div className="rounded-lg border border-line bg-card p-4">
+        <div className="painel-kpi p-5">
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <Package className="size-5" aria-hidden="true" />
             Produtos previstos (por loja)
           </p>
-          <p className="font-heading text-[40px] leading-tight font-semibold text-heading numero">
+          <p className="mt-1 numero-destaque text-[32px] leading-tight whitespace-nowrap">
             {itens.length}
           </p>
           <p className="mt-1 text-sm text-muted-foreground numero">

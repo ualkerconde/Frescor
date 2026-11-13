@@ -26,6 +26,7 @@ Cálculo do estoque real — 3 cenários (ver especificação atualizada):
   uso do cliente e é rejeitado.
 """
 
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -35,6 +36,11 @@ from app.models.estoque_atual import EstoqueAtual
 from app.models.produto import Produto, UnidadeMedida
 from app.models.produto_loja import ProdutoLoja
 from app.schemas.estoque import ContagemOffline
+
+
+def _agora_utc() -> datetime:
+    """Hora do lançamento (UTC sem fuso, como o resto do banco) para `contado_em` (D111)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def calcular_estoque_atual(
@@ -166,6 +172,7 @@ def aplicar_contagem(
             quantidade_inventariada=quantidade_inventariada,
             estoque_atual_calculado=estoque_calculado,
             peso_informado_kg=peso_a_persistir,
+            contado_em=_agora_utc(),
         )
         db.add(estoque)
     else:
@@ -175,6 +182,7 @@ def aplicar_contagem(
         estoque.quantidade_inventariada = quantidade_inventariada
         estoque.estoque_atual_calculado = estoque_calculado
         estoque.peso_informado_kg = peso_a_persistir
+        estoque.contado_em = _agora_utc()
 
     db.commit()
     db.refresh(estoque)
@@ -254,12 +262,17 @@ def sincronizar_contagens(
                 quantidade_inventariada=contagem.quantidade,
                 estoque_atual_calculado=estoque_calculado,
                 peso_informado_kg=peso_a_persistir,
+                contado_em=_agora_utc(),
             )
             db.add(estoque)
         else:
             estoque.quantidade_inventariada = contagem.quantidade
             estoque.estoque_atual_calculado = estoque_calculado
             estoque.peso_informado_kg = peso_a_persistir
+            # Hora da sincronização, não a do aparelho: o relógio do celular não é
+            # confiável. Contagem do fechamento sincronizada na manhã seguinte cai
+            # na mesma janela (D111: até 12 h depois do fechamento).
+            estoque.contado_em = _agora_utc()
 
         produtos_sincronizados.append(produto_id)
 

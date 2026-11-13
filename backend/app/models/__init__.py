@@ -34,3 +34,7 @@ from app.models.setor_producao import SetorProducao  # noqa: F401
 from app.models.romaneio import Romaneio, StatusRomaneio  # noqa: F401
 from app.models.romaneio_entrega import RomaneioEntrega, SituacaoEntrega  # noqa: F401
 from app.models.romaneio_item import RomaneioItem, MotivoDivergencia  # noqa: F401
+from app.models.lancamento_perda import LancamentoPerda, MotivoPerda  # noqa: F401
+from app.models.integracao_vendas import IntegracaoVendas, ModoIntegracaoVendas  # noqa: F401
+from app.models.execucao_sync_vendas import ExecucaoSyncVendas, OrigemExecucaoSync, SituacaoExecucaoSync  # noqa: F401
+from app.models.pendencia_sync_vendas import PendenciaSyncVendas, MotivoPendenciaSync  # noqa: F401

@@ -124,9 +124,20 @@ export interface ItemPrevisao {
   proxy: string | null
   origem_proxy: 'outras_lojas' | 'categoria' | 'unidade' | null
   eventos: EventoAplicado[]
+  /** Fatores de calendário (D112–D114); null nas previsões de antes da versão 2026.11-v3. */
+  fatores?: FatoresCalendario | null
   data_referencia: string
   gerado_em: string
   versao_metodo: string
+}
+
+/** Multiplicadores de calendário da previsão; "1" ou "1.0000" = sem efeito. */
+export interface FatoresCalendario {
+  ano: string
+  semana_mes: string
+  dia_mes: string
+  feriado: string
+  nome_feriado: string | null
 }
 
 export interface TotalPrevisto {
@@ -218,6 +229,8 @@ export interface ContaNecessidade {
   pouco_historico?: boolean
   /** Perda ÷ venda das 4 semanas até a véspera (fração); null = sem venda. */
   taxa_perda?: string | null
+  /** D111: false = vendeu, mas nenhuma perda foi registrada (taxa 0 não é "perda baixa"). Ordens antigas não têm. */
+  perda_registrada?: boolean
 }
 
 export interface TotalOrdem {
@@ -452,6 +465,8 @@ export interface ProdutoDetalhe {
   codigo: string | null
   nome: string
   codigo_barras: string | null
+  /** Código no sistema de vendas do cliente, se diferente do código (D108). */
+  codigo_pdv: string | null
   unidade: Unidade
   peso_medio_kg: string | null
   ativo: boolean
@@ -472,6 +487,7 @@ export interface ProdutoEnvio {
   nome: string
   codigo: string | null
   codigo_barras: string | null
+  codigo_pdv: string | null
   unidade_medida: Unidade
   peso_medio_kg: string | null
   ativo: boolean
@@ -511,4 +527,119 @@ export interface Evento {
   produto_ids: number[]
   /** False: o evento vale também para lojas de outra central (só lá pode ser apagado). */
   pode_apagar: boolean
+}
+
+/** GET /web/perdas/lancamentos (D110) */
+export interface LancamentoPerda {
+  id: number
+  data: string
+  loja: { id: number; codigo: string | null; nome: string }
+  produto: { id: number; codigo: string | null; nome: string }
+  unidade: Unidade
+  quantidade: string
+  motivo: 'vencido' | 'avariado' | 'outro'
+  observacao: string | null
+  lancado_por: string
+  lancado_em: string
+  alterado_por: string | null
+  alterado_em: string | null
+  /** True até o fim do dia seguinte ao da perda; depois só o gestor corrige. */
+  loja_pode_alterar: boolean
+}
+
+/** Uma execução da integração de vendas (D108). */
+export interface ExecucaoSyncVendas {
+  id: number
+  /** agendada (busca de madrugada), manual ("Buscar agora") ou envio (o sistema do cliente mandou). */
+  origem: 'agendada' | 'manual' | 'envio'
+  situacao: 'sucesso' | 'parcial' | 'falhou'
+  data_inicio: string | null
+  data_fim: string | null
+  iniciada_em: string
+  terminada_em: string | null
+  linhas_recebidas: number
+  linhas_gravadas: number
+  linhas_pendentes: number
+  linhas_invalidas: number
+  mensagem: string | null
+}
+
+/** Um código do sistema de vendas que não casou com o cadastro. */
+export interface PendenciaSyncVendas {
+  motivo: 'produto_desconhecido' | 'loja_desconhecida'
+  /** Código do produto (produto desconhecido) ou da loja (loja desconhecida), como o sistema manda. */
+  codigo: string
+  linhas: number
+  primeira_data: string
+  ultima_data: string
+  lojas: string[]
+}
+
+/** GET /web/integracao/vendas (D108). */
+export interface IntegracaoVendas {
+  configurada: boolean
+  modo: 'envio' | 'busca' | null
+  ativa: boolean | null
+  sistema: string | null
+  /** "HH:MM:SS"; só no modo busca. */
+  horario_busca: string | null
+  dias_rebusca: number | null
+  /** Começo da chave ("frv_ab12"); só no modo envio. */
+  chave_prefixo: string | null
+  execucoes: ExecucaoSyncVendas[]
+  pendencias: PendenciaSyncVendas[]
+}
+
+/** POST /web/integracao/vendas/pendencias/casar */
+export interface ResultadoCasamento {
+  gravadas: number
+  pendentes: number
+  invalidas: string[]
+}
+
+/** GET /web/acompanhamento (D115, D116). Números em texto decimal; null = nenhum registro. */
+export interface ValoresAcompanhamento {
+  previsto: string | null
+  sugerido: string | null
+  final: string | null
+  produzido: string | null
+  enviado: string | null
+  vendido: string | null
+  perda: string | null
+  /** D111: contagem de ontem + recebido − vendido − perda − contagem de hoje (+ = sumiu). Só das células com balanço. */
+  sem_registro: string | null
+}
+
+export interface ErroPrevisao {
+  /** Σ|previsto − vendido| ÷ Σ vendido (fração). */
+  wape: string | null
+  /** (Σ previsto − Σ vendido) ÷ Σ vendido; + = previu a mais. */
+  vies: string | null
+  celulas: number
+}
+
+export interface Acompanhamento {
+  data_inicio: string
+  data_fim: string
+  /** False com filtro de loja: a produção é da central inteira. */
+  produzido_disponivel: boolean
+  unidades: {
+    unidade: Unidade
+    totais: ValoresAcompanhamento
+    erro: ErroPrevisao
+    dias: (ValoresAcompanhamento & { data: string })[]
+    /** D111: células loja × produto × dia com balanço da contagem; dessas, quantas acabaram (ruptura). */
+    balancos: number
+    rupturas: number
+  }[]
+  produtos: {
+    produto: { id: number; codigo: string | null; nome: string }
+    unidade: Unidade
+    totais: ValoresAcompanhamento
+    erro: ErroPrevisao
+    /** Enviado − vendido − perda lançada no período (inclui o que está na prateleira). */
+    sobra: string | null
+    balancos: number
+    rupturas: number
+  }[]
 }

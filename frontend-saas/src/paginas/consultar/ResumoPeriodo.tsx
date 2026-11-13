@@ -23,7 +23,7 @@ function Numero({
   vazio: string
 }) {
   return (
-    <div className="rounded-lg border border-line bg-card p-4">
+    <div className="painel-kpi p-5">
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Icone className="size-5" aria-hidden="true" />
         {rotulo}
@@ -35,7 +35,7 @@ function Numero({
       ) : (
         <ul className="mt-1">
           {totais.map((t) => (
-            <li key={t.unidade} className="font-heading text-[36px] leading-tight font-semibold text-heading numero">
+            <li key={t.unidade} className="numero-destaque text-[32px] leading-tight whitespace-nowrap">
               {formatarQuantidade(t.quantidade, t.unidade)}
             </li>
           ))}

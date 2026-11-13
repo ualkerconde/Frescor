@@ -26,6 +26,7 @@ export interface CamposProduto {
   nome: string
   codigo: string
   codigo_barras: string
+  codigo_pdv: string
   unidade: Unidade
   peso_medio_kg: string
   ativo: boolean
@@ -46,7 +47,7 @@ export const SEM_SETOR = 'sem'
 
 export function camposVazios(): CamposProduto {
   return {
-    nome: '', codigo: '', codigo_barras: '', unidade: 'UN', peso_medio_kg: '', ativo: true,
+    nome: '', codigo: '', codigo_barras: '', codigo_pdv: '', unidade: 'UN', peso_medio_kg: '', ativo: true,
     tipo_abastecimento: 'produzido', dias_validade: '', margem: '', vigencia: 'permanente', inicio: '', fim: '',
     // Produto novo nasce com todos os dias marcados: sem dia nenhum ele fica sem calendário e a ordem não sugere (D42).
     setor_id: SEM_SETOR, dias: DIAS.map((d) => d.valor), habilitar_lojas: true,
@@ -68,6 +69,7 @@ export function camposDoProduto(p: ProdutoDetalhe): CamposProduto {
     nome: p.nome,
     codigo: p.codigo ?? '',
     codigo_barras: p.codigo_barras ?? '',
+    codigo_pdv: p.codigo_pdv ?? '',
     unidade: p.unidade,
     peso_medio_kg: decimalParaCampo(p.peso_medio_kg),
     ativo: p.ativo,
@@ -110,8 +112,10 @@ export function montarEnvio(
   if (!nome) erros.nome = 'Informe o nome do produto.'
   const codigo = c.codigo.trim()
   if (!codigo && (novo || codigoAntigo !== null)) {
-    erros.codigo = 'Informe o código. É por ele que a importação de vendas e perdas acha o produto.'
+    erros.codigo = 'Informe o código. É por ele que a venda do sistema do cliente acha o produto.'
   }
+  const codigoPdv = c.codigo_pdv.trim()
+  if (codigoPdv.length > 60) erros.codigo_pdv = 'Use no máximo 60 caracteres.'
 
   let peso: string | null = null
   if (c.unidade === 'KG' && c.peso_medio_kg.trim()) {
@@ -156,6 +160,7 @@ export function montarEnvio(
     nome,
     codigo: codigo || null,
     codigo_barras: c.codigo_barras.trim() || null,
+    codigo_pdv: codigoPdv || null,
     unidade_medida: c.unidade,
     peso_medio_kg: peso,
     ativo: c.ativo,

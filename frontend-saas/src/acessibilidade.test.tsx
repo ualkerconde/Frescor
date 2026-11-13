@@ -263,7 +263,7 @@ describe('acessibilidade (axe-core, WCAG)', () => {
         'GET /perdas': resposta(200, vazia),
       })
       renderizarApp('/consultar')
-      await screen.findByText('Nenhuma venda importada neste período.')
+      await screen.findByText('Nenhuma venda registrada neste período.')
       expect(await violacoes()).toEqual([])
     })
 
