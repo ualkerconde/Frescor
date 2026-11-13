@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from jose import JWTError
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import UsuarioAutenticado, obter_usuario_autenticado
 from app.core.security import (
     criar_access_token,
     criar_refresh_token,
@@ -24,9 +25,28 @@ from app.schemas.auth import (
     LoginRequest,
     RefreshRequest,
     TokenResponse,
+    TrocarSenhaRequest,
 )
+from app.services.senha_service import SenhaInvalida, trocar_senha
 
 router = APIRouter()
+
+
+@router.post("/senha", status_code=status.HTTP_204_NO_CONTENT)
+def trocar_senha_app(
+    dados: TrocarSenhaRequest,
+    db: Session = Depends(get_db),
+    atual: UsuarioAutenticado = Depends(obter_usuario_autenticado),
+):
+    """
+    O operador troca a própria senha (o usuário vem do token).
+
+    - 400: senha atual errada ou senha nova fora das regras (mensagem em `detail`).
+    """
+    try:
+        trocar_senha(db, db.get(Usuario, atual.usuario_id), dados.senha_atual, dados.senha_nova)
+    except SenhaInvalida as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/login", response_model=TokenResponse)

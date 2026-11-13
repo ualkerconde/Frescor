@@ -136,6 +136,17 @@ export function confirmarRecebimento(entregaId, diferencas = []) {
   })
 }
 
+// ---- Troca da própria senha (2026-11-13) ----
+// Só online. 400 (senha atual errada, senha nova fora das regras) chega com a
+// mensagem do backend em português.
+
+export function trocarSenha(senhaAtual, senhaNova) {
+  return chamarRecebimento('/auth/senha', {
+    method: 'POST',
+    body: JSON.stringify({ senha_atual: senhaAtual, senha_nova: senhaNova }),
+  })
+}
+
 // ---- Perda (D110) ----
 // Também só online, com as mesmas mensagens do Recebimento. 404/409 marcam
 // `desatualizado`: o lançamento sumiu ou o prazo da loja (fim de D+1) acabou.

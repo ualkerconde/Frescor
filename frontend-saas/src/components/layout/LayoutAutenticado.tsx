@@ -131,8 +131,14 @@ function BarraLateral() {
 
       {/* Rodapé fixo: usuário e "Sair" numa linha só, para sobrar altura para o menu. */}
       <div className="flex shrink-0 items-center gap-3 border-t border-ink-line px-4 py-3 lg:gap-2 lg:px-3">
-        <div className="min-w-0 flex-1 lg:pl-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1 lg:pl-3">
           <QuemEsta />
+          <NavLink
+            to="/senha"
+            className={cn("self-start rounded pl-12 text-xs text-ink-muted hover:text-white hover:underline", FOCO_ESCURO)}
+          >
+            Trocar senha
+          </NavLink>
         </div>
         <Button
           variant="ghost"

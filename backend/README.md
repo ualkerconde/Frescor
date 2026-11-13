@@ -354,6 +354,8 @@ as contagens das lojas do seed não são tocadas.
 python scripts/test_constraint_usuario.py     # check constraint de tipo de usuário (4 casos)
 python scripts/test_obter_gestor_central.py   # dependency de acesso ao SaaS (11 casos)
 python scripts/test_auth_web.py               # login/refresh do SaaS + regressão completa do app (38)
+python scripts/test_trocar_senha.py           # POST /auth/senha e /auth/web/senha (7)
+python scripts/test_implantar_cliente.py      # script de implantação de cliente (7)
 python scripts/test_vendas_perdas_modelo.py   # regras de banco de vendas/perdas e códigos (23)
 python scripts/test_escopo_gestor.py          # escopo do gestor: só a própria central (13)
 python scripts/test_importacao_csv.py         # serviço de importação de CSV (45)
