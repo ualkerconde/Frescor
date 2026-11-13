@@ -143,6 +143,10 @@ backend/
 │   ├── seed_demo_previsao.py           # Negócio separado para ver "Sem previsão" e "Pouco histórico"
 │   ├── seed_demo_producao.py           # Negócio separado para a ordem de produção (contagens, setores)
 │   ├── backtest_previsao.py            # Teste no passado do motor (WAPE, viés, contra o ingênuo)
+│   ├── backtest_fatores.py             # WAPE com e sem cada fator de calendário (séries sintéticas)
+│   ├── implantar_cliente.py            # Cliente novo a partir de um JSON (simula; grava com --aplicar)
+│   ├── exemplo_implantacao.json        # Modelo do arquivo do implantar_cliente.py
+│   ├── verificar_pre_deploy.py         # Conferência só leitura antes do upgrade em produção
 │   ├── test_*.py                       # Scripts de teste (ver seção 3.3)
 │   └── _check_enums.py                 # Utilitário: lista os tipos enum do PostgreSQL
 ├── .env.example
@@ -693,9 +697,11 @@ aquela loja no dia corrente antes de executar.
 
 ## 10. CORS
 
-O backend está configurado para aceitar requisições do frontend em
-`http://localhost:3000` e `http://127.0.0.1:3000`. Para produção, atualize
-a lista de origens em `app/main.py`.
+Sem configuração, o backend aceita as origens de desenvolvimento listadas
+em `app/main.py` (`http://localhost:3000` e afins). Em produção, defina no
+`.env` `CORS_ORIGINS=https://app.exemplo.com,https://web.exemplo.com`
+(vírgula entre as origens): a lista substitui a de desenvolvimento.
+Roteiro completo do deploy: `docs/implantacao-piloto.md`.
 
 ---
 

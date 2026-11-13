@@ -20,6 +20,10 @@ class Settings(BaseSettings):
 
     # Geral
     ENVIRONMENT: str = "development"
+    # Origens liberadas no CORS, separadas por vírgula (ex.:
+    # "https://app.frescor.com.br,https://web.frescor.com.br"). Vazio = as
+    # origens de desenvolvimento de app/main.py (comportamento de antes).
+    CORS_ORIGINS: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
