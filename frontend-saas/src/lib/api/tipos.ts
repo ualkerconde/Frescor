@@ -595,6 +595,8 @@ export interface ValoresAcompanhamento {
   enviado: string | null
   vendido: string | null
   perda: string | null
+  /** D111: contagem de ontem + recebido − vendido − perda − contagem de hoje (+ = sumiu). Só das células com balanço. */
+  sem_registro: string | null
 }
 
 export interface ErroPrevisao {
@@ -615,6 +617,9 @@ export interface Acompanhamento {
     totais: ValoresAcompanhamento
     erro: ErroPrevisao
     dias: (ValoresAcompanhamento & { data: string })[]
+    /** D111: células loja × produto × dia com balanço da contagem; dessas, quantas acabaram (ruptura). */
+    balancos: number
+    rupturas: number
   }[]
   produtos: {
     produto: { id: number; codigo: string | null; nome: string }
@@ -623,5 +628,7 @@ export interface Acompanhamento {
     erro: ErroPrevisao
     /** Enviado − vendido − perda lançada no período (inclui o que está na prateleira). */
     sobra: string | null
+    balancos: number
+    rupturas: number
   }[]
 }

@@ -73,6 +73,10 @@ class EstoqueAtual(Base):
     # nos demais casos (UN ou KG com peso médio).
     peso_informado_kg = mapped_column(Numeric(10, 4), nullable=True)
 
+    # Hora (UTC) do último lançamento de contagem pelo app (migration 0028,
+    # D111). Diferente de `atualizado_em`, a zeragem não mexe nela: é por ela
+    # que se sabe se a loja contou num dia. NULL = contagem de antes da 0028.
+    contado_em = mapped_column(DateTime, nullable=True)
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )

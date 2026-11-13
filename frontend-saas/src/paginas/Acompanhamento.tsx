@@ -6,7 +6,8 @@
  * - Um bloco por unidade (un e kg nunca se somam): erro da previsão (WAPE),
  *   viés, vendido e perda; gráfico previsto × vendido por dia; totais do
  *   período em barras; tabela do dia a dia.
- * - Tabela por produto, com erro, viés e sobra.
+ * - Tabela por produto, com erro, viés, sobra, perda sem registro e
+ *   ruptura ("acabou", D111, pela contagem do fechamento).
  * Pedido, produzido e enviado contam pelo dia de ENTREGA: o que chega num
  * dia vende nos seguintes, então a comparação justa é a dos totais.
  */
@@ -45,6 +46,22 @@ const COLUNAS: { chave: keyof ValoresAcompanhamento; rotulo: string; dica: strin
   { chave: "vendido", rotulo: "Vendido", dica: "Venda real do dia" },
   { chave: "perda", rotulo: "Perda", dica: "Perda lançada no dia" },
 ]
+
+/** Na tabela do dia a dia entra também a perda sem registro (D111); nas barras não (pode ser negativa). */
+const COLUNAS_DIA = [
+  ...COLUNAS,
+  {
+    chave: "sem_registro" as const,
+    rotulo: "Sem registro",
+    dica: "Contagem de ontem + recebido − vendido − perda lançada − contagem de hoje",
+  },
+]
+
+/** "Acabou 2 de 9 dias" a partir dos balanços da contagem (D111). */
+function textoRupturas(rupturas: number, balancos: number): string {
+  if (balancos === 0) return "—"
+  return `${rupturas} de ${balancos}`
+}
 
 function erroDoPeriodo(f: Filtros): string | null {
   if (!f.inicio || !f.fim) return "Informe as duas datas."
@@ -235,7 +252,7 @@ export function Acompanhamento() {
               return (
                 <section key={u.unidade} aria-labelledby={`${id}-${u.unidade}`} className="flex flex-col gap-6">
                   <h2 id={`${id}-${u.unidade}`} className="text-xl font-bold">{nome}</h2>
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                     <Indicador
                       rotulo="Erro da previsão"
                       valor={u.erro.wape === null ? "—" : formatarPercentual(u.erro.wape)}
@@ -247,6 +264,15 @@ export function Acompanhamento() {
                       rotulo="Perda lançada"
                       valor={q(u.totais.perda, u.unidade)}
                       apoio={perda === null ? "Nenhuma perda lançada." : vendido ? `${formatarPercentual(perda / vendido)} do vendido.` : "Sem venda para comparar."}
+                    />
+                    <Indicador
+                      rotulo="Perda sem registro"
+                      valor={q(u.totais.sem_registro, u.unidade)}
+                      apoio={
+                        u.balancos === 0
+                          ? "Sem contagem de fechamento em dois dias seguidos com venda."
+                          : `Pela contagem, em ${u.balancos} ${u.balancos === 1 ? "balanço" : "balanços"} loja × produto × dia. Acabou em ${u.rupturas}.`
+                      }
                     />
                   </div>
                   <div className="painel grid gap-8 p-6 xl:grid-cols-[2fr_1fr]">
@@ -265,7 +291,7 @@ export function Acompanhamento() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Dia</TableHead>
-                        {COLUNAS.filter((c) => c.chave !== "produzido" || dados.data.produzido_disponivel).map((c) => (
+                        {COLUNAS_DIA.filter((c) => c.chave !== "produzido" || dados.data.produzido_disponivel).map((c) => (
                           <TableHead key={c.chave} className="text-right" title={c.dica}>{c.rotulo}</TableHead>
                         ))}
                       </TableRow>
@@ -276,7 +302,7 @@ export function Acompanhamento() {
                           <TableCell className="numero whitespace-nowrap">
                             {formatarData(d.data).slice(0, 5)} <span className="text-muted-foreground">{diaDaSemana(d.data).slice(0, 3)}</span>
                           </TableCell>
-                          {COLUNAS.filter((c) => c.chave !== "produzido" || dados.data.produzido_disponivel).map((c) => (
+                          {COLUNAS_DIA.filter((c) => c.chave !== "produzido" || dados.data.produzido_disponivel).map((c) => (
                             <TableCell key={c.chave} className="numero text-right whitespace-nowrap">{q(d[c.chave], u.unidade)}</TableCell>
                           ))}
                         </TableRow>
@@ -291,7 +317,10 @@ export function Acompanhamento() {
               <h2 id={`${id}-produtos`} className="text-xl font-bold">Por produto</h2>
               <p className="max-w-3xl text-muted-foreground">
                 Sobra = enviado − vendido − perda lançada no período. Inclui o que ainda está na prateleira, por isso não
-                é perda; sobra alta e repetida indica pedido acima da venda.
+                é perda; sobra alta e repetida indica pedido acima da venda. Sem registro = o que a contagem mostra que
+                sumiu além da venda e da perda lançada (descarte não lançado, furto, erro de contagem); negativo, apareceu
+                mais do que o esperado. Acabou = dias em que a contagem do fechamento deu zero e houve venda: a venda
+                daquele dia pode ter sido menor que a procura.
               </p>
               <Table aria-label="Por produto">
                 <TableHeader>
@@ -306,6 +335,8 @@ export function Acompanhamento() {
                     <TableHead className="text-right">Erro</TableHead>
                     <TableHead className="text-right">Viés</TableHead>
                     <TableHead className="text-right">Sobra</TableHead>
+                    <TableHead className="text-right">Sem registro</TableHead>
+                    <TableHead className="text-right">Acabou (dias)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -323,6 +354,8 @@ export function Acompanhamento() {
                       <TableCell className="numero text-right whitespace-nowrap">{p.erro.wape === null ? "—" : formatarPercentual(p.erro.wape)}</TableCell>
                       <TableCell className="numero text-right whitespace-nowrap">{textoVies(p.erro.vies)}</TableCell>
                       <TableCell className="numero text-right whitespace-nowrap">{q(p.sobra, p.unidade)}</TableCell>
+                      <TableCell className="numero text-right whitespace-nowrap">{q(p.totais.sem_registro, p.unidade)}</TableCell>
+                      <TableCell className="numero text-right whitespace-nowrap">{textoRupturas(p.rupturas, p.balancos)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

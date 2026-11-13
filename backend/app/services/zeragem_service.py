@@ -86,6 +86,7 @@ def zerar_loja(db: Session, loja: Loja, agora: datetime) -> int:
                 quantidade_inventariada=item.quantidade_inventariada,
                 estoque_atual_calculado=item.estoque_atual_calculado,
                 peso_informado_kg=item.peso_informado_kg,
+                contado_em=item.contado_em,
                 data_referencia=agora,
             )
         )

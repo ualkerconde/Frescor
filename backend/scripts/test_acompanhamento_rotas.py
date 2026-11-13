@@ -251,7 +251,9 @@ def main():
         esperado = {"previsto": 27, "sugerido": 16, "final": 18, "produzido": 20, "enviado": 12, "vendido": 35,
                     "perda": 1}
         obtido = {k: n(v) for k, v in (un or {}).get("totais", {}).items()}
-        registrar("T1 totais UN", obtido == {k: DEC(v) for k, v in esperado.items()}, f"{r.status_code} {obtido}")
+        # Sem contagem no cenário: nenhum balanço (D111), sem_registro None e 0 balanços.
+        registrar("T1 totais UN", obtido == {**{k: DEC(v) for k, v in esperado.items()}, "sem_registro": None}
+                  and (un or {}).get("balancos") == 0, f"{r.status_code} {obtido}")
         erro = (un or {}).get("erro", {})
         registrar("T2 erro UN (3 celulas, WAPE 0,1154, vies 0,0385)",
                   erro.get("celulas") == 3 and n(erro.get("wape")) == DEC("0.1154")

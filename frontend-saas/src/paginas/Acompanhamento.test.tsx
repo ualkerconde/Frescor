@@ -19,7 +19,9 @@ const LOJAS = [
   { id: 1, codigo: '001', nome: 'Loja Centro', ativo: true },
   { id: 2, codigo: '002', nome: 'Loja Bairro', ativo: true },
 ]
-const vazio = { previsto: null, sugerido: null, final: null, produzido: null, enviado: null, vendido: null, perda: null }
+const vazio = {
+  previsto: null, sugerido: null, final: null, produzido: null, enviado: null, vendido: null, perda: null, sem_registro: null,
+}
 
 function dados(extra: Partial<Acompanhamento> = {}): Acompanhamento {
   return {
@@ -29,12 +31,14 @@ function dados(extra: Partial<Acompanhamento> = {}): Acompanhamento {
     unidades: [
       {
         unidade: 'UN',
-        totais: { previsto: '27.0000', sugerido: '16.000', final: '18.000', produzido: '20.000', enviado: '12.000', vendido: '26.000', perda: '1.000' },
+        totais: { previsto: '27.0000', sugerido: '16.000', final: '18.000', produzido: '20.000', enviado: '12.000', vendido: '26.000', perda: '1.000', sem_registro: '5.0000' },
         erro: { wape: '0.1154', vies: '0.0385', celulas: 3 },
         dias: [
-          { data: '2026-10-05', previsto: '15.0000', sugerido: '16.000', final: '18.000', produzido: '20.000', enviado: '12.000', vendido: '14.000', perda: '1.000' },
-          { data: '2026-10-06', ...vazio, previsto: '12.0000', vendido: '12.000' },
+          { data: '2026-10-05', previsto: '15.0000', sugerido: '16.000', final: '18.000', produzido: '20.000', enviado: '12.000', vendido: '14.000', perda: '1.000', sem_registro: '4.0000' },
+          { data: '2026-10-06', ...vazio, previsto: '12.0000', vendido: '12.000', sem_registro: '1.0000' },
         ],
+        balancos: 2,
+        rupturas: 1,
       },
       {
         unidade: 'KG',
@@ -44,13 +48,15 @@ function dados(extra: Partial<Acompanhamento> = {}): Acompanhamento {
           { data: '2026-10-05', ...vazio, previsto: '2.5000', vendido: '2.000' },
           { data: '2026-10-06', ...vazio },
         ],
+        balancos: 0,
+        rupturas: 0,
       },
     ],
     produtos: [
       {
         produto: { id: 17, codigo: 'INT-007', nome: 'Pão Francês' }, unidade: 'UN',
-        totais: { previsto: '27.0000', sugerido: '16.000', final: '18.000', produzido: '20.000', enviado: '12.000', vendido: '26.000', perda: '1.000' },
-        erro: { wape: '0.1154', vies: '-0.0600', celulas: 3 }, sobra: '-15.000',
+        totais: { previsto: '27.0000', sugerido: '16.000', final: '18.000', produzido: '20.000', enviado: '12.000', vendido: '26.000', perda: '1.000', sem_registro: '5.0000' },
+        erro: { wape: '0.1154', vies: '-0.0600', celulas: 3 }, sobra: '-15.000', balancos: 2, rupturas: 1,
       },
     ],
     ...extra,
@@ -121,7 +127,22 @@ describe('acompanhamento (D115/D116)', () => {
     renderizarApp('/acompanhamento')
     const tabela = await screen.findByRole('table', { name: 'Por produto' })
     const [, pao] = within(tabela).getAllByRole('row')
-    expect(pao).toHaveTextContent('INT-007 · Pão Francês27 un18 un20 un12 un26 un1 un11,5%−6%-15 un')
+    expect(pao).toHaveTextContent('INT-007 · Pão Francês27 un18 un20 un12 un26 un1 un11,5%−6%-15 un5 un1 de 2')
+  })
+
+  it('D111: perda sem registro pela contagem e quantas vezes acabou; sem balanço, diz por quê', async () => {
+    api(dados())
+    renderizarApp('/acompanhamento')
+    const un = await screen.findByRole('region', { name: 'Produtos em unidade (un)' })
+    expect(within(un).getByText('Perda sem registro').parentElement).toHaveTextContent(
+      'Perda sem registro5 unPela contagem, em 2 balanços loja × produto × dia. Acabou em 1.',
+    )
+    const dia = within(within(un).getByRole('table', { name: /Dia a dia/ })).getAllByRole('row')[1]
+    expect(dia).toHaveTextContent(/4 un$/)
+    const kg = screen.getByRole('region', { name: 'Produtos em quilo (kg)' })
+    expect(within(kg).getByText('Sem contagem de fechamento em dois dias seguidos com venda.')).toBeInTheDocument()
+    // Pode ser negativa: fica fora das barras de totais.
+    expect(within(within(un).getByRole('list', { name: 'Totais do período' })).queryByText('Sem registro')).not.toBeInTheDocument()
   })
 
   it('passar o mouse no gráfico mostra o dia', async () => {

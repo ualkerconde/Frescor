@@ -33,6 +33,8 @@ class Valores(BaseModel):
     enviado: Decimal | None
     vendido: Decimal | None
     perda: Decimal | None
+    # D111: esperado − contado (+ = sumiu sem registro). Só das células com balanço.
+    sem_registro: Decimal | None
 
 
 class ErroPrevisao(BaseModel):
@@ -50,6 +52,8 @@ class UnidadeAcompanhamento(BaseModel):
     totais: Valores
     erro: ErroPrevisao
     dias: list[DiaAcompanhamento]
+    balancos: int  # células loja × produto × dia com balanço da contagem (D111)
+    rupturas: int  # dessas, quantas fecharam com contagem zero e venda no dia
 
 
 class ProdutoAcompanhamento(BaseModel):
@@ -58,6 +62,8 @@ class ProdutoAcompanhamento(BaseModel):
     totais: Valores
     erro: ErroPrevisao
     sobra: Decimal | None
+    balancos: int
+    rupturas: int
 
 
 class AcompanhamentoResponse(BaseModel):
@@ -101,6 +107,7 @@ def acompanhamento(
             UnidadeAcompanhamento(
                 unidade=s.unidade, totais=Valores(**s.totais.valores), erro=_erro(s.erro),
                 dias=[DiaAcompanhamento(data=d, **linha.valores) for d, linha in sorted(s.dias.items())],
+                balancos=s.balancos, rupturas=s.rupturas,
             )
             for s in r.unidades
         ],
@@ -108,6 +115,7 @@ def acompanhamento(
             ProdutoAcompanhamento(
                 produto={"id": p.produto_id, "codigo": p.produto_codigo, "nome": p.produto_nome}, unidade=p.unidade,
                 totais=Valores(**p.totais.valores), erro=_erro(p.erro), sobra=p.sobra,
+                balancos=p.balancos, rupturas=p.rupturas,
             )
             for p in r.produtos
         ],

@@ -31,8 +31,12 @@ Sem venda nas células comparadas, os dois ficam None.
 Produção × venda NÃO se compara dia a dia (o que chega num dia vende nos
 seguintes): o painel mostra os dias lado a lado e compara os totais do
 período. "Sobra" = enviado − vendido − perda lançada no período: inclui o
-que ainda está na prateleira, por isso não é perda (a perda sem registro,
-D111, precisa da contagem e vem depois).
+que ainda está na prateleira, por isso não é perda.
+
+Perda sem registro e ruptura (D111): pela contagem do fechamento, em
+`perda_sem_registro_service`; só nas células em que dá para fazer o
+balanço (as duas contagens e venda registrada na loja no dia). `balancos`
+diz em quantas células, para a tela não mostrar 0 quando não houve conta.
 """
 
 from collections import defaultdict
@@ -53,11 +57,14 @@ from app.models.romaneio import Romaneio
 from app.models.romaneio_entrega import RomaneioEntrega
 from app.models.romaneio_item import RomaneioItem
 from app.models.venda_diaria import VendaDiaria
+from app.services import perda_sem_registro_service
 from app.services.registros_efetivos import condicao_registro_efetivo
 
 PERIODO_PADRAO_DIAS = 7
 PERIODO_MAXIMO_DIAS = 28
-METRICAS = ("previsto", "sugerido", "final", "produzido", "enviado", "vendido", "perda")
+# sem_registro (D111): perda sem registro pela contagem, só nas células com balanço
+# (perda_sem_registro_service).
+METRICAS = ("previsto", "sugerido", "final", "produzido", "enviado", "vendido", "perda", "sem_registro")
 
 Celula = tuple[int, int, date]  # loja, produto, dia
 
@@ -86,6 +93,9 @@ class SerieUnidade:
     totais: Linha
     erro: Erro
     dias: dict[date, Linha]
+    # D111: células loja × produto × dia com balanço da contagem, e quantas delas acabaram (ruptura).
+    balancos: int = 0
+    rupturas: int = 0
 
 
 @dataclass
@@ -97,6 +107,8 @@ class LinhaProduto:
     totais: Linha
     erro: Erro
     sobra: Decimal | None
+    balancos: int = 0
+    rupturas: int = 0
 
 
 @dataclass
@@ -219,8 +231,12 @@ def montar(
     produtos: dict[int, Produto],
     celulas: dict[str, dict[Celula, Decimal]],
     produzido: dict[tuple[int, date], Decimal] | None,
+    rupturas: dict[Celula, bool] | None = None,
 ) -> Acompanhamento:
-    """Junta as leituras (função pura, testável sem banco)."""
+    """
+    Junta as leituras (função pura, testável sem banco). `rupturas`: célula
+    com balanço da contagem (D111) -> acabou no dia.
+    """
     dias = [inicio + timedelta(days=k) for k in range((fim - inicio).days + 1)]
     unidade = {pid: p.unidade_medida.value for pid, p in produtos.items()}
 
@@ -261,6 +277,16 @@ def montar(
     for u, s in series.items():
         s.erro = calcular_erro(pares_unidade[u])
 
+    contagem_produto: dict[int, list[int]] = defaultdict(lambda: [0, 0])  # balanços, rupturas
+    for (_loja, pid, _dia), acabou in (rupturas or {}).items():
+        if pid not in unidade:
+            continue
+        s = serie(unidade[pid])
+        s.balancos += 1
+        s.rupturas += int(acabou)
+        contagem_produto[pid][0] += 1
+        contagem_produto[pid][1] += int(acabou)
+
     linhas_produto = []
     for pid, totais in por_produto.items():
         p = produtos[pid]
@@ -268,8 +294,9 @@ def montar(
         sobra = None
         if t["enviado"] is not None and t["vendido"] is not None:
             sobra = t["enviado"] - t["vendido"] - (t["perda"] or Decimal(0))
+        balancos, n_rupturas = contagem_produto.get(pid, (0, 0))
         linhas_produto.append(LinhaProduto(pid, p.codigo, p.nome, unidade[pid], totais,
-                                           calcular_erro(pares_produto[pid]), sobra))
+                                           calcular_erro(pares_produto[pid]), sobra, balancos, n_rupturas))
     linhas_produto.sort(key=lambda l: (l.produto_nome.lower(), l.produto_id))
     ordem_unidades = sorted(series.values(), key=lambda s: (s.unidade != "UN", s.unidade))
     return Acompanhamento(inicio, fim, produzido is not None, ordem_unidades, linhas_produto)
@@ -297,10 +324,12 @@ def acompanhamento(
         "enviado": _enviado(db, negocio_id, central_id, lojas, inicio, fim, produto_id),
     }
     celulas["sugerido"], celulas["final"] = _ordens(db, negocio_id, central_id, lojas, inicio, fim, produto_id)
+    balancos = perda_sem_registro_service.calcular(db, negocio_id, lojas, inicio, fim, produto_id)
+    celulas["sem_registro"] = {c: b.sem_registro for c, b in balancos.items()}
     produzido = None if por_loja else _produzido(db, negocio_id, central_id, inicio, fim, produto_id)
 
     ids = {c[1] for valores in celulas.values() for c in valores} | {p for p, _ in (produzido or {})}
     produtos = {}
     if ids:
         produtos = {p.id: p for p in db.query(Produto).filter(Produto.negocio_id == negocio_id, Produto.id.in_(ids))}
-    return montar(inicio, fim, produtos, celulas, produzido)
+    return montar(inicio, fim, produtos, celulas, produzido, {c: b.ruptura for c, b in balancos.items()})

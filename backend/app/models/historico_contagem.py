@@ -43,6 +43,10 @@ class HistoricoContagem(Base):
     # sem peso médio cadastrado; NULL nos demais casos.
     peso_informado_kg = mapped_column(Numeric(10, 4), nullable=True)
 
+    # Cópia de estoque_atual.contado_em no momento do snapshot (UTC; migration
+    # 0028, D111): quando a contagem guardada aqui foi lançada. O mesmo valor
+    # se repete nos snapshots seguintes enquanto a loja não contar de novo.
+    contado_em = mapped_column(DateTime, nullable=True)
     # Data/hora a que este snapshot se refere (momento em que a zeragem
     # daquela loja específica ocorreu)
     data_referencia: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
